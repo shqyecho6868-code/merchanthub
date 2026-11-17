@@ -49,11 +49,28 @@
 		<commons-lang3.version>3.12.0</commons-lang3.version>
 		<langchain4j.version>1.1.0</langchain4j.version>
 		<langchain4j-beta.version>1.1.0-beta7</langchain4j-beta.version>
-		<netty.version>4.2.0.Final</netty.version>
+		<!--
+		  不要在这里定义 netty.version：它和 Spring Boot 父 pom 的同名属性重名，会把全项目所有 Netty 模块
+		  （Gateway 的 Reactor Netty、Lettuce、RocketMQ remoting）一起覆盖。A2+ 曾因此用 4.2.0 导致 RocketMQ 客户端
+		  连不上 NameServer，见 pitfalls P12。Netty 版本交给 Boot 管理（3.5.x 为 4.1.x）。
+		-->
 		<canal.version>1.1.7</canal.version>
-		<fastjson2.version>2.0.31</fastjson2.version><!-- 与 canal 1.1.7 自带版本一致 -->
+		<!--
+		  必须和 SCA BOM 管理的 com.alibaba:fastjson（2.x 兼容层，2.0.58）同版本：兼容层内部直接调用 fastjson2 核心，
+		  版本错位会在运行时 NoSuchMethodError。原先为对齐 canal 1.1.7 锁在 2.0.31，导致 RocketMQ 客户端发请求失败（pitfalls P12）。
+		-->
+		<fastjson2.version>2.0.58</fastjson2.version>
 		<minio.version>8.2.1</minio.version>
 		<shedlock.version>4.42.0</shedlock.version>
+
+		<!-- 测试与覆盖率 -->
+		<jacoco.version>0.8.13</jacoco.version>
+		<!--
+		  覆盖率门禁默认关闭：现在只出报告不卡阈值。
+		  order / inventory / payment 模块写测试时在自己的 pom 里设 jacoco.check.skip=false，启用 70% 行覆盖率门禁。
+		-->
+		<jacoco.check.skip>true</jacoco.check.skip>
+		<jacoco.line.minimum>0.70</jacoco.line.minimum>
 	</properties>
 
 	<!--
@@ -87,6 +104,34 @@
 				<groupId>com.alibaba.cloud</groupId>
 				<artifactId>spring-cloud-alibaba-dependencies</artifactId>
 				<version>${spring-cloud-alibaba.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<!--
+			  测试框架 BOM。版本号直接复用 Spring Boot 父 pom 的属性（junit-jupiter.version / mockito.version /
+			  testcontainers.version），不另写数字：显式列出“项目用了哪些测试框架”，同时保证和 Boot 管理的版本永远一致，
+			  升级 Boot 时自动跟着升，不会出现两处版本打架。
+			  注意：Testcontainers 1.21.x 没有 RocketMQ 模块，RocketMQ 用 GenericContainer 启动（见 Common 的示例 IT）。
+			-->
+			<dependency>
+				<groupId>org.junit</groupId>
+				<artifactId>junit-bom</artifactId>
+				<version>${junit-jupiter.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.mockito</groupId>
+				<artifactId>mockito-bom</artifactId>
+				<version>${mockito.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>${testcontainers.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -143,11 +188,6 @@
 			</dependency>
 
 			<!-- 中间件客户端 -->
-			<dependency>
-				<groupId>io.netty</groupId>
-				<artifactId>netty-all</artifactId>
-				<version>${netty.version}</version>
-			</dependency>
 			<dependency>
 				<groupId>com.alibaba.otter</groupId>
 				<artifactId>canal.client</artifactId>
@@ -218,6 +258,68 @@
 				</plugin>
 			</plugins>
 		</pluginManagement>
+
+		<!--
+		  测试分两层：
+		    *Test / *Tests  → surefire，test 阶段，纯单元测试，不需要 Docker（mvn test）
+		    *IT             → failsafe，integration-test 阶段，用 Testcontainers 起真实中间件（mvn verify）
+		  分开的原因：单测秒级、随时能跑；集成测试要拉镜像、起容器，慢且依赖 Docker，CI 里一起跑。
+		-->
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<!-- 版本与 integration-test / verify 两个 execution 由 Boot 父 pom 管理，这里只需激活 -->
+			</plugin>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>${jacoco.version}</version>
+				<executions>
+					<!--
+					  prepare-agent 把 JaCoCo agent 写进 argLine，surefire 和 failsafe 都读 argLine，
+					  两者的数据追加到同一个 target/jacoco.exec，所以报告 = 单测 + 集成测试的合并覆盖率。
+					  如果以后某个模块要自定义 argLine，必须写成 "@{argLine} -Xxx"，否则 agent 会被覆盖掉、覆盖率变 0。
+					-->
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<!-- 绑定 verify：等集成测试跑完再出报告。产物：<模块>/target/site/jacoco/index.html 和 jacoco.csv -->
+					<execution>
+						<id>report</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>check</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+						<configuration>
+							<skip>${jacoco.check.skip}</skip>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>${jacoco.line.minimum}</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
 	</build>
 
 </project>
