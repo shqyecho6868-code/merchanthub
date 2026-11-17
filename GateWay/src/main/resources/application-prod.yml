@@ -53,8 +53,3 @@ spring:
               uri: lb://AiService
               predicates:
                 - Path=/api/ai/**
-
-            - id: RedPacketService
-              uri: lb://RedPacketService
-              predicates:
-                - Path=/api/chat/redPacket/**

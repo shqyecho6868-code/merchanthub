@@ -2,14 +2,14 @@ spring:
   data:
     redis:
       host: 127.0.0.1
-      port: 59000
+      port: 6379
       password: ${REDIS_PASSWORD}
       ttl: 3600
       timeout: 30000
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:49152/InfiniteChat?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://127.0.0.1:3306/merchanthub?useUnicode=true&characterEncoding=UTF-8&serverTimezone=America/Los_Angeles
     username: root
     password: ${MYSQL_ROOT_PASSWORD}
 
@@ -18,7 +18,7 @@ spring:
       username: ${NACOS_USERNAME:nacos}
       password: ${NACOS_PASSWORD:nacos}
       discovery:
-        server-addr: 127.0.0.1:18375
+        server-addr: 127.0.0.1:8848
 
 pgvector:
   database: dp

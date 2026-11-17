@@ -3,7 +3,7 @@ spring:
     redis:
       database: 2
       host: 127.0.0.1
-      port: 59000
+      port: 6379
       password: ${REDIS_PASSWORD}
       timeout: 30000
 
@@ -12,7 +12,7 @@ spring:
       username: ${NACOS_USERNAME:nacos}
       password: ${NACOS_PASSWORD:nacos}
       discovery:
-        server-addr: 127.0.0.1:18375
+        server-addr: 127.0.0.1:8848
 
     gateway:
       server:
@@ -53,8 +53,3 @@ spring:
               uri: lb://AiService
               predicates:
                 - Path=/api/ai/**
-
-            - id: RedPacketService
-              uri: lb://RedPacketService
-              predicates:
-                - Path=/api/chat/redPacket/**
