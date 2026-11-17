@@ -61,3 +61,23 @@
 - **根因**：`git remote rename origin legacy` 会同步修改 `branch.main.remote`，main 分支的跟踪目标跟着变成了 `legacy/main`；IDEA 默认推送到当前跟踪的 remote
 - **解决**：`git config branch.main.remote origin`（或首次推送时用 `git push -u origin main`），推送前确认弹窗写的是 `main → origin : main`
 - **另**：命令行和 IDEA 用的是不同的 GitHub 凭据，命令行凭据没有新仓库的权限（403），目前只能在 IDEA 里推送
+
+## A2+ 测试框架与 CI
+
+### P12｜RocketMQ 客户端 `send request to <localhost:xxxx> failed`，NameServer 端口却是通的
+- **现象**：Testcontainers 集成测试里，生产者第一步“向 NameServer 查路由”就失败；容器日志显示 NameServer 和 Broker 都 `boot success`
+- **定位**：
+  1. 起一个探针容器，从宿主机用同一份 classpath 直连，同样失败 → 与 Testcontainers 无关，问题在客户端
+  2. “send request failed”是请求在**编码/写出阶段**就失败（不是超时），怀疑序列化依赖
+  3. `dependency:build-classpath` 发现：`com.alibaba:fastjson`（2.x 兼容层）和 `fastjson2-extension` 是 2.0.58（SCA BOM 管理），`fastjson2` 核心却是 2.0.31（根 pom 为对齐 canal 锁定）
+  4. 只把 classpath 里的 fastjson2 换成 2.0.58 → `SEND_OK`
+- **根因**：fastjson 兼容层内部直接调用 fastjson2 核心，同一家族的 jar 版本错位 → 运行时找不到方法，RocketMQ remoting 编码请求头失败
+- **解决**：根 pom `fastjson2.version` 改为 2.0.58，与 SCA 管理的 fastjson 对齐
+- **教训**：“同一家族多个 jar”（fastjson/fastjson2、netty-*、jackson-*）必须同版本；只锁其中一个比不锁更危险
+
+### P13｜根 pom 的 `netty.version` 与 Spring Boot 属性重名（隐患，已修）
+- **现象**：排查 P12 时发现全项目所有 Netty 模块都是 4.2.0.Final，而 Spring Boot 3.5 管理的是 4.1.x
+- **根因**：根 pom 定义了 `<netty.version>`，恰好与 Boot 父 pom 的同名属性重名，Maven 子 pom 属性覆盖父 pom 属性 → 不只是 RealTimeService 的 netty-all，Gateway 的 Reactor Netty、Lettuce、RocketMQ remoting 一起被升到 4.2
+- **说明**：P12 的失败在修掉这个之后仍然存在，所以它不是 P12 的直接原因；但 Reactor Netty / RocketMQ 是基于 4.1 编译的，混用是潜在的运行时风险。RealTimeService 只用了 4.1 的 `NioEventLoopGroup`，退回 4.1 无影响
+- **解决**：删除该属性及 netty-all 的版本声明，交给 Boot 管理
+- **教训**：在继承 spring-boot-starter-parent 的 pom 里自定义 `xxx.version` 前，先查 Boot 是否已有同名属性（`help:evaluate -Dexpression=xxx.version`）

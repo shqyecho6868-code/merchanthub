@@ -28,7 +28,7 @@ docker compose down -v      # 连数据卷一起删 —— 会清空所有数据
 | 项 | 版本 | 依据 |
 |---|---|---|
 | JDK | 17（本机 `ms-17.0.20`） | 本机默认 `java` 是 26，命令行编译要先 `export JAVA_HOME=$(/usr/libexec/java_home -v 17)` |
-| Maven | 3.9.11（IntelliJ 自带） | 本机无全局 `mvn`，路径 `/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn` |
+| Maven | 3.9.11 | A2+ 起用仓库自带的 `./mvnw`（Maven Wrapper），本机无需安装 Maven |
 | Spring Boot | 3.5.11 | — |
 | Spring Cloud | 2025.0.0 | SCA 官方版本说明 |
 | Spring Cloud Alibaba | 2025.0.0.0 | 官方：2025.0.0.0 ↔ Spring Cloud 2025.0.0 ↔ Spring Boot 3.5.x |

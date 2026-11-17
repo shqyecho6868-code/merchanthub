@@ -88,5 +88,36 @@
             <artifactId>mybatis-plus-jsqlparser</artifactId>
             <optional>true</optional>
         </dependency>
+
+        <!--
+          以下全是 test 范围，只给 Common 的示例集成测试（MiddlewareContainersIT）用，不会传递给其他服务。
+          版本全部由根 pom 导入的 BOM（Boot / SCA / Testcontainers）管理。
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.lettuce</groupId>
+            <artifactId>lettuce-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- 版本 5.3.1 由 SCA BOM 管理，与 docker-compose 里的 Broker 版本一致 -->
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

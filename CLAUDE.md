@@ -72,6 +72,10 @@
 - 分层：controller / service / mapper / model（entity、dto、vo）/ config / mq / job
 - 统一返回体、全局异常处理沿用 Common 模块，按需精简
 - 关键链路必须有测试：状态流转、库存预占与释放、幂等、租户隔离（JUnit 5，能用 Testcontainers 就用）
+- **测试是每个任务的完成条件**：`./mvnw verify` 本地通过 + push 后 CI 是绿的，任务才算完成；测试不通过，任务不算完成，不能 commit 成“完成”
+- 测试分层：单元测试命名 `*Test`（surefire，`mvn test`，不依赖 Docker）；集成测试命名 `*IT`（failsafe，`mvn verify`，Testcontainers 起真实中间件，镜像版本与 docker-compose 一致）。示例见 Common 的 `GlobalExceptionHandlerTest`、`MiddlewareContainersIT`
+- **B 组破坏性实验能自动化的都沉淀成集成测试**（如并发超卖、重复消费、消息乱序、超时与支付竞争、跨租户越权），实验结论写进测试注释；无法自动化的（如手动 kill 进程看恢复）在 notes 里写明步骤和原因
+- 覆盖率：JaCoCo 报告在 `<模块>/target/site/jacoco/`；order、inventory、payment 模块在自己的 pom 里设 `<jacoco.check.skip>false</jacoco.check.skip>`，启用 70% 行覆盖率门禁
 - 日志带 traceId 和 tenantId
 - 注释用中文，解释“为什么”
 - 每个任务完成后 git commit，信息写清做了什么
@@ -83,7 +87,7 @@
 - `docs/pitfalls.md`：踩坑记录（现象 → 定位 → 根因 → 解决）
 - `docs/interview-qa.md`：面试自问自答，记录我答不上来的问题和最终答案
 - `docs/architecture.md`：架构图和核心链路时序图（Mermaid）
-- `docs/migration-map.md`（A1 产出）、`docs/env-setup.md`（A2 产出：版本、端口、账号）、`docs/data-model.md`（A3 产出）
+- `docs/migration-map.md`（A1 产出）、`docs/env-setup.md`（A2 产出：版本、端口、账号）、`docs/runbook.md`（A2+ 产出：启动、控制台、故障排查；新增中间件时补充）、`docs/data-model.md`（A3 产出）
 - `docs/notes/`：每个任务的讲解笔记（本项目特有调整及原因）
 
 ## 8. 收到任务指令后
@@ -91,7 +95,7 @@
 1. 用 2–3 句复述任务目标和范围，确认理解
 2. 拆成小步，告诉我大致步骤
 3. 按第 2 节教学规则推进（设计先问我、🧑 停下、✍️ 留给我）
-4. B 组任务必须做指令里的破坏性实验
+4. B 组任务必须做指令里的破坏性实验，能自动化的写成 `*IT` 集成测试
 
 ## 9. 任务结束流程
 
@@ -101,7 +105,7 @@
    - **答不上时**：先给提示让我再试，不要直接判“不稳”；提示后仍答不上，再讲答案，并记入 interview-qa
    - **后续任务的内容**：只做预告（一两句话说明以后会学什么），不提问、不计入过关
 2. **更新文档**：progress、decisions、pitfalls、interview-qa，必要时更新 architecture
-3. **测试通过后 git commit**
+3. **测试通过后 git commit**：`./mvnw verify` 全绿才 commit；push 后确认 CI 绿，红了先修，结果摘要里写明 CI 状态
 4. **给我一段结果摘要**（我会贴回规划对话），格式：
    ```
    任务：B1｜状态：完成｜过关：稳 / 不稳（哪一点）

@@ -57,3 +57,28 @@
 - **选**：用主机名，容器侧靠 `extra_hosts: host-gateway`，宿主机侧靠 `/etc/hosts`
 - **没选**：`127.0.0.1`（容器里的 Dashboard 连不上）；局域网 IP（校园网下 IP 会变）
 - **代价**：宿主机需要一次性 sudo 修改 `/etc/hosts`
+
+## D11｜测试分层：`*Test` 单元测试 + `*IT` Testcontainers 集成测试（A2+，2026-11-16）
+- **选**：surefire 跑 `*Test`（不依赖 Docker，`mvn test` 秒级）；failsafe 跑 `*IT`（Testcontainers 起 MySQL/Redis/RocketMQ，`mvn verify`）；CI 每次 push 跑 `verify`
+- **没选**：H2 / 嵌入式 Redis 代替真实中间件（行为和 MySQL 8、Redis 7 不一致，库存 CAS、锁、事务隔离这类关键测试会测不准）；连本机 docker-compose 的中间件跑测试（CI 上没有，且测试数据会污染开发库）；`@Testcontainers(disabledWithoutDocker = true)`（没 Docker 时测试静默跳过，看起来是绿的，违背“测试通过才算完成”）
+- **为什么**：镜像版本与 compose 一致，测试环境 = 开发环境；GitHub runner 自带 Docker
+- **代价**：集成测试慢（首次拉镜像），本地跑 `verify` 必须开 Docker
+
+## D12｜测试框架版本交给 Spring Boot BOM，根 pom 显式导入但不写版本号（A2+）
+- **选**：根 pom `dependencyManagement` 导入 `junit-bom`、`mockito-bom`、`testcontainers-bom`，版本引用 Boot 的属性 `${junit-jupiter.version}` 等（当前 5.12.2 / 5.17.0 / 1.21.4）
+- **没选**：自己写死版本号（升级 Boot 时容易与 Boot 自带版本打架，P13 就是这类问题）
+- **代价**：想单独升级某个测试框架时，要覆盖 Boot 的属性
+- **注**：Testcontainers 1.21.x 没有 RocketMQ 模块，用 `GenericContainer` 自己封装（见 `MiddlewareContainersIT.RocketMqContainer`）
+
+## D13｜JaCoCo 覆盖率：单测 + 集成测试合并统计；门禁按模块开启（A2+）
+- **选**：surefire 与 failsafe 共用一个 `jacoco.exec`，`verify` 阶段出报告；`jacoco:check` 默认 `skip`，order/inventory/payment 在自己的 pom 打开 70% 行覆盖率
+- **没选**：全局统一卡 70%（旧 IM 模块没有测试，会全部失败）；只统计单测（本项目关键逻辑——库存、状态机 CAS——主要靠集成测试覆盖）
+- **代价**：每个模块一份报告，没有全项目汇总报告；CI Summary 页用脚本把各模块 csv 汇总成表
+
+## D14｜引入 Maven Wrapper（A2+）
+- **选**：`./mvnw`（only-script 模式，Maven 3.9.11，下载地址用 Maven Central）
+- **为什么**：本机没有全局 mvn，CI 和本机用同一个 Maven 版本；only-script 模式不需要提交 jar（`.gitignore` 忽略了 `*.jar`）
+- **注**：wrapper 生成时会继承本机 `settings.xml` 的阿里云镜像地址，已改回 Maven Central（GitHub runner 在海外）
+
+## D15｜删除 5 个旧服务的 `contextLoads` 测试（A2+）
+- **为什么**：它们要连 Nacos/MySQL/Kafka 才能启动 Spring 容器，CI 上必红；本身不验证任何行为。各服务改造时按新约定重写测试
