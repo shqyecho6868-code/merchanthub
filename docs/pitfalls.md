@@ -55,3 +55,9 @@
 - **现象**：新增的 `REDIS_PASSWORD` 被拼接到了 MySQL 密码那一行
 - **根因**：原文件最后一行没有换行符，`>>` 追加时接在同一行后面
 - **解决**：拆成两行；以后追加前先检查文件末尾是否有换行符
+
+### P11｜改了 remote 名字后，提交被推到了旧仓库
+- **现象**：IDEA 显示推送成功，但新仓库 `merchanthub` 是空的，提交出现在旧仓库 `InfiniteChat`
+- **根因**：`git remote rename origin legacy` 会同步修改 `branch.main.remote`，main 分支的跟踪目标跟着变成了 `legacy/main`；IDEA 默认推送到当前跟踪的 remote
+- **解决**：`git config branch.main.remote origin`（或首次推送时用 `git push -u origin main`），推送前确认弹窗写的是 `main → origin : main`
+- **另**：命令行和 IDEA 用的是不同的 GitHub 凭据，命令行凭据没有新仓库的权限（403），目前只能在 IDEA 里推送
