@@ -43,3 +43,5 @@ app.env
 *.jks
 *.log
 *.jar
+### 本地密码，不提交 ###
+.env

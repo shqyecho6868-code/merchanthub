@@ -2,13 +2,17 @@
 
 | 任务 | 状态 | 日期 | 产出 | 过关 |
 |---|---|---|---|---|
-| A1 旧项目分析与迁移地图 | 完成 | 2026-11-16 | `docs/migration-map.md` | 不稳（跨服务状态变更主路径；推送路由表存放与失效） |
+| A2 环境搭建 | 完成 | 2026-11-16 | 包名 `com.merchanthub`、删除 RedPacketService、依赖重构（SCA 2025.0.0.0）、`docker-compose.yml`、`docs/env-setup.md` | 本任务不考 |
+| A1 旧项目分析与迁移地图 | 完成 | 2026-11-16 | `docs/migration-map.md` | 稳（按“先讲后考”规则重判：原判不稳的两点都没有先讲过，其中推送路由表属于 realtime 任务内容，改为预告） |
 
 ## 遗留问题
 
-- [A2] Spring Cloud Alibaba 当前为 `2022.0.0.0-RC1`，与 Boot 3.5.11 / Spring Cloud 2025.0.0 很可能不匹配，需按官方版本对照表重选
-- [A2] 根 pom 的 `<dependencies>` 强塞依赖给所有模块（含 LangChain4j、starter-web 进 Gateway），改为只做 `dependencyManagement`
-- [A2] 核实 LangChain4j 1.1 的 `langchain4j-elasticsearch` 对 ES 8 客户端与 metadata filter 的支持
-- [A2/B] 雪花 ID workerId 问题（见 pitfalls）需在订单号落地前修复
+- [B·RocketMQ] 宿主机 `/etc/hosts` 需加 `127.0.0.1 host.docker.internal`（需 sudo），写 RocketMQ 代码前做，见 env-setup 第 5 节
+- [A3/B] Java 代码中仍有写死的 `Asia/Shanghai`（`FormatDateUtil`、`TimeTool`、Offline 模块），时区策略写订单时统一定（建议库存 UTC）
+- [B] 旧代码仍引用 Kafka、MinIO（bucket `infinitechat`）、pgvector，均未拉起；服务暂不能完整启动（A2 不要求）
+- [B] `CommonConstant.TOKEN_SECRET_KEY` 仍为硬编码旧字符串，改造鉴权时移到配置
+- [B·AI] 核实 LangChain4j 1.1 的 `langchain4j-elasticsearch` 对 ES 8 与 metadata filter 的支持
+- [A2/B] 雪花 ID workerId 问题（见 pitfalls P1）需在订单号落地前修复
 - [B] 实时推送多实例方案（广播消费 vs 按用户路由）待 realtime 任务设计
-- CLAUDE.md 第 6 节包名仍为占位符，A2 改包名前需确定
+- [B] `OfflineDataService` 包名临时为 `com.merchanthub.offline`，Canal 拆到 order 后整体删除
+- ~~SCA 版本不匹配~~、~~根 pom 强塞依赖~~、~~包名占位符~~ → A2 已解决

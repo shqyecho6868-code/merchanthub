@@ -43,3 +43,17 @@
 - **没选**：单独的 sync 进程
 - **为什么**：只同步订单表
 - **代价**：同步线程和 order 服务同生共死
+
+## D8｜依赖结构：根 pom 只管版本，Common 重依赖设为 optional（A2，2026-11-16）
+- **选**：根 pom 只做 `dependencyManagement`（外加 lombok/test）；Common 的 web/MyBatis/AOP 标为 optional，相关 Bean 用 `@ConditionalOnClass` 按需装配
+- **没选**：Gateway 用 `<exclusions>` 排除（治标，每个新服务都要排一遍）；拆分 common-core / common-web（结构最清晰，但超出 A2 范围，建新服务时再评估）
+- **为什么**：各服务 pom 明确写出自己用到的依赖；Gateway（WebFlux）不再被带上 Servlet 栈
+- **代价**：各服务 pom 变长；Common 新增 Bean 时要记得判断是否需要加条件装配
+
+## D9｜版本：SCA 2025.0.0.0 + Spring Cloud 2025.0.0 + Boot 3.5.11（A2）
+- **依据**：sca.aliyun.com 官方版本说明（GitHub wiki 已过时）。中间件服务端与客户端对齐：Nacos v3.0.3、RocketMQ 5.3.1
+
+## D10｜RocketMQ `brokerIP1 = host.docker.internal`（A2）
+- **选**：用主机名，容器侧靠 `extra_hosts: host-gateway`，宿主机侧靠 `/etc/hosts`
+- **没选**：`127.0.0.1`（容器里的 Dashboard 连不上）；局域网 IP（校园网下 IP 会变）
+- **代价**：宿主机需要一次性 sudo 修改 `/etc/hosts`

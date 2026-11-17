@@ -32,3 +32,26 @@
 ### P6｜登录密码打进日志
 - **定位**：Common 的 `LogInterceptor` 用 `StringUtils.join(args)` 打印 controller 的全部入参
 - **解决**：common 改造时对敏感字段脱敏，并加入 MDC traceId/tenantId
+
+## A2 环境搭建
+
+### P7｜RocketMQ Broker 反复重启，日志只有 NPE
+- **现象**：`mh-broker` 一直处于 Restarting，日志末尾是 `ScheduleMessageService.configFilePath` 的 NullPointerException
+- **定位**：NPE 出现在 `BrokerController.shutdown` 调用链里，说明是初始化失败后关闭时的副作用；用临时容器测试，发现存储目录属于 root，uid 3000 的 rocketmq 用户 `touch` 失败
+- **根因**：新建的命名卷默认属于 root，镜像以非 root 用户运行
+- **解决**：加一个一次性服务 `broker-init` 来 `chown`，Broker 通过 `depends_on: service_completed_successfully` 等它完成
+
+### P8｜Dashboard 端口映射后访问不到
+- **现象**：`127.0.0.1:8082` 连接失败
+- **根因**：Dashboard 2.1.0 在容器内监听的是 8082，不是旧版本的 8080
+- **解决**：映射改为 `8082:8082`。教训：端口以镜像日志里的 `Tomcat started on port` 为准
+
+### P9｜修改 compose 项目名后容器名冲突
+- **现象**：`The container name "/mh-mysql" is already in use`
+- **根因**：加了 `name: merchanthub` 后项目名变了，旧项目 `shoppingmall` 下的同名容器还在
+- **解决**：确认旧容器只有一个空库后，删除旧容器和旧卷
+
+### P10｜追加 `.env` 时串行
+- **现象**：新增的 `REDIS_PASSWORD` 被拼接到了 MySQL 密码那一行
+- **根因**：原文件最后一行没有换行符，`>>` 追加时接在同一行后面
+- **解决**：拆成两行；以后追加前先检查文件末尾是否有换行符
