@@ -1,28 +1,30 @@
 package com.merchanthub.common.utils;
 
-import com.merchanthub.common.constant.SnowflakeConstant;
-
-import cn.hutool.core.lang.Snowflake;
-import cn.hutool.core.util.IdUtil;
+import com.merchanthub.common.id.SnowflakeIdGenerator;
 
 /**
- * 雪花 ID 生成工具类
- *
- * @author shanyang
+ * 静态门面：只为兼容旧 IM 代码里的 {@code SnowflakeUtil.nextId()} 调用。
+ * <p>
+ * 原实现把 workerId 写死为 1，多实例会撞号（pitfalls P1）；现在委托给 Redis 领号的 {@link SnowflakeIdGenerator}。
+ * 新代码（订单号、支付单号）直接注入 SnowflakeIdGenerator，不要用这个类。旧 IM 代码删除后这个类一起删。
  */
-public class SnowflakeUtil {
+public final class SnowflakeUtil {
 
-    private static final Snowflake SNOWFLAKE = IdUtil.getSnowflake(
-            SnowflakeConstant.WORKER_ID,
-            SnowflakeConstant.DATA_CENTER_ID
-    );
+    private static volatile SnowflakeIdGenerator generator;
 
-    /**
-     * 生成雪花 ID
-     *
-     * @return 雪花 ID
-     */
+    private SnowflakeUtil() {
+    }
+
+    public static void bind(SnowflakeIdGenerator g) {
+        generator = g;
+    }
+
     public static long nextId() {
-        return SNOWFLAKE.nextId();
+        SnowflakeIdGenerator g = generator;
+        if (g == null) {
+            // 没配 Redis 的服务没有生成器；宁可报错，也不退回写死 workerId 的老做法
+            throw new IllegalStateException("SnowflakeIdGenerator 未初始化：当前服务需要依赖 Redis");
+        }
+        return g.nextId();
     }
 }

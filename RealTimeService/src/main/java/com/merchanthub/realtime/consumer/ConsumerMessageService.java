@@ -11,7 +11,7 @@ import com.merchanthub.common.model.vo.MessageResponse;
 import com.merchanthub.common.utils.FormatDateUtil;
 import com.merchanthub.realtime.client.AiServiceClient;
 import com.merchanthub.realtime.client.UserServiceClient;
-import com.merchanthub.realtime.utils.SnowflakeDynamicUtil;
+import com.merchanthub.common.utils.SnowflakeUtil;
 import com.merchanthub.realtime.websocket.ChannelManager;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
@@ -60,7 +60,7 @@ public class ConsumerMessageService {
 
     public void aiSignalMessage(MessageRequest messageRequest) {
         MessageResponse messageResponse = createMessageResponse(messageRequest);
-        messageResponse.setMessageId(SnowflakeDynamicUtil.nextId());
+        messageResponse.setMessageId(SnowflakeUtil.nextId());
         // 获取 AI 回复
         ChatRequest chatRequest = new ChatRequest();
         chatRequest.setPrompt(messageRequest.getBody().getContent());

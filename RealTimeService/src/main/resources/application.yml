@@ -6,7 +6,3 @@ spring:
     name: RealTimeService
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-
-snowflake:
-  workerId: 1
-  datacenterId: 1

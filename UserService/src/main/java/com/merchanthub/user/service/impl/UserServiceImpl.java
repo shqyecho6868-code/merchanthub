@@ -1,8 +1,7 @@
 package com.merchanthub.user.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.lang.Snowflake;
-import cn.hutool.core.util.IdUtil;
+import com.merchanthub.common.utils.SnowflakeUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -102,8 +101,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
         LoginAndRegisterResponse loginAndRegisterResponse = new LoginAndRegisterResponse();
 
-        Snowflake snowflake = IdUtil.getSnowflake(UserConstant.WORKER_ID, UserConstant.DATA_CENTER_ID);
-        Long userId = snowflake.nextId();
+        // workerId 由 Redis 租约分配（B1 修复 pitfalls P1），不再写死
+        Long userId = SnowflakeUtil.nextId();
         synchronized (email.intern()) {
             User newUser = new User();
             newUser.setEmail(email);
@@ -117,7 +116,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
 
 
 
-        Long sessionId = snowflake.nextId();
+        Long sessionId = SnowflakeUtil.nextId();
         Session session = new Session();
         session.setSessionId(sessionId);
         session.setStatus(CommonConstant.SESSION_STATUS);
