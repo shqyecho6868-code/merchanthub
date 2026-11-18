@@ -1,6 +1,7 @@
 # MerchantHub 数据模型（A3）
 
-> A3 只做设计，不建表。DDL 在 B 组对应任务里落地，字段如果有调整，要回来同步更新本文档。
+> A3 只做设计；DDL 从 B1 起落地，字段有调整时回写本文档（见第 6 节变更记录）。
+> DDL 源文件：`ProductInventoryService/src/main/resources/db/schema.sql`、`OrderService/src/main/resources/db/schema.sql`。
 > 讲解过程和评审记录见 `docs/notes/A3-业务建模.md`。
 
 ## 1. 全局约定
@@ -13,6 +14,8 @@
 | 主键 | `id bigint`，只在内部使用；对外只暴露业务单号 |
 | 租户 | `tenant_id` = 商家。买家是平台级用户，用 `buyer_id` 表示，不属于任何租户 |
 | 一单一商家 | 本项目没有购物车，一个订单只属于一个商家，不做跨店拆单 |
+| 时间 | `DATETIME(3)`，一律存 UTC：JDBC 连接把会话时区固定为 UTC（`connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true`）。`created_at` / `updated_at` 由数据库默认值维护（B1） |
+| 分库 | 每个服务一个库：product-inventory → `mh_product`，order → `mh_order`。不跨库 join，不共用本地事务（B1） |
 
 ## 2. ER 关系
 
@@ -20,6 +23,7 @@
 erDiagram
     product ||--|{ sku : "一个商品多个规格"
     sku ||--|| inventory : "一个 SKU 一行库存"
+    inventory ||--o{ inventory_reservation : "按订单记录预占"
     orders ||--|{ order_item : "一单多行"
     order_item ||--|| trade_snapshot : "每行一份快照"
     orders ||--o{ payment : "一单多次支付尝试"
@@ -70,7 +74,23 @@ erDiagram
 | 支付成功：确认扣减 | 不变 | −n | `reserved >= n` |
 | 取消/超时：释放 | +n | −n | `reserved >= n` |
 
-设计要点：库存和 SKU 分开存。库存是写多的热点行，SKU 是读多写少的描述信息，拆开以后两者不会抢同一行锁。B 组会加一张库存预占记录表（按订单号记录），用来保证预占和释放的幂等
+设计要点：库存和 SKU 分开存。库存是写多的热点行，SKU 是读多写少的描述信息，拆开以后两者不会抢同一行锁。`available` 故意不加 UNSIGNED / CHECK，防超卖由条件更新负责（B1）
+
+### 3.3.1 inventory_reservation（库存预占记录，B1 新增）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | bigint PK | |
+| order_no | bigint | |
+| sku_id | bigint | |
+| quantity | int | 预占数量 |
+| status | tinyint | 10 RESERVED / 20 CONFIRMED / 30 RELEASED |
+
+索引：`uk(order_no, sku_id)`
+设计要点：
+- 和库存条件更新在**同一个本地事务**里写入。重复预占（Feign 重试、并发重复请求）会撞唯一键，整个事务回滚，库存不会被扣两次
+- 撞唯一键且已有记录与请求一致时返回成功（幂等），不一致则报错
+- CONFIRMED / RELEASED 是互斥终态，B2/B3 用 `WHERE status = 10` 做 CAS，保证确认和释放各最多执行一次
+- 还用于补偿：库存占了、订单没建成时，B2/B3 按 order_no 找到悬空的预占并释放
 
 ### 3.4 orders（订单）
 | 字段 | 类型 | 说明 |
@@ -205,3 +225,9 @@ stateDiagram-v2
 | 关闭状态 | 一个 CLOSED + close_reason | CANCELLED / CLOSED 两个终态 | 两者后续处理一样；代价是按原因统计时要查 close_reason |
 | 已支付后取消 | 不支持 | 已支付 → 关闭 | 必须同时退款，退款不在本项目范围内；以后做退款时加"退款中"状态 |
 | 状态编码 | 10/20/30 间隔编码 | 0/1/2 连续编码 | 以后可以在中间插入新状态（比如 25 退款中） |
+
+## 6. 变更记录
+
+| 任务 | 变更 |
+|---|---|
+| B1 | 新增 `inventory_reservation`；时间列定为 `DATETIME(3)` + UTC；按服务分库 `mh_product` / `mh_order`；`inventory.available` 不加 UNSIGNED/CHECK |

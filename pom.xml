@@ -15,9 +15,13 @@
 	<description>MerchantHub 多租户电商交易平台</description>
 
 	<modules>
+		<!-- Maven 会按模块间依赖自动排构建顺序，这里的顺序只为阅读：基础模块在前，业务服务在后 -->
+		<module>TestSupport</module>
+		<module>Common</module>
+		<module>ProductInventoryService</module>
+		<module>OrderService</module>
 		<module>UserService</module>
 		<module>AiService</module>
-		<module>Common</module>
 		<module>GateWay</module>
 		<module>OfflineDataService</module>
 		<module>RealTimeService</module>
@@ -140,6 +144,11 @@
 			<dependency>
 				<groupId>com.merchanthub</groupId>
 				<artifactId>Common</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.merchanthub</groupId>
+				<artifactId>TestSupport</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 

@@ -4,7 +4,7 @@ import cn.hutool.json.JSONUtil;
 import com.merchanthub.common.constant.CommonConstant;
 import com.merchanthub.common.model.dto.MessageRequest;
 import com.merchanthub.realtime.constants.WebSocketConstant;
-import com.merchanthub.realtime.utils.SnowflakeDynamicUtil;
+import com.merchanthub.common.utils.SnowflakeUtil;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
@@ -162,7 +162,7 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<TextWebSocketF
     public void sendMessageKafka(String message, Channel channel) {
         // 转成消息体
         MessageRequest messageRequest = JSONUtil.toBean(message, MessageRequest.class);
-        messageRequest.setMessageId(SnowflakeDynamicUtil.nextId());
+        messageRequest.setMessageId(SnowflakeUtil.nextId());
         messageRequest.setCreatedTime(new Date());
 
 

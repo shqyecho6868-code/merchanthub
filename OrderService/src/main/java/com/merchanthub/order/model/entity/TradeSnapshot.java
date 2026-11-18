@@ -1,0 +1,32 @@
+package com.merchanthub.order.model.entity;
+
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
+import com.baomidou.mybatisplus.annotation.TableName;
+import lombok.Data;
+
+import java.time.LocalDateTime;
+
+/**
+ * 交易快照（表 trade_snapshot）
+ */
+@Data
+@TableName("trade_snapshot")
+public class TradeSnapshot {
+
+    @TableId(type = IdType.AUTO)
+    private Long id;
+
+    private Long orderNo;
+    private Long skuId;
+    /** 下单时刻完整商品信息（JSON） */
+    private String content;
+
+    private Long tenantId;
+    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    @TableLogic
+    private Integer deleted;
+}

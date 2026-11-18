@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    # 每个服务一个库（mh_order）：服务之间不能跨库 join、也不能共用本地事务，只能通过接口交互
+    url: jdbc:mysql://127.0.0.1:3306/mh_order?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  cloud:
+    nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
+      discovery:
+        server-addr: 127.0.0.1:8848

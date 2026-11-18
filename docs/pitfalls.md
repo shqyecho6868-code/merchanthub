@@ -81,3 +81,21 @@
 - **说明**：P12 的失败在修掉这个之后仍然存在，所以它不是 P12 的直接原因；但 Reactor Netty / RocketMQ 是基于 4.1 编译的，混用是潜在的运行时风险。RealTimeService 只用了 4.1 的 `NioEventLoopGroup`，退回 4.1 无影响
 - **解决**：删除该属性及 netty-all 的版本声明，交给 Boot 管理
 - **教训**：在继承 spring-boot-starter-parent 的 pom 里自定义 `xxx.version` 前，先查 Boot 是否已有同名属性（`help:evaluate -Dexpression=xxx.version`）
+
+## B1 下单 + 库存预占
+
+### P14｜Testcontainers 报 `Previous attempts to find a Docker environment failed`
+- **现象**：单测全过，所有 `*IT` 在启动容器时报错
+- **定位**：`docker info` → `Cannot connect to the Docker daemon`
+- **根因**：Docker Desktop 没启动；`/var/run/docker.sock` 是指向 `~/.docker/run/docker.sock` 的软链接，Docker Desktop 不运行时目标文件不存在
+- **解决**：启动 Docker Desktop，等状态变为 Running 再跑 `./mvnw verify`
+
+### P15｜命令行编译报 Lombok 生成的方法找不到（`cannot find symbol: method builder()` / `variable log`）
+- **现象**：`./mvnw verify` 在 Common 报大量 Lombok 相关编译错误
+- **根因**：本机默认 `java` 是 26，Boot 3.5 管理的 Lombok 不支持；runbook 已有记录，但新开终端容易忘
+- **解决**：先 `export JAVA_HOME=$(/usr/libexec/java_home -v 17)`
+
+### P16｜复制的长命令在终端里被拆成几条，报 `command not found: verify`
+- **现象**：`./mvnw ... verify -Dxxx` 报 `No goals have been specified`，接着 `zsh: command not found: verify`
+- **根因**：从聊天窗口复制时，长命令按显示宽度被折成多行，终端把每一行当成独立命令执行，`./mvnw -pl X` 没带 goal 就先执行了
+- **解决**：长命令写成脚本，或者确认粘贴后是单独一行再回车

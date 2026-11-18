@@ -1,0 +1,43 @@
+server:
+  port: 8107
+
+spring:
+  application:
+    name: order
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  # 启动时执行 db/schema.sql（全是 CREATE TABLE IF NOT EXISTS，可重复执行）。
+  # 没用 Flyway：不在本项目技术栈表里；代价是只能建表、不能做有版本的变更，以后改表结构时再评估
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+  data:
+    redis:
+      database: 0
+      timeout: 3000
+  cloud:
+    openfeign:
+      client:
+        config:
+          # 跨服务调用必须有超时（行业规范）。不配的话默认读超时 60 秒，下游一慢，order 的线程全部卡死
+          product-inventory:
+            connect-timeout: 1000
+            read-timeout: 3000
+
+merchanthub:
+  order:
+    # 待支付订单的支付截止时间（B3 超时关单用）
+    pay-timeout-minutes: 15
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

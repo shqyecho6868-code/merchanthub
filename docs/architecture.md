@@ -28,4 +28,40 @@ flowchart LR
     AI --> ES
 ```
 
-核心链路时序图在 A3 及 B 组任务中补充。
+## 下单 + 库存预占（B1）
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as 买家
+    participant O as order
+    participant PI as product-inventory
+    participant DBP as MySQL mh_product
+    participant DBO as MySQL mh_order
+
+    B->>O: POST /orders（X-User-Id，items[skuId, qty]，expectedPayAmount）
+    O->>PI: Feign /internal/skus/query
+    PI->>DBP: SELECT sku JOIN product
+    PI-->>O: SKU 快照（价格、规格、状态、tenant）
+    O->>O: 校验在售 / 同商家，计价，比对 expectedPayAmount
+    O->>O: order_no = 雪花 ID（预占的幂等键）
+    O->>PI: Feign /internal/inventory/reserve（order_no, tenant, items）
+    rect rgb(235, 245, 255)
+    Note over PI,DBP: 事务 A：全占或全不占
+    loop 按 sku_id 升序
+        PI->>DBP: INSERT inventory_reservation（uk order_no+sku_id）
+        PI->>DBP: UPDATE inventory ... WHERE available >= ?
+        alt 影响 0 行
+            PI->>PI: 抛 INVENTORY_INSUFFICIENT → 整体回滚
+        end
+    end
+    end
+    PI-->>O: 成功（重复请求且内容一致也返回成功）
+    rect rgb(235, 255, 240)
+    Note over O,DBO: 事务 B
+    O->>DBO: trade_snapshot + order_item + orders(10) + order_status_log
+    end
+    O-->>B: orderNo（字符串）、payAmount、expireAt
+    Note over O,PI: 缺口：A 成功、B 失败或 Feign 超时 → 悬空预占，B2/B3 按预占记录补偿
+```
+

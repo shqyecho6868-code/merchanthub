@@ -26,6 +26,15 @@ public enum ErrorCode {
     SAME_LOGIN_CONFLICT(50005, "账号已在其他地方登录"),
     SYSTEM_BUSY(50008, "系统繁忙，请稍后重试"),
 
+    // ============ 交易：商品 / 订单（60xxx）、库存（61xxx）（B1）============
+    SKU_NOT_FOUND(60001, "商品不存在"),
+    SKU_NOT_ON_SALE(60002, "商品已下架或停售"),
+    ORDER_MULTI_TENANT(60003, "一个订单只能包含同一商家的商品"),
+    PRICE_CHANGED(60004, "商品价格已变动，请确认后重新下单"),
+    DOWNSTREAM_UNAVAILABLE(60005, "依赖服务暂不可用，请稍后重试"),
+    INVENTORY_INSUFFICIENT(61001, "库存不足"),
+    RESERVATION_CONFLICT(61002, "同一订单号的预占内容不一致"),
+
     // ============ 用户相关错误码（70xxx）============
     PHONE_EMAIL_ERROR(70000, "手机号/邮箱格式错误"),
     USER_ALREADY_EXISTS(70001, "用户已存在"),

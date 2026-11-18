@@ -108,3 +108,28 @@
 - **选**：`order_no`、`pay_no` 由雪花算法生成，对外暴露；表内另有 `id` 主键
 - **没选**：直接用自增 id 作为订单号（暴露业务量、分库后不全局唯一）
 - **代价**：多一个唯一索引；雪花 workerId 分配问题（pitfalls P1）要在订单号落地前修复
+
+## D20｜雪花 workerId：启动时从 Redis 领槽位，租约 + 续期（B1，2026-11-18）
+- **选**：10 位 workerId+dataCenterId = 1024 个槽位；启动时依次 `SET mh:snowflake:slot:{n} 实例ID NX EX 90`，后台每 30s 比对后续期（Lua compare-and-expire）；用本地截止时间判断租约是否有效，过期或被抢走即停止发号；全局一个命名空间
+- **没选**：配置文件手写 workerId（扩容易配重，就是旧代码的问题）；ZooKeeper 顺序节点（不为此引入 ZK）；MySQL 表领号（过期回收要自己写）；Nacos 实例序号（没有稳定序号）
+- **代价**：启动强依赖 Redis（宁可起不来也不带重复号运行）；时钟回拨只抛异常不处理；旧代码通过静态门面 `SnowflakeUtil` 兼容
+
+## D21｜下单事务边界：inventory 一个本地事务 + order 一个本地事务，中间缺口留给补偿（B1）
+- **选**：按 D2 保持两个服务、两个库（`mh_product` / `mh_order`）。inventory 侧一个本地事务完成"多 SKU 预占 + 写预占记录"（全占或全不占）；order 侧一个本地事务完成"订单 + 明细 + 快照 + 流水"；远程调用放在任何事务之外
+- **没选**：Seata（CLAUDE.md 不引入）；两服务共库共事务（破坏服务边界）；order 整个下单方法加 @Transactional（远程调用期间占着连接，且回滚不了远程预占）
+- **代价**：预占成功、落单失败 / Feign 超时时出现悬空预占，B1 不处理，B2/B3 按预占记录补偿释放
+
+## D22｜防超卖：数据库条件更新，按 sku_id 排序加锁（B1）
+- **选**：`UPDATE inventory SET available=available-?, reserved=reserved+? WHERE sku_id=? AND tenant_id=? AND available>=?`，影响 0 行即库存不足、主动抛异常回滚；多 SKU 按 sku_id 升序更新
+- **没选**：Redis Lua 扣减（CLAUDE.md 明确不做，与红包同构；且 Redis 与 MySQL 之间又多一层一致性问题）；`SELECT ... FOR UPDATE` 再在 Java 判断（多一次往返、锁持有更久，效果相同）；先 SELECT 再 UPDATE 不加锁（会超卖且丢失更新）；乐观锁版本号（热点行上大量重试失败）
+- **代价**：热点 SKU 的请求在同一行锁上排队，吞吐受限于单行更新速度；超大并发场景需要另做（本项目不做秒杀）
+
+## D23｜库存预占记录表 inventory_reservation，唯一键 (order_no, sku_id)，重复请求幂等返回成功（B1）
+- **选**：预占时同事务写记录，先插记录（幂等闸门）再扣库存；状态 10 RESERVED / 20 CONFIRMED / 30 RELEASED；同 order_no 重复请求：内容一致返回成功，不一致返回 RESERVATION_CONFLICT；用 TransactionTemplate 编程式事务，唯一键冲突在事务回滚后、事务外处理
+- **没选**：唯一键只建在 order_no（多 SKU 订单存不下）；重复请求返回失败（第一次其实成功了，会让买家看到失败、库存悬空）；只看订单号存在就返回成功（订单号被错误复用时会掩盖超卖）
+- **代价**：多一张表、每个 SKU 多一次插入
+
+## D24｜工程约定：每服务一个库、schema.sql 建表、时间存 UTC、TestSupport 共享容器模块（B1）
+- **选**：`spring.sql.init` 执行 `db/schema.sql`（全部 IF NOT EXISTS）；JDBC 会话时区固定 UTC、列用 DATETIME(3)；独立 TestSupport 模块提供单例容器（懒启动、JVM 内复用）和 `IntegrationTestBase`，A2+ 的示例 IT 迁入
+- **没选**：Flyway（不在技术栈表）；Common 的 test-jar（不传递 Testcontainers 等 test 依赖）；每个测试类 `@Container` 各起一套（慢）
+- **代价**：schema.sql 不能做有版本的表结构变更；TestSupport 多一个模块
