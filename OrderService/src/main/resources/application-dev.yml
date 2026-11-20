@@ -15,3 +15,7 @@ spring:
       password: ${NACOS_PASSWORD:nacos}
       discovery:
         server-addr: 127.0.0.1:8848
+
+merchanthub:
+  rocketmq:
+    namesrv-addr: 127.0.0.1:9876

@@ -24,6 +24,9 @@ public abstract class IntegrationTestBase {
         registry.add("spring.data.redis.port", () -> SharedContainers.redis().getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
 
+        // 读到这个属性时才会启动 RocketMQ 容器；不用 MQ 的服务不受影响
+        registry.add("merchanthub.rocketmq.namesrv-addr", () -> SharedContainers.rocketmq().getNamesrvAddr());
+
         // 测试不连 Nacos：只测本服务，跨服务调用用 Mock 或 WireMock 替代
         registry.add("spring.cloud.nacos.discovery.enabled", () -> "false");
         registry.add("spring.cloud.service-registry.auto-registration.enabled", () -> "false");
