@@ -65,3 +65,54 @@ sequenceDiagram
     Note over O,PI: 缺口：A 成功、B 失败或 Feign 超时 → 悬空预占，B2/B3 按预占记录补偿
 ```
 
+
+
+## 订单已创建事件：两种可靠发送方案（B2）
+
+### 方案一：RocketMQ 事务消息（`event-mode=TX_MESSAGE`）
+
+```mermaid
+sequenceDiagram
+    participant O as order
+    participant B as RocketMQ Broker
+    participant DB as MySQL mh_order
+    participant C as 下游消费者
+    O->>B: ① 发半消息（RMQ_SYS_TRANS_HALF_TOPIC，消费者不可见）
+    B-->>O: SEND_OK
+    O->>DB: ② 本地事务：订单 + 明细 + 快照 + 流水（timeout 5s）
+    alt 成功
+        O->>B: ③ COMMIT → 消息进入 ORDER_EVENT
+    else 失败
+        O->>B: ③ ROLLBACK → 半消息作废
+    end
+    Note over O,B: ③ 丢失（进程被 kill）时
+    B->>O: ④ 回查（找同一生产者组任意在线实例，≥30s 后）
+    O->>DB: 按订单号查 orders
+    O-->>B: 存在 COMMIT / 不存在且消息够老 ROLLBACK / 查库失败或太新 UNKNOW
+    B->>C: 投递 ORDER_EVENT
+    C->>C: consumed_event 唯一键去重 + 写通知（同一事务）
+```
+
+### 方案二：本地消息表（`event-mode=OUTBOX`，默认）
+
+```mermaid
+sequenceDiagram
+    participant O as order
+    participant DB as MySQL mh_order
+    participant R as OutboxRelay
+    participant B as RocketMQ Broker
+    participant C as 下游消费者
+    O->>DB: 一个本地事务：订单… + order_outbox(status=0)
+    O->>R: afterCommit → 异步快路径
+    loop 快路径 / 每 5s 扫描 status=0 且到期
+        R->>DB: claim：推后 next_retry_at（租约），影响 1 行才发
+        R->>B: send（普通消息，keys=订单号 事件ID）
+        alt 成功
+            R->>DB: status=1, sent_at
+        else 失败
+            R->>DB: retry_count+1, 退避 10s→20s→…≤10min；满 10 次 status=2 告警
+        end
+    end
+    B->>C: 投递 ORDER_EVENT
+    C->>C: consumed_event 唯一键去重 + 写通知（同一事务）
+```

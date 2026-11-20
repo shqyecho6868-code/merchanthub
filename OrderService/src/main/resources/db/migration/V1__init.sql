@@ -1,4 +1,5 @@
 -- order 服务的表（库 mh_order）。设计见 docs/data-model.md。
+-- B1 时由 spring.sql.init 执行；B2 起改由 Flyway 管理，这个文件作为 V1 基线，以后不能再改（改表写新的 V 文件）。
 -- 约定同 product-inventory：DATETIME(3) 存 UTC；created_at / updated_at 由数据库维护；deleted 逻辑删除。
 -- 金额一律 BIGINT，单位分。
 

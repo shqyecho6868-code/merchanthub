@@ -10,7 +10,6 @@ import com.merchanthub.order.client.dto.SkuSnapshot;
 import com.merchanthub.order.model.dto.CreateOrderRequest;
 import com.merchanthub.order.model.vo.CreateOrderVO;
 import com.merchanthub.order.service.OrderCreateService;
-import com.merchanthub.testsupport.IntegrationTestBase;
 import feign.Request;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,57 +37,7 @@ import static org.mockito.Mockito.when;
  * 预占的并发与全占全不占在 product-inventory 的 IT 里测。
  */
 @SpringBootTest
-class OrderCreateIT extends IntegrationTestBase {
-
-    private static final long TENANT = 7L;
-    private static final long BUYER = 1001L;
-
-    @MockitoBean
-    private ProductInventoryClient client;
-
-    @Autowired
-    private OrderCreateService orderCreateService;
-
-    @Autowired
-    private JdbcTemplate jdbc;
-
-    private final Map<Long, SkuSnapshot> catalog = new HashMap<>();
-
-    @BeforeEach
-    void setUp() {
-        for (String t : List.of("orders", "order_item", "trade_snapshot", "order_status_log")) {
-            jdbc.execute("TRUNCATE TABLE " + t);
-        }
-        catalog.clear();
-        catalog.put(101L, sku(101, TENANT, 9900, "{\"颜色\": \"白\", \"尺码\": \"L\"}"));
-        catalog.put(102L, sku(102, TENANT, 1999, "{\"颜色\": \"黑\"}"));
-        when(client.querySkus(any())).thenAnswer(inv -> {
-            List<Long> ids = inv.<com.merchanthub.order.client.dto.SkuQueryRequest>getArgument(0).getSkuIds();
-            return ResultUtils.success(ids.stream().filter(catalog::containsKey).map(catalog::get).toList());
-        });
-        when(client.reserve(any())).thenReturn(ResultUtils.success(null));
-    }
-
-    private static SkuSnapshot sku(long id, long tenant, long price, String spec) {
-        SkuSnapshot s = new SkuSnapshot();
-        s.setSkuId(id);
-        s.setTenantId(tenant);
-        s.setProductId(id * 10);
-        s.setProductName("商品" + id);
-        s.setSpecJson(spec);
-        s.setPrice(price);
-        s.setSkuStatus(SkuSnapshot.SKU_ON_SALE);
-        s.setProductStatus(SkuSnapshot.PRODUCT_LISTED);
-        return s;
-    }
-
-    private static CreateOrderRequest req(Long expected, long... skuQty) {
-        List<CreateOrderRequest.Item> items = new java.util.ArrayList<>();
-        for (int i = 0; i < skuQty.length; i += 2) {
-            items.add(new CreateOrderRequest.Item(skuQty[i], (int) skuQty[i + 1]));
-        }
-        return new CreateOrderRequest(items, expected);
-    }
+class OrderCreateIT extends OrderItSupport {
 
     @Test
     void createOrder_writesOrderItemsSnapshotsAndLog_inOneGo() {

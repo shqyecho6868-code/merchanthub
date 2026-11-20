@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 冒烟：上下文能起来，表建成功，雪花发号器已从 Redis 领到槽位 */
+/** 冒烟：上下文能起来，Flyway 建表成功，雪花发号器已从 Redis 领到槽位 */
 @SpringBootTest
 class SchemaIT extends IntegrationTestBase {
 
@@ -23,7 +23,8 @@ class SchemaIT extends IntegrationTestBase {
     void tablesExist() {
         assertThat(jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()", String.class))
-                .contains("orders", "order_item", "trade_snapshot", "order_status_log");
+                .contains("orders", "order_item", "trade_snapshot", "order_status_log", "order_outbox",
+                        "consumed_event", "merchant_order_notice", "flyway_schema_history");
     }
 
     @Test

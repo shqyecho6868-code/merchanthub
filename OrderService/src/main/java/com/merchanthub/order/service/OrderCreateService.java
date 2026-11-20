@@ -28,10 +28,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 下单编排：校验 SKU → 计价 → 生成订单号 → 预占库存（远程，事务 A）→ 落订单（本地，事务 B）。
+ * 下单编排：校验 SKU → 计价 → 生成订单号 → 预占库存（远程，事务 A）→ 落订单并发事件（本地，事务 B）。
  * <p>
  * 这个方法<b>故意不加 @Transactional</b>：中间有两次远程调用，加了事务就会在等待网络期间一直占着数据库连接；
- * 而且本地事务也回滚不了远程的预占。真正需要原子性的只有“落订单”这一步，交给 {@link OrderPersistService}。
+ * 而且本地事务也回滚不了远程的预占。真正需要原子性的只有“落订单 + 事件”这一步，交给 {@link OrderPlacer}。
  */
 @Slf4j
 @Service
@@ -40,7 +40,7 @@ public class OrderCreateService {
 
     private final ProductInventoryClient productInventoryClient;
     private final SnowflakeIdGenerator idGenerator;
-    private final OrderPersistService orderPersistService;
+    private final OrderPlacer orderPlacer;
     private final Clock clock;
 
     @Value("${merchanthub.order.pay-timeout-minutes:15}")
@@ -78,12 +78,12 @@ public class OrderCreateService {
         RemoteResults.call("reserve",
                 () -> productInventoryClient.reserve(new ReserveRequest(orderNo, tenantId, reserveItems)));
 
-        // 6. 落订单（本地事务 B）。
-        // 已知缺口：如果这里失败，第 5 步占的库存不会自动释放 → B2/B3 按预占记录补偿（B1 笔记第 2 节）
+        // 6. 落订单 + "订单已创建"事件（同生共死，具体方案见 OrderPlacer 的两种实现）。
+        // 已知缺口：如果这里失败，第 5 步占的库存不会自动释放 → B3 按预占记录补偿（B1 笔记第 2 节）
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDateTime expireAt = now.plus(Duration.ofMinutes(payTimeoutMinutes));
         try {
-            orderPersistService.saveNewOrder(orderNo, tenantId, buyerId, pricing, expireAt);
+            orderPlacer.place(new NewOrder(orderNo, tenantId, buyerId, pricing, now, expireAt));
         } catch (RuntimeException e) {
             log.error("订单落库失败，库存已预占待补偿 orderNo={} tenantId={}", orderNo, tenantId, e);
             throw e;

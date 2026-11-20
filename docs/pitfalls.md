@@ -99,3 +99,18 @@
 - **现象**：`./mvnw ... verify -Dxxx` 报 `No goals have been specified`，接着 `zsh: command not found: verify`
 - **根因**：从聊天窗口复制时，长命令按显示宽度被折成多行，终端把每一行当成独立命令执行，`./mvnw -pl X` 没带 goal 就先执行了
 - **解决**：长命令写成脚本，或者确认粘贴后是单独一行再回车
+
+### P17｜事务消息回查测试：回查被"别人"接走，而且来得比免回查时间早（B2）
+- **现象**：`OrderTxCheckIT` 断言"本测试的监听器收到了回查"失败，但消息确实已经被 COMMIT 并投递了。另外，日志里第一次回查出现在发出半消息后约 1.9 秒，而测试 Broker 配置的下限是 3 秒
+- **定位**：回查日志的线程名、进程号都和本测试一样，但 Mockito spy 没有记录到这次调用 → 说明回查进的是另一个 Bean。同一个 JVM 里还缓存着 `OrderCreateIT` 的 Spring 上下文，它的生产者也在 `order-tx-producer` 组里
+- **根因**：① Broker 回查时找的是**同一生产者组里任意一个在线实例**，不一定是发半消息的那个；② 免回查时间是 Broker 用自己的时钟和生产者写入的 `bornTimestamp` 比出来的，宿主机和 Docker VM 的时钟有偏差（推测在 1 秒以内），窗口就跟着偏
+- **同类**：本地消息表的补偿测试里，别的缓存上下文抢着补发（B2 笔记 7.5），解决方式是测试默认关闭扫描
+- **解决**：① 回查测试用独立的生产者组（`merchanthub.order.tx.producer-group`）；② 回查端加第二道防线：订单查不到、且消息年龄（按生产者时钟算）不满 `rollback-min-age-seconds`，返回 UNKNOW，不判 ROLLBACK。两点都写进了 B2 笔记 4.2
+- **还原到生产**：① 说明组里每个实例都必须能回答任意一条半消息，回查只能依赖共享数据库；② 说明"只靠时间窗口"不够可靠
+
+### P18｜kill 后重启 order，迟迟等不到回查，半消息最后被丢弃（B2）
+- **现象**：kill 实验里，order 已经重启，但日志一直没有 `事务回查`。过了几分钟，半消息从 `RMQ_SYS_TRANS_HALF_TOPIC` 转到了 `TRANS_CHECK_MAX_TIME_TOPIC`：订单存在，事件却永远不会投递
+- **定位**：Broker 容器里 `~/logs/rocketmqlogs/transaction.log` 有 `Check transaction failed, channel is null. groupId=order-tx-producer`，说明 Broker 在这个生产者组里找不到在线连接
+- **根因**：生产者只给"已拉到路由的 Broker"发心跳，而路由默认要等**第一次发消息**才拉取。重启后的实例在下第一单之前，Broker 根本不知道它在线，回查无人应答；回查次数照样累加，满 `transactionCheckMax`（默认 15）次后，半消息被当成死信丢弃
+- **解决**：`producer.setTopics(List.of("ORDER_EVENT"))`，5.x 客户端在 `start()` 时会预取这些 Topic 的路由，一启动就和 Broker 建立心跳。新增 `OrderTxRestartIT` 覆盖"新实例没发过消息也要能接住回查"；去掉修复后这个测试会失败（已验证）
+- **延伸**：即使修好了，事务消息的回查也有**时间上限**（回查周期 × 最大次数），生产者组整体宕机超过这个时间，消息照样丢。所以仍需要对账兜底（B3）

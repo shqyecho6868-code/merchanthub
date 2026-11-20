@@ -29,6 +29,7 @@ erDiagram
     orders ||--o{ payment : "一单多次支付尝试"
     orders ||--|{ order_status_log : "每次状态变更一条"
     sku ||--o{ order_item : "被购买"
+    orders ||--|| order_outbox : "同一事务写一条待发事件（B2）"
 ```
 
 ## 3. 表结构
@@ -166,6 +167,43 @@ erDiagram
 
 索引：`idx(order_no)`
 
+### 3.9 order_outbox（订单事件本地消息表，B2 新增，Flyway V2）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | bigint PK | |
+| event_id | bigint UK | 事件唯一 ID（雪花），重发不变，消费端按它幂等 |
+| biz_key | varchar(64) | 业务键，这里是 order_no，同时放进消息 keys 方便排查 |
+| topic / tag | varchar(64) | 发到哪（只记 Topic，不记下游是谁） |
+| payload | json | 事件 JSON：eventId、orderNo、tenantId、buyerId、payAmount、createdAt |
+| status | tinyint | 0 待发送 / 1 已发送 / 2 发送失败（超过重试上限，人工处理） |
+| retry_count | int | 已失败次数 |
+| next_retry_at | datetime(3) | 最早什么时候可以（再）发送；发送过程中兼作租约截止时间 |
+| last_error | varchar(512) | 最近一次失败原因 |
+| sent_at | datetime(3) | |
+
+索引：`uk(event_id)`、`idx(status, next_retry_at)`（扫描条件）
+设计要点：和订单在**同一个本地事务**里写入；抢占只推后 `next_retry_at`、不改 status，只有发送成功才改成 1（B2 笔记 7.3）
+
+### 3.10 consumed_event（消费去重记录，B2 新增，Flyway V3）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | bigint PK | |
+| consumer_group | varchar(64) | 不同消费组各自去重 |
+| event_id | bigint | 生产方的事件 ID，不是 RocketMQ msgId |
+
+索引：`uk(consumer_group, event_id)`
+设计要点：和消费者的业务处理写在**同一个本地事务**里，唯一键冲突 = 已处理过
+
+### 3.11 merchant_order_notice（商家新订单通知，B2 新增，Flyway V3）
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | bigint PK | |
+| order_no / buyer_id / pay_amount / event_id | bigint | 来自 OrderCreated 事件 |
+| read_status | tinyint | 0 未读 / 1 已读 |
+
+索引：`idx(tenant_id, created_at)`、`idx(order_no)`
+设计要点：B2 演示下游（方案 A，暂放 order 服务，realtime 任务时迁走）；`order_no` 故意不加唯一键，幂等由 `consumed_event` 负责，重复了测试能直接看出来
+
 ## 4. 订单状态机
 
 | 编码 | 状态 | 类型 |
@@ -230,4 +268,5 @@ stateDiagram-v2
 
 | 任务 | 变更 |
 |---|---|
+| B2 | order 服务改用 Flyway：原 `schema.sql` → `V1__init.sql`（基线），`V2` 新增 `order_outbox`，`V3` 新增 `consumed_event`、`merchant_order_notice`；`orders.created_at` 改由应用写入下单时刻（与事件里的 createdAt 一致） |
 | B1 | 新增 `inventory_reservation`；时间列定为 `DATETIME(3)` + UTC；按服务分库 `mh_product` / `mh_order`；`inventory.available` 不加 UNSIGNED/CHECK |

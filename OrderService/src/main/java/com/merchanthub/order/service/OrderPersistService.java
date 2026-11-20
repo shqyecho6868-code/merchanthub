@@ -17,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -37,8 +36,16 @@ public class OrderPersistService {
     private final OrderStatusLogMapper statusLogMapper;
     private final ObjectMapper objectMapper;
 
-    @Transactional(rollbackFor = Exception.class)
-    public void saveNewOrder(long orderNo, long tenantId, long buyerId, OrderPricing.Result pricing, LocalDateTime expireAt) {
+    /**
+     * timeout = 5：本地事务最多 5 秒，超时必回滚。事务消息的免回查时间（30 秒）必须比它长，
+     * 这样 Broker 回查时本地事务一定已经结束，"查不到订单"才能放心判定为回滚（B2 笔记 Q2）。
+     */
+    @Transactional(rollbackFor = Exception.class, timeout = 5)
+    public void saveNewOrder(NewOrder newOrder) {
+        long orderNo = newOrder.orderNo();
+        long tenantId = newOrder.tenantId();
+        long buyerId = newOrder.buyerId();
+        OrderPricing.Result pricing = newOrder.pricing();
         for (OrderPricing.Line line : pricing.lines()) {
             SkuSnapshot sku = line.sku();
 
@@ -75,7 +82,8 @@ public class OrderPersistService {
         order.setTotalAmount(pricing.totalAmount());
         order.setDiscountAmount(pricing.discountAmount());
         order.setPayAmount(pricing.payAmount());
-        order.setExpireAt(expireAt);
+        order.setExpireAt(newOrder.expireAt());
+        order.setCreatedAt(newOrder.createdAt());
         ordersMapper.insert(order);
 
         OrderStatusLog log = new OrderStatusLog();

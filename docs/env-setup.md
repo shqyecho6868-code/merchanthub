@@ -47,7 +47,7 @@ docker compose down -v      # 连数据卷一起删 —— 会清空所有数据
 sudo sh -c 'echo "127.0.0.1 host.docker.internal" >> /etc/hosts'
 ```
 
-原因见 `docs/notes/A2-环境搭建.md` 第 3 条。A2 还没有 RocketMQ 代码，所以暂时不做也不影响。
+原因见 `docs/notes/A2-环境搭建.md` 第 3 条。B2 起 order 服务连 RocketMQ，必须先做（本机已于 2026-11-20 加好）。
 
 ## 6. 尚未纳入 compose 的组件
 

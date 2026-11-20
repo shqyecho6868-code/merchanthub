@@ -35,6 +35,10 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
                 "brokerRole=ASYNC_MASTER",
                 "flushDiskType=ASYNC_FLUSH",
                 "autoCreateTopicEnable=true",
+                // 事务消息回查调快（默认几十秒一轮），让回查类测试几秒内出结果：
+                // transactionTimeOut 是半消息"多老才会被回查"的下限，也是免回查时间的最小值
+                "transactionCheckInterval=1000",
+                "transactionTimeOut=3000",
                 "listenPort=" + brokerPort,
                 "brokerIP1=" + DockerClientFactory.instance().dockerHostIpAddress(),
                 "");
@@ -46,6 +50,33 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
         withCommand("sh", "-c",
                 "sh mqnamesrv & sh mqbroker -n localhost:" + NAMESRV_PORT + " -c /home/rocketmq/broker-it.conf");
         waitingFor(Wait.forLogMessage(".*boot success.*", 2).withStartupTimeout(Duration.ofMinutes(3)));
+    }
+
+    /**
+     * 提前建 Topic（和生产环境"关闭自动建 Topic、提前规划"的做法一致）。
+     * 依赖自动建 Topic 时，刚启动的 Broker 第一次发送常报 No route info，测试会偶发失败。
+     */
+    public void createTopic(String topic) {
+        // Broker 打出 boot success 后，到它出现在 NameServer 的集群信息里还有一段延迟，
+        // 这期间 mqadmin 报 "Make sure the specified clusterName exists"，所以重试（最多约 60 秒）
+        String last = "";
+        for (int i = 0; i < 30; i++) {
+            try {
+                ExecResult r = execInContainer("sh", "mqadmin", "updateTopic",
+                        "-n", "localhost:" + NAMESRV_PORT, "-c", "DefaultCluster", "-t", topic);
+                if (r.getExitCode() == 0 && r.getStdout().contains("success")) {
+                    return;
+                }
+                last = r.getStdout() + r.getStderr();
+                Thread.sleep(2_000);
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new IllegalStateException("创建 Topic 失败: " + last);
     }
 
     public String getNamesrvAddr() {

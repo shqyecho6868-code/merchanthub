@@ -131,5 +131,15 @@
 
 ## D24｜工程约定：每服务一个库、schema.sql 建表、时间存 UTC、TestSupport 共享容器模块（B1）
 - **选**：`spring.sql.init` 执行 `db/schema.sql`（全部 IF NOT EXISTS）；JDBC 会话时区固定 UTC、列用 DATETIME(3)；独立 TestSupport 模块提供单例容器（懒启动、JVM 内复用）和 `IntegrationTestBase`，A2+ 的示例 IT 迁入
-- **没选**：Flyway（不在技术栈表）；Common 的 test-jar（不传递 Testcontainers 等 test 依赖）；每个测试类 `@Container` 各起一套（慢）
+- **没选**：Flyway（不在技术栈表；B2 起 order 已改用 Flyway，见 D26）；Common 的 test-jar（不传递 Testcontainers 等 test 依赖）；每个测试类 `@Container` 各起一套（慢）
 - **代价**：schema.sql 不能做有版本的表结构变更；TestSupport 多一个模块
+
+## D25｜"订单已创建"事件：事务消息与本地消息表两种都实现，配置二选一，默认本地消息表（B2，2026-11-20）
+- **选**：`merchanthub.order.event-mode` = `TX_MESSAGE` / `OUTBOX`，下单最后一步抽象为 `OrderPlacer`。事务消息：免回查时间 30s > 本地事务超时 5s，回查端对"订单查不到但消息未满 30s"返回 UNKNOW（第二道防线），查库失败返回 UNKNOW，启动预取 Topic 路由。本地消息表：订单与 outbox 同事务，afterCommit 异步快路径 + `@Scheduled` 扫描兜底，抢占只推后 `next_retry_at` 租约、成功才改状态，指数退避 10s 起封顶 10min，10 次后标失败告警。事件 ID 用自己的雪花 `event_id`，不用 msgId。消费端去重记录与业务同事务。默认 OUTBOX：MQ 不可用时仍能下单，最坏情况可人工重发
+- **没选**：Seata（不需要强一致，且全局锁 + TC 组件）；同时开两种方案（重复事件）；在事务内发 MQ；按 msgId / Redis SETNX 去重；rocketmq-spring-boot-starter / Spring Cloud Stream（封装深，看不清三步；兼容性需另核）
+- **代价**：事务消息有回查时间上限、MQ 挂了不能下单；本地消息表多一张表、一次 insert、一个扫描任务；两种都需要 B3 对账兜底
+
+## D26｜order 服务引入 Flyway，product-inventory 暂不动（B2）
+- **选**：Flyway 11.7.2（Boot 3.5 管理）+ `flyway-mysql`；原 schema.sql 作为 `V1__init.sql` 基线不再修改；`baseline-on-migrate` + `baseline-version: 1` 兼容 B1 建好的本机库（已验证）
+- **没选**：继续 `CREATE TABLE IF NOT EXISTS`（不能改已有表）；Liquibase（XML/YAML 变更集更重，本项目只需 SQL 版本化）；两个服务一起切（product-inventory 本任务无表变更，按需再切）
+- **代价**：多一个依赖；已执行的 V 文件不能改（校验和）；两个服务暂时用两种建表方式

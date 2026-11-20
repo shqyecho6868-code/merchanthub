@@ -8,12 +8,11 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-  # 启动时执行 db/schema.sql（全是 CREATE TABLE IF NOT EXISTS，可重复执行）。
-  # 没用 Flyway：不在本项目技术栈表里；代价是只能建表、不能做有版本的变更，以后改表结构时再评估
-  sql:
-    init:
-      mode: always
-      schema-locations: classpath:db/schema.sql
+  # 表结构由 Flyway 管理（db/migration/V*.sql）。B2 之前的库是 spring.sql.init 建的、没有 Flyway 历史表：
+  # baseline-on-migrate 让 Flyway 把这种已有库记为 V1，只执行 V2 起的脚本；空库则从 V1 正常执行
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 1
   data:
     redis:
       database: 0
@@ -31,6 +30,32 @@ merchanthub:
   order:
     # 待支付订单的支付截止时间（B3 超时关单用）
     pay-timeout-minutes: 15
+    # "订单已创建"事件的发送方案，二选一：TX_MESSAGE（RocketMQ 事务消息）/ OUTBOX（本地消息表）。见 B2 笔记 Q1
+    event-mode: OUTBOX
+    tx:
+      # 半消息至少隔这么久才会被回查；必须大于本地事务超时 5 秒（B2 笔记 Q2）
+      check-immunity-seconds: 30
+      # 回查时查不到订单、且消息不满这么久 → 返回 UNKNOW 稍后重查，而不是直接回滚（第二道防线，B2 笔记 Q2）
+      rollback-min-age-seconds: 30
+      debug:
+        # 以下两项只给实验/测试用，生产保持默认
+        pause-after-local-commit-ms: 0
+        report-unknown: false
+    notice-consumer:
+      # "商家新订单通知"演示消费者（B2 方案 A）
+      enabled: true
+      consume-from: CONSUME_FROM_LAST_OFFSET
+    outbox:
+      # 扫描开关、间隔；每批最多取多少条
+      scan-enabled: true
+      scan-interval-ms: 5000
+      batch-size: 100
+      # 抢到一条记录后的租约：租约内其他实例不会再发它。必须大于一次发送的最长耗时（3s 超时 × 最多 3 次）
+      lease-seconds: 30
+      # 第 n 次失败后隔 base × 2^(n-1) 秒再试，封顶 max-backoff；失败满 max-retries 次标记为失败并告警
+      base-backoff-seconds: 10
+      max-backoff-seconds: 600
+      max-retries: 10
 
 mybatis-plus:
   configuration:

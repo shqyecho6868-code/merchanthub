@@ -62,6 +62,23 @@ docker exec mh-broker sh mqadmin clusterList -n namesrv:9876         # 期望看
 - 集成测试用 Testcontainers **自己起一套临时容器**，不使用 compose 的中间件，两者可以同时运行、互不影响
 - 命令行先切到 JDK 17：`export JAVA_HOME=$(/usr/libexec/java_home -v 17)`（本机默认 `java` 是 26）
 
+### 3.1 本地手动跑下单链路（B2 起）
+
+脚本在 `deploy/b2/`，都要在仓库根目录执行（会自动切 JDK 17、读 `.env`）：
+
+| 步骤 | 命令 |
+|---|---|
+| 打包 | `./mvnw -pl OrderService,ProductInventoryService -am package -DskipTests` |
+| 灌实验数据（商家 7、SKU 1、库存 100，可重复执行） | `docker exec -i -e MYSQL_PWD=<root 密码> mh-mysql mysql -uroot < deploy/b2/seed.sql` |
+| 启动 product-inventory（8106） | `. deploy/b2/env.sh && $JAVA_HOME/bin/java -jar ProductInventoryService/target/ProductInventoryService-0.0.1-SNAPSHOT.jar` |
+| 启动 order（8107，前台） | `./deploy/b2/start-order.sh [停顿毫秒]`，参数给 kill 实验留窗口，默认 0 |
+| 下一单 | `./deploy/b2/place-order.sh` |
+| 按订单号查消息在哪个 Topic | `./deploy/b2/show-msg.sh 订单号`（每次 10–20 秒） |
+
+- `start-order.sh` 固定用 `TX_MESSAGE` 模式（kill 实验用）；要试本地消息表，直接 `java -jar` 启动（默认 `OUTBOX`）
+- order 启动时 Flyway 自动执行 `db/migration` 下的新脚本；B1 建的老库会先被记为 V1 基线
+- Broker 事务日志：`docker exec mh-broker tail -f /home/rocketmq/logs/rocketmqlogs/transaction.log`（回查失败的 `channel is null` 在这里，P18）
+
 ## 4. CI
 
 - 配置：`.github/workflows/ci.yml`，每次 push / PR 执行 `./mvnw -B verify`
@@ -77,6 +94,8 @@ docker exec mh-broker sh mqadmin clusterList -n namesrv:9876         # 期望看
 | `Cannot connect to the Docker daemon` | Docker Desktop 是否启动 | 打开 Docker Desktop，等鲸鱼图标稳定再跑 `./mvnw verify` |
 | `mh-broker` 一直 Restarting，日志末尾是 NPE | `docker compose logs broker` 往前翻 | 存储目录无写权限：确认 `broker-init` 是 `Exited (0)`；否则 `docker compose up -d broker-init` 后重启 broker（P7） |
 | 发消息超时 / `No route info` | `mqadmin clusterList` 看 Broker 注册的地址 | 地址是 172.x → `brokerIP1` 配置没生效；宿主机程序连不上 `host.docker.internal` → `/etc/hosts` 没加（env-setup 第 5 节） |
+| 事务消息一直不回查，`transaction.log` 有 `channel is null` | 生产者是否启动时预取路由 | 生产者没发过消息就不发心跳 → `setTopics` 预取（P18）；半消息超过 15 次回查会进 `TRANS_CHECK_MAX_TIME_TOPIC` |
+| order 启动报 Flyway `Validate failed: checksum mismatch` | 是否改过已执行的 `V*.sql` | 已执行的脚本不能改，改表写新的 V 文件；本机实验库可删掉对应库重建 |
 | RocketMQ 客户端 `send request to <...> failed`，NameServer 端口是通的 | `dependency:tree -Dincludes=com.alibaba.fastjson2` | `fastjson` 与 `fastjson2` 版本错位 → 根 pom 的 `fastjson2.version` 必须与 SCA 管理的 fastjson 一致（P12） |
 | Nacos 控制台能打开，但服务注册超时 | `docker compose ps` 看端口映射 | 9848（gRPC）没映射 |
 | Nacos 登录失败 / 提示初始化 | `.env` 的 `NACOS_PASSWORD` | 3.x 首次启动需初始化管理员密码；`down -v` 清过数据卷后要重新初始化 |
