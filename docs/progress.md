@@ -2,7 +2,7 @@
 
 | 任务 | 状态 | 日期 | 产出 | 过关 |
 |---|---|---|---|---|
-| B2 RocketMQ 事务消息 + 本地消息表 | 完成 | 2026-11-20 | 方案一事务消息（半消息 + 本地事务 + 回查，两道防线）；方案二本地消息表（同事务写入 + afterCommit 快路径 + 扫描补偿，抢占租约 + 指数退避 + 上限）；`event-mode` 开关二选一（默认 OUTBOX）；消费端按 event_id 幂等（去重记录与业务同事务）；order 服务引入 Flyway（V1 基线 / V2 outbox / V3 消费去重 + 商家通知）；🧑 kill 实验（第三次成功，前两次暴露回查上限与 P18）；MQ 不可用实验（自动化 + 真停 Broker）；`docs/notes/B2-事务消息与本地消息表.md` | 稳（Q1、Q4 及两道追问直接答对；Q2 经提示补全 kill 时状态与"同组新实例查共享库"；Q3 经两轮提示讲完整。🔍 审代码：claim 改 status 的 bug 找到且后果说对；逐段 6 问全对，第 4、6 段第二问提示后答对）|
+| B2 RocketMQ 事务消息 + 本地消息表 | 完成 | 2026-11-20 | 方案一事务消息（半消息 + 本地事务 + 回查，两道防线）；方案二本地消息表（同事务写入 + afterCommit 快路径 + 扫描补偿，抢占租约 + 指数退避 + 上限）；`event-mode` 开关二选一（默认 OUTBOX）；消费端按 event_id 幂等（去重记录与业务同事务）；order 服务引入 Flyway（V1 基线 / V2 outbox / V3 消费去重 + 商家通知）；🧑 kill 实验（第三次成功，前两次暴露回查上限与 P18）；MQ 不可用实验（自动化 + 真停 Broker）；`docs/notes/B2-事务消息与本地消息表.md` | 稳（Q1、Q4 及两道追问直接答对；Q2 经提示补全 kill 时状态与"同组新实例查共享库"；Q3 经两轮提示讲完整。🔍 审代码：claim 改 status 的 bug 找到且后果说对；逐段 6 问全对，第 4、6 段第二问提示后答对）；CI ✅ |
 | B1 下单 + 库存预占 | 完成 | 2026-11-18 | 雪花 workerId Redis 租约（修 P1）；新模块 ProductInventoryService / OrderService / TestSupport；8 张表 DDL + 预占记录表；下单接口（Feign 查 SKU → 预占 → 本地事务落单）；多 SKU 有序条件更新预占（幂等）；单测 + 并发 IT；破坏性实验（去掉 `available >= ?` → 超卖 90 件）；`docs/notes/B1-下单与库存预占.md` | 基本稳（第 1 题"行锁 + 代码主动抛异常"经讲解后复述正确；第 2、3 题及追问稳。🔍 审代码：`rows < 0` 位置找到，后果经讲解后理解；逐段 7 问中 5 问答对，快速路径讲解后答对）；CI ✅ |
 | A3 业务建模 | 完成 | 2026-11-17 | `docs/data-model.md`（8 张表 + ER 图 + 订单状态机 + 设计取舍）、`docs/notes/A3-业务建模.md` | 稳（状态 CAS、快照分两层两题经提示后答对） |
 | A2+ runbook + 测试框架 + CI | 完成 | 2026-11-16 | `docs/runbook.md`、JUnit5/Mockito/Testcontainers/JaCoCo、`.github/workflows/ci.yml`、README 徽章、Maven Wrapper；修复 fastjson2 版本错位（P12）与 Netty 版本覆盖（P13） | 本任务不考 |
