@@ -20,6 +20,7 @@
 		<module>Common</module>
 		<module>ProductInventoryService</module>
 		<module>OrderService</module>
+		<module>PaymentService</module>
 		<module>UserService</module>
 		<module>AiService</module>
 		<module>GateWay</module>
