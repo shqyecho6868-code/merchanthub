@@ -1,7 +1,7 @@
 -- product-inventory 服务的表（库 mh_product）。设计见 docs/data-model.md。
 -- 约定：时间列一律 DATETIME(3) 存 UTC（连接会话时区固定为 UTC，见 application.yml）；
 --      created_at / updated_at 由数据库默认值维护，应用不写；deleted 为逻辑删除。
--- 用 IF NOT EXISTS，服务每次启动执行都是幂等的（spring.sql.init）。
+-- B1 时由 spring.sql.init 执行；B3 起改由 Flyway 管理，这个文件作为 V1 基线，以后不能再改（改表写新的 V 文件）。
 
 CREATE TABLE IF NOT EXISTS product (
     id          BIGINT       NOT NULL AUTO_INCREMENT,

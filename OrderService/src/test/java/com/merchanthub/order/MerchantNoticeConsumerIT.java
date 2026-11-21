@@ -117,6 +117,9 @@ class MerchantNoticeConsumerIT extends OrderItSupport {
         rawProducer.send(codec.toMessage(event));
 
         verify(service, timeout(60_000).atLeast(1)).handle(argThat(e -> e != null && e.eventId() == event.eventId()));
+        // verify 在 handle() 被"调用"时就通过，那次处理可能还没执行到写通知表；不等它跑完就恢复表，
+        // 它会直接成功，测试看不到失败 → 重投（B3 全量构建时偶发，pitfalls P21）
+        await().pollDelay(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(5)).until(() -> true);
         // 失败的那次处理：去重记录已回滚
         assertThat(count("consumed_event", "event_id", event.eventId())).isZero();
 

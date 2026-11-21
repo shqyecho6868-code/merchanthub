@@ -114,3 +114,22 @@
 - **根因**：生产者只给"已拉到路由的 Broker"发心跳，而路由默认要等**第一次发消息**才拉取。重启后的实例在下第一单之前，Broker 根本不知道它在线，回查无人应答；回查次数照样累加，满 `transactionCheckMax`（默认 15）次后，半消息被当成死信丢弃
 - **解决**：`producer.setTopics(List.of("ORDER_EVENT"))`，5.x 客户端在 `start()` 时会预取这些 Topic 的路由，一启动就和 Broker 建立心跳。新增 `OrderTxRestartIT` 覆盖"新实例没发过消息也要能接住回查"；去掉修复后这个测试会失败（已验证）
 - **延伸**：即使修好了，事务消息的回查也有**时间上限**（回查周期 × 最大次数），生产者组整体宕机超过这个时间，消息照样丢。所以仍需要对账兜底（B3）
+
+### P19｜10 次并发回调，PAYMENT_EVENT 上收到 11 条事件（B3）
+- **现象**：`PaymentCallbackIT.concurrentDuplicateCallbacks_exactlyOneWins` 断言事件 1 条，实际 11 条；多出来的消息带 `TRANSACTION_CHECK_TIMES=1`
+- **定位**：多出的消息都是被**回查**提交的。9 次输掉 CAS 的回调已经返回 ROLLBACK，但 Broker（测试配置 3 秒起回查）仍来回查它们
+- **根因**：① COMMIT / ROLLBACK 是 oneway 发送，和回查之间有竞态，Broker 可能回查一条已经结束的半消息；② 回查逻辑只看"支付单已成功且流水号一致"，输家的半消息流水号和赢家一样，全被 COMMIT
+- **解决**：每次回调生成尝试 ID 放进消息属性，CAS 时写入 `payment.success_attempt`，回查只提交 ID 匹配的那条 → 输家不再被提交。赢家自己的消息仍可能被投递两次（剩 2 条），这是 RocketMQ 不承诺恰好一次的正常表现，由 eventId = payNo + order 消费去重兜住；测试断言改为"所有消息都来自赢家、eventId 相同"
+- **教训**：回查必须**精确**判断"这条半消息对应的本地事务是否成功"，不能用"业务现在是什么状态"近似
+
+### P20｜🧑 实验里回调成功了，订单却一直是待支付（B3）
+- **现象**：`dup-callback.sh` 打印订单 status=10、去重表为空；半分钟后再查变成 20
+- **定位**：`mqadmin consumerProgress -g order-pay-success` 显示消息已被消费，只是比脚本查询晚
+- **根因**：`PAYMENT_EVENT` 由 payment 第一次发送时自动创建；order 消费者启动更早，要等路由定时刷新（默认 30 秒）才发现这个 Topic
+- **解决**：脚本改为轮询等待订单变成 20。生产应预先创建 Topic（不依赖 autoCreateTopicEnable）
+
+### P21｜B2 的 `MerchantNoticeConsumerIT` 在 B3 全量构建时偶发失败（B3）
+- **现象**：`businessFails_dedupRolledBack...` 报 `handle` 只被调用 1 次（期望至少 2 次），耗时仅 0.2 秒
+- **根因**：`verify(timeout).atLeast(1)` 在 `handle()` 被**调用**那一刻就通过；那次处理还没执行到写通知表，测试已把表改名恢复，于是它直接成功，没有失败也就没有重投。B2 单跑时时序刚好错开，B3 测试变多、负载变大后暴露
+- **解决**：恢复表之前等 2 秒，让失败的那次处理先结束
+- **教训**：Mockito 的 `verify(timeout)` 只能证明"被调用过"，不能证明"执行完了"

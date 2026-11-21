@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    # 每个服务一个库（mh_payment）：支付单和订单不在一个库，payment 不能直接改订单，只能发事件让 order 自己改
+    url: jdbc:mysql://127.0.0.1:3306/mh_payment?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
+    username: root
+    password: ${MYSQL_ROOT_PASSWORD}
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: ${REDIS_PASSWORD}
+  cloud:
+    nacos:
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
+      discovery:
+        server-addr: 127.0.0.1:8848
+
+merchanthub:
+  rocketmq:
+    namesrv-addr: 127.0.0.1:9876

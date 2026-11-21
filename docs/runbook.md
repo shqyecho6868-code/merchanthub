@@ -79,6 +79,21 @@ docker exec mh-broker sh mqadmin clusterList -n namesrv:9876         # 期望看
 - order 启动时 Flyway 自动执行 `db/migration` 下的新脚本；B1 建的老库会先被记为 V1 基线
 - Broker 事务日志：`docker exec mh-broker tail -f /home/rocketmq/logs/rocketmqlogs/transaction.log`（回查失败的 `channel is null` 在这里，P18）
 
+### 3.2 支付回调幂等实验（B3 起）
+
+在 3.1 基础上（中间件、seed、product-inventory、order 已启动；order 用 `java -jar` 默认 OUTBOX 即可）：
+
+| 步骤 | 命令 |
+|---|---|
+| 打包 | `./mvnw -pl OrderService,ProductInventoryService,PaymentService -am package -DskipTests` |
+| 启动 payment（8108，前台） | `./deploy/b3/start-payment.sh` |
+| 下一单 | `./deploy/b2/place-order.sh`，记下 orderNo |
+| 建支付单 + 并发 5 次 / 先后 2 次回调 + 打印四张表 | `./deploy/b3/dup-callback.sh 订单号` |
+
+- payment 日志搜 `幂等`：`第一层 快速路径` / `第二层 CAS`；order 日志搜 `订单状态流转`、`第三层`、`第四层`
+- 首次运行 `PAYMENT_EVENT` 刚被自动创建，order 最多要等 30 秒才开始消费（P20），脚本会轮询等待
+- 消费进度：`docker exec mh-broker sh -c 'cd /home/rocketmq/rocketmq-*/bin && ./mqadmin consumerProgress -n namesrv:9876 -g order-pay-success'`
+
 ## 4. CI
 
 - 配置：`.github/workflows/ci.yml`，每次 push / PR 执行 `./mvnw -B verify`

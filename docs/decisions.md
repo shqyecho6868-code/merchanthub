@@ -143,3 +143,22 @@
 - **选**：Flyway 11.7.2（Boot 3.5 管理）+ `flyway-mysql`；原 schema.sql 作为 `V1__init.sql` 基线不再修改；`baseline-on-migrate` + `baseline-version: 1` 兼容 B1 建好的本机库（已验证）
 - **没选**：继续 `CREATE TABLE IF NOT EXISTS`（不能改已有表）；Liquibase（XML/YAML 变更集更重，本项目只需 SQL 版本化）；两个服务一起切（product-inventory 本任务无表变更，按需再切）
 - **代价**：多一个依赖；已执行的 V 文件不能改（校验和）；两个服务暂时用两种建表方式
+
+## D27｜product-inventory 切到 Flyway（B3）
+- **选**：同 D26，`schema.sql` → `V1__init.sql` 基线，`baseline-on-migrate`；SchemaIT 断言 `flyway_schema_history` 有 V1
+- **代价**：无新增；两个服务建表方式统一
+
+## D28｜新建 payment 服务（独立库 mh_payment，端口 8108）（B3）
+- **选**：支付单独立服务、独立库；建支付单时 Feign 只读查询 order（金额以订单为准）；订单状态只由 order 写，payment 通过"支付成功"事件通知
+- **没选**：payment 同步调 order 改状态（两个写入方，状态机被绕开；order 挂了回调就失败）；支付字段放订单表（一单多次支付无处存）
+- **代价**：多一个服务、一次跨服务查询；订单变成已支付有秒级延迟
+
+## D29｜回调幂等：快速路径 + 支付单 CAS；订单侧消费去重 + 订单 CAS（B3）
+- **选**：四层（见 B3-上笔记第 2 节）。eventId = payNo（确定性）。订单 CAS 的旧状态由事件枚举决定；CAS 失败不写流水、不重投、记 ERROR 待对账；`transit()` 用 MANDATORY 强制同事务
+- **没选**：只靠 MQ 或只靠消费去重（不同支付单的事件 eventId 不同）；Redis SETNX 去重（与数据库不在一个事务）；先 SELECT 判断再 UPDATE（并发下都读到旧状态）
+- **代价**：多一个 `success_attempt` 列；CAS 失败的场景需要对账处理（B3-下）
+
+## D30｜payment 发事件用事务消息（order 用本地消息表）（B3）
+- **选**：TransactionMQProducer，本地事务 = 支付单 CAS，赢了 COMMIT、输了 ROLLBACK；回查按 pay_no 查支付单 + 比对赢家尝试 ID（P19）
+- **没选**：本地消息表（再加表 + 扫描任务，payment 的本地事务足够简单，回查判断可靠）
+- **代价**：MQ 不可用时回调失败（渠道会重试，可接受）；回查有时间上限，极端情况靠对账

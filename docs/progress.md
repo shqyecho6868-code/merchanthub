@@ -2,6 +2,7 @@
 
 | 任务 | 状态 | 日期 | 产出 | 过关 |
 |---|---|---|---|---|
+| B3-上 支付 + 回调幂等 + 状态 CAS | 完成 | 2026-11-20 | product-inventory 切 Flyway；新模块 PaymentService（8108，mh_payment）：建支付单、模拟回调、事务消息发 PAY_SUCCESS；回调幂等四层（快速路径 / 支付单 CAS / 消费去重 / 订单 CAS）；`OrderStatusTransitioner`（CAS + 状态流水，MANDATORY）；order 消费 PAY_SUCCESS；IT：并发回调、重复投递、两张支付单、关单后支付、MANDATORY；踩坑 P19（回查误提交输家半消息）、P20；`docs/notes/B3-上-支付与回调幂等.md` | 稳（设计问题"在哪几处挡重复"答不上，讲解后实验中对照日志完整解释两层；🔍 bug 经一次提示定位到"流水在 CAS 判断前插入"；逐段 4 问全对；过关两条 + 追问全对）；CI 见提交记录 |
 | B2 RocketMQ 事务消息 + 本地消息表 | 完成 | 2026-11-20 | 方案一事务消息（半消息 + 本地事务 + 回查，两道防线）；方案二本地消息表（同事务写入 + afterCommit 快路径 + 扫描补偿，抢占租约 + 指数退避 + 上限）；`event-mode` 开关二选一（默认 OUTBOX）；消费端按 event_id 幂等（去重记录与业务同事务）；order 服务引入 Flyway（V1 基线 / V2 outbox / V3 消费去重 + 商家通知）；🧑 kill 实验（第三次成功，前两次暴露回查上限与 P18）；MQ 不可用实验（自动化 + 真停 Broker）；`docs/notes/B2-事务消息与本地消息表.md` | 稳（Q1、Q4 及两道追问直接答对；Q2 经提示补全 kill 时状态与"同组新实例查共享库"；Q3 经两轮提示讲完整。🔍 审代码：claim 改 status 的 bug 找到且后果说对；逐段 6 问全对，第 4、6 段第二问提示后答对）；CI ✅ |
 | B1 下单 + 库存预占 | 完成 | 2026-11-18 | 雪花 workerId Redis 租约（修 P1）；新模块 ProductInventoryService / OrderService / TestSupport；8 张表 DDL + 预占记录表；下单接口（Feign 查 SKU → 预占 → 本地事务落单）；多 SKU 有序条件更新预占（幂等）；单测 + 并发 IT；破坏性实验（去掉 `available >= ?` → 超卖 90 件）；`docs/notes/B1-下单与库存预占.md` | 基本稳（第 1 题"行锁 + 代码主动抛异常"经讲解后复述正确；第 2、3 题及追问稳。🔍 审代码：`rows < 0` 位置找到，后果经讲解后理解；逐段 7 问中 5 问答对，快速路径讲解后答对）；CI ✅ |
 | A3 业务建模 | 完成 | 2026-11-17 | `docs/data-model.md`（8 张表 + ER 图 + 订单状态机 + 设计取舍）、`docs/notes/A3-业务建模.md` | 稳（状态 CAS、快照分两层两题经提示后答对） |
@@ -26,7 +27,10 @@
 - [B3·对账] **有订单、无事件**：事务消息方案下生产者组整体宕机超过回查上限（周期 × 15 次），半消息被丢弃（B2 第一次 kill 实验实测）；本地消息表方案下记录被标成失败（status=2）。B3 对账任务找出这两类并补发
 - [B3] 本地消息表扫描暂用 Spring `@Scheduled`（多实例靠抢占不重复发），引入 XXL-Job 时迁移；已发送记录的归档 / 清理未做
 - [B·realtime] 演示消费者 `MerchantNoticeConsumer` 与 `merchant_order_notice` 暂放 order 服务（方案 A），realtime 任务时迁走
-- [B·product] product-inventory 仍用 `schema.sql`，第一次改表时切 Flyway（D26）
+- ~~[B·product] product-inventory 仍用 `schema.sql`~~ → B3 已切 Flyway（D27）
+- **[B3-下 明天待做]** ① 超时取消：下单发延迟消息，到期 `PAY_TIMEOUT` 走 `OrderStatusTransitioner`（10→50）；② 取消 / 超时与支付成功竞争的破坏性实验（同一订单两个事件谁 CAS 赢）；③ 支付成功 → 库存确认扣减、关单 → 库存释放（预占记录 `WHERE status = 10` CAS）；④ 悬空预占扫描；⑤ 对账："关单后支付成功"（order 日志 `【幂等·第四层 订单 CAS】`）、"有支付单成功、订单仍待支付"、"有订单无事件"；⑥ 关单时关闭未完成的支付单
+- [B3] payment 尚未接入网关 / Sentinel；`/payments/callback/mock` 真实场景需验签
+- [B3] 预先创建 Topic（`ORDER_EVENT`、`PAYMENT_EVENT`），不依赖 autoCreateTopicEnable（P20）
 - [B2/B3·补偿] **悬空预占**：inventory 预占成功、order 落单失败或 Feign 超时（order 不知道是否占上）时，库存被占着却没有订单。B1 只记日志；B2/B3 按 `inventory_reservation` 找出"有预占、无订单"的记录释放（D21）
 - [B2/B3] 支付确认扣减 / 超时释放：预占记录 `WHERE status = 10` CAS，释放 SQL 带 `reserved >= n`
 - [B·下单] 防重复提交（买家连点两次 → 两个订单）：确认页下发下单 token，提交时按 token 去重；B1 未做

@@ -137,8 +137,10 @@ erDiagram
 | amount | bigint | 本次支付金额 |
 | channel | varchar(32) | 本项目只有 MOCK |
 | status | tinyint | 0 待支付 / 1 成功 / 2 失败 / 3 已关闭 |
-| channel_trade_no | varchar(64) | 渠道流水号，回调幂等依据 |
+| channel_trade_no | varchar(64) | 渠道流水号，回调时写入（待支付时 NULL）；唯一键兜底 |
 | paid_at | datetime | |
+| success_attempt | varchar(36) | B3 新增：赢得 待支付→成功 CAS 的回调尝试 ID，事务回查只提交这次回调的半消息 |
+| tenant_id / created_at / updated_at / deleted | | 公共字段（B3 落表时补齐） |
 
 索引：`uk(pay_no)`、`idx(order_no)`、`uk(channel_trade_no)`
 
@@ -268,5 +270,6 @@ stateDiagram-v2
 
 | 任务 | 变更 |
 |---|---|
+| B3 | product-inventory 改用 Flyway（`schema.sql` → `V1__init.sql`）；新增库 `mh_payment` 与 `payment` 表（Flyway V1），在 3.6 基础上增加 `tenant_id`、`success_attempt`（赢得成功 CAS 的回调尝试 ID，事务回查用，P19）及公共字段；`channel_trade_no` 允许 NULL（待支付时为空，唯一索引允许多个 NULL）；`order_status_log` 无结构变化，B3 起由 `OrderStatusTransitioner` 写入 |
 | B2 | order 服务改用 Flyway：原 `schema.sql` → `V1__init.sql`（基线），`V2` 新增 `order_outbox`，`V3` 新增 `consumed_event`、`merchant_order_notice`；`orders.created_at` 改由应用写入下单时刻（与事件里的 createdAt 一致） |
 | B1 | 新增 `inventory_reservation`；时间列定为 `DATETIME(3)` + UTC；按服务分库 `mh_product` / `mh_order`；`inventory.available` 不加 UNSIGNED/CHECK |

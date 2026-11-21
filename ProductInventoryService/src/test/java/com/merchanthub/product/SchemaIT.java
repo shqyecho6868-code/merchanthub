@@ -8,7 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 冒烟：Spring 上下文能起来，schema.sql 在真实 MySQL 8 上执行成功，关键唯一约束存在 */
+/** 冒烟：Spring 上下文能起来，Flyway 脚本在真实 MySQL 8 上执行成功，关键唯一约束存在 */
 @SpringBootTest
 class SchemaIT extends IntegrationTestBase {
 
@@ -26,5 +26,9 @@ class SchemaIT extends IntegrationTestBase {
                         + "AND table_name = 'inventory_reservation' AND index_name = 'uk_order_sku' ORDER BY seq_in_index",
                 String.class))
                 .containsExactly("order_no", "sku_id");
+
+        // 由 Flyway 建表，而不是 spring.sql.init
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM flyway_schema_history WHERE version = '1' AND success = 1",
+                Integer.class)).isEqualTo(1);
     }
 }

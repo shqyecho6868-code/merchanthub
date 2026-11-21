@@ -43,6 +43,15 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
+        <!-- 表结构版本管理（B3 从 schema.sql 切换，与 order 一致，见 D26）。11.x 起 MySQL 支持拆在 flyway-mysql 里 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
         <!-- 注册到 Nacos，供 order 通过 Feign 调用 -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>

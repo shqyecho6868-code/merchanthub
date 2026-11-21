@@ -116,3 +116,22 @@ sequenceDiagram
     B->>C: 投递 ORDER_EVENT
     C->>C: consumed_event 唯一键去重 + 写通知（同一事务）
 ```
+
+## 支付回调 → 订单已支付（B3-上）
+
+```mermaid
+sequenceDiagram
+    participant CH as 渠道（模拟）
+    participant P as payment (8108)
+    participant DBP as MySQL mh_payment
+    participant MQ as RocketMQ PAYMENT_EVENT
+    participant O as order (8107)
+    participant DBO as MySQL mh_order
+    CH->>P: 支付成功通知（可能重复）
+    P->>DBP: 已成功？→ 直接回成功
+    P->>MQ: 半消息（eventId = payNo）
+    P->>DBP: UPDATE payment ... WHERE status = 0
+    P->>MQ: 赢了 COMMIT / 输了 ROLLBACK
+    MQ->>O: PAY_SUCCESS
+    O->>DBO: 事务内：consumed_event → orders CAS(10→20) → order_status_log
+```

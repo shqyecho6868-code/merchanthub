@@ -34,6 +34,11 @@ public enum ErrorCode {
     DOWNSTREAM_UNAVAILABLE(60005, "依赖服务暂不可用，请稍后重试"),
     INVENTORY_INSUFFICIENT(61001, "库存不足"),
     RESERVATION_CONFLICT(61002, "同一订单号的预占内容不一致"),
+    ORDER_NOT_PAYABLE(60006, "订单当前不是待支付状态"),
+    // ============ 支付（62xxx）（B3）============
+    PAYMENT_NOT_FOUND(62001, "支付单不存在"),
+    PAY_AMOUNT_MISMATCH(62002, "回调金额与支付单金额不一致"),
+    CHANNEL_TRADE_NO_CONFLICT(62003, "渠道流水号已被其他支付单使用"),
 
     // ============ 用户相关错误码（70xxx）============
     PHONE_EMAIL_ERROR(70000, "手机号/邮箱格式错误"),
