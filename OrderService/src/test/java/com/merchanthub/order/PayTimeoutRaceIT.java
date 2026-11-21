@@ -121,4 +121,50 @@ class PayTimeoutRaceIT extends OrderItSupport {
         // 重复的超时消息：去重表挡住
         assertThat(timeoutService.handle(new PayTimeoutMessage(payNo + 1, orderNo, TENANT))).isFalse();
     }
+
+    /**
+     * 先后版本（反方向）：支付先成功，超时消息照常到期投递。
+     * <p>
+     * 这是线上<b>最常见</b>的路径：定时消息发出后不会撤回，所以每个已支付订单都会收到一条超时消息。
+     * 超时一方 CAS(10→50) 影响 0 行 → 订单保持已支付，不写流水、不写 ORDER_CLOSED（库存不会被释放）。
+     * 去掉 CAS 里的 {@code AND status = #{from}} 再跑，会看到已支付订单被关掉、库存先确认又释放（B4 实验 ③）。
+     */
+    @Test
+    void timeoutAfterPaid_noop_orderStaysPaid_noClosedEvent() {
+        long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
+        long payNo = System.nanoTime();
+        assertThat(paidService.handle(new PaySuccessEvent(payNo, payNo, orderNo, TENANT, BUYER, 9900, "T" + payNo,
+                LocalDateTime.now()))).isTrue();
+
+        assertThat(timeoutService.handle(new PayTimeoutMessage(payNo + 1, orderNo, TENANT))).isFalse();
+
+        String key = String.valueOf(orderNo);
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo)).isEqualTo(20);
+        assertThat(jdbc.queryForObject("SELECT close_reason FROM orders WHERE order_no = ?", String.class, orderNo)).isNull();
+        // 流水：CREATE + PAY_SUCCESS，没有 PAY_TIMEOUT
+        assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ?", orderNo)).isEqualTo(2);
+        assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'", key)).isEqualTo(1);
+        assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", key)).isZero();
+        assertThat(count("SELECT COUNT(*) FROM pay_anomaly WHERE order_no = ?", orderNo)).isZero();
+    }
+
+    /**
+     * 租户隔离：订单号对、租户不对的超时消息关不掉订单。
+     * 订单 CAS 的 WHERE 里带 tenant_id，所以即使消息体被篡改 / 串租户，也只会影响 0 行。
+     * 之后用正确租户的消息仍能正常关单（错误消息没有"占掉"任何东西）。
+     */
+    @Test
+    void timeoutWithOtherTenant_cannotCloseOrder() {
+        long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
+        long otherTenant = TENANT + 1;
+        long eventId = System.nanoTime();
+
+        assertThat(timeoutService.handle(new PayTimeoutMessage(eventId, orderNo, otherTenant))).isFalse();
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo)).isEqualTo(10);
+        assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'",
+                String.valueOf(orderNo))).isZero();
+
+        assertThat(timeoutService.handle(new PayTimeoutMessage(eventId + 1, orderNo, TENANT))).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo)).isEqualTo(50);
+    }
 }
