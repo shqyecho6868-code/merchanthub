@@ -23,6 +23,14 @@ public class OrderEventCodec {
         }
     }
 
+    public String toJson(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public OrderCreatedEvent fromJson(String json) {
         try {
             return objectMapper.readValue(json, OrderCreatedEvent.class);

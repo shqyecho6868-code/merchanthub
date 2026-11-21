@@ -3,7 +3,6 @@ package com.merchanthub.order.mq.outbox;
 import com.merchanthub.order.mq.OrderEventTopics;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -15,9 +14,12 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * B3-下起 outbox 是 order 的通用发件箱（已支付 / 已关闭 / 超时关单消息都走它），不再跟随 event-mode 开关；
+ * event-mode 只决定"订单已创建"事件走事务消息还是本地消息表
+ */
 @Configuration
 @EnableScheduling
-@ConditionalOnProperty(name = "merchanthub.order.event-mode", havingValue = "OUTBOX")
 public class OutboxConfig {
 
     /** 普通生产者即可：一致性靠本地消息表，不需要 MQ 的事务能力 */
@@ -27,7 +29,7 @@ public class OutboxConfig {
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(3000);
-        producer.setTopics(List.of(OrderEventTopics.TOPIC));   // 启动时预取路由（P18）
+        producer.setTopics(List.of(OrderEventTopics.TOPIC, OrderEventTopics.TIMEOUT_TOPIC));   // 启动时预取路由（P18）
         return producer;
     }
 

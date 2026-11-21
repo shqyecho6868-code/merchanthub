@@ -10,6 +10,14 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   # 表结构由 Flyway 管理（db/migration/V*.sql），与 order 服务一致（D26）。B3 之前 spring.sql.init 建的库没有 Flyway 历史表：
   # baseline-on-migrate 把这种已有库记为 V1，只执行 V2 起的脚本；空库则从 V1 正常执行
+  cloud:
+    openfeign:
+      client:
+        config:
+          # 跨服务调用必须有超时：悬空扫描查订单，order 慢了这一批就跳过，下一轮再查
+          order:
+            connect-timeout: 1000
+            read-timeout: 3000
   flyway:
     baseline-on-migrate: true
     baseline-version: 1
@@ -23,3 +31,17 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+merchanthub:
+  inventory:
+    settle-consumer:
+      # 订阅订单的 ORDER_PAID / ORDER_CLOSED，做确认扣减 / 释放（B3-下）
+      enabled: true
+    dangling-scan:
+      # 悬空预占扫描（B3-下）：预占超过 older-than 仍是 RESERVED、且 order 确认订单不存在 → 释放
+      enabled: true
+      interval-ms: 60000
+      # 必须远大于下单事务超时（5 秒）：过了这么久还查不到订单，才能确定它以后也不会出现。
+      # 还要大于订单支付时限（15m）+ 余量：正常的待支付订单本来就占着库存，不该每轮都被捞出来问一遍
+      older-than: 30m
+      batch-size: 100

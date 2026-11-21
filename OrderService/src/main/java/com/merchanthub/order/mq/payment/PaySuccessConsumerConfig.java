@@ -43,6 +43,10 @@ public class PaySuccessConsumerConfig {
                 }
                 try {
                     service.handle(event);
+                } catch (OrderNotVisibleException e) {
+                    log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                            event.eventId(), event.orderNo(), m.getReconsumeTimes());
+                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 } catch (RuntimeException e) {
                     // 数据库不可用等：整个事务（含去重记录）已回滚，让 RocketMQ 稍后重投
                     log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",

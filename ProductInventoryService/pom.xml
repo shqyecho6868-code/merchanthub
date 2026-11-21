@@ -52,6 +52,20 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
+        <!-- B3-下：悬空预占扫描要问 order"这个订单存在吗"（只读内部接口） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+        </dependency>
+        <!-- B3-下：消费订单的 ORDER_PAID / ORDER_CLOSED 事件做确认扣减 / 释放。和 order 一样用原生客户端，版本由 SCA BOM 管理 -->
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
+        </dependency>
         <!-- 注册到 Nacos，供 order 通过 Feign 调用 -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>

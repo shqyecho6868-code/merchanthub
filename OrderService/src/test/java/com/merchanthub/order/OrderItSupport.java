@@ -46,6 +46,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
     @BeforeAll
     static void createTopics() {
         SharedContainers.rocketmq().createTopic(OrderEventTopics.TOPIC);
+        SharedContainers.rocketmq().createTopic(OrderEventTopics.TIMEOUT_TOPIC);
     }
 
     @BeforeEach
@@ -65,7 +66,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
 
     protected List<String> tablesToTruncate() {
         return List.of("orders", "order_item", "trade_snapshot", "order_status_log", "order_outbox",
-                "consumed_event", "merchant_order_notice");
+                "consumed_event", "merchant_order_notice", "pay_anomaly");
     }
 
     protected static SkuSnapshot sku(long id, long tenant, long price, String spec) {

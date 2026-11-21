@@ -37,7 +37,7 @@ public class OrderStatusTransitioner {
         int from = event.getFrom().getCode();
         int to = event.getTo().getCode();
 
-        int rows = ordersMapper.casStatus(orderNo, tenantId, from, to, LocalDateTime.now(clock));
+        int rows = ordersMapper.casStatus(orderNo, tenantId, from, to, LocalDateTime.now(clock), event.name());
         if (rows != 1) {
             // CAS 失败 = 订单没变，就不能写流水：流水必须和真实发生过的流转一一对应，否则对账时"流水说已支付、订单却是已关闭"
             log.warn("订单状态 CAS 失败：订单当前不是 {}，{} 未生效 orderNo={} tenantId={}",

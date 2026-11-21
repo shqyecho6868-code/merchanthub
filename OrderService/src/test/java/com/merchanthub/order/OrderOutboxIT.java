@@ -46,7 +46,7 @@ class OrderOutboxIT extends OrderItSupport {
     void orderAndOutboxRowCommittedTogether_thenDelivered() {
         long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
 
-        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ?", String.valueOf(orderNo));
+        Map<String, Object> row = jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", String.valueOf(orderNo));
         assertThat(row.get("tenant_id")).isEqualTo(TENANT);
         assertThat(row.get("topic")).isEqualTo(OrderEventTopics.TOPIC);
 
@@ -54,7 +54,7 @@ class OrderOutboxIT extends OrderItSupport {
         MessageExt m = observer.received(orderNo).get(0);
         assertThat(m.getUserProperty(OrderEventTopics.PROP_EVENT_ID)).isEqualTo(String.valueOf(row.get("event_id")));
         await().atMost(Duration.ofSeconds(10)).until(() -> jdbc.queryForObject(
-                "SELECT status FROM order_outbox WHERE biz_key = ?", Integer.class, String.valueOf(orderNo)) == 1);
+                "SELECT status FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", Integer.class, String.valueOf(orderNo)) == 1);
     }
 
     /** 写订单失败 → 整个本地事务回滚：订单和消息记录都不存在，也就不可能发出消息 */

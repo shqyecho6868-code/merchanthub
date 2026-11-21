@@ -25,4 +25,21 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
               AND available >= #{qty}
             """)
     int tryReserve(@Param("tenantId") long tenantId, @Param("skuId") long skuId, @Param("qty") int qty);
+
+    /**
+     * 确认扣减（支付成功）：预占 → 真正卖出。available 不变（下单时已经减过），reserved 减掉。
+     * reserved >= qty 是防御条件：正常情况一定成立，不成立说明数据已经不一致，调用方抛异常回滚并告警。
+     */
+    @Update("""
+            UPDATE inventory SET reserved = reserved - #{qty}
+            WHERE sku_id = #{skuId} AND tenant_id = #{tenantId} AND deleted = 0 AND reserved >= #{qty}
+            """)
+    int confirm(@Param("tenantId") long tenantId, @Param("skuId") long skuId, @Param("qty") int qty);
+
+    /** 释放（关单 / 悬空预占）：预占的数量还回可售。条件同 confirm */
+    @Update("""
+            UPDATE inventory SET available = available + #{qty}, reserved = reserved - #{qty}
+            WHERE sku_id = #{skuId} AND tenant_id = #{tenantId} AND deleted = 0 AND reserved >= #{qty}
+            """)
+    int release(@Param("tenantId") long tenantId, @Param("skuId") long skuId, @Param("qty") int qty);
 }

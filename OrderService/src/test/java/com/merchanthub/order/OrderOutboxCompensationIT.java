@@ -2,6 +2,7 @@ package com.merchanthub.order;
 
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
+import com.merchanthub.order.mq.OrderEventTopics;
 import com.merchanthub.order.mq.outbox.OutboxRelay;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -68,11 +69,14 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         observer.close();
     }
 
-    /** 前 failTimes 次发送失败，之后恢复正常 */
+    /**
+     * "订单已创建"事件的前 failTimes 次发送失败，之后恢复正常。
+     * 只对 ORDER_EVENT 计数：B3-下起每单还会写一行 ORDER_TIMEOUT 定时消息，不能让它分走失败次数
+     */
     private void mqDownFor(int failTimes) throws Exception {
         AtomicInteger calls = new AtomicInteger();
         doAnswer(inv -> {
-            if (calls.incrementAndGet() <= failTimes) {
+            if (OrderEventTopics.TOPIC.equals(inv.<Message>getArgument(0).getTopic()) && calls.incrementAndGet() <= failTimes) {
                 throw new MQClientException(-1, "模拟 MQ 不可用");
             }
             return inv.callRealMethod();
@@ -80,7 +84,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
     }
 
     private Map<String, Object> outbox(long orderNo) {
-        return jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ?", String.valueOf(orderNo));
+        return jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", String.valueOf(orderNo));
     }
 
     /**

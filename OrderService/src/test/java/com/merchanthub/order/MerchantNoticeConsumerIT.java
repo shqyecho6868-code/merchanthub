@@ -101,6 +101,9 @@ class MerchantNoticeConsumerIT extends OrderItSupport {
         assertThat(msgIds).hasSize(3);
 
         verify(service, timeout(60_000).times(3)).handle(argThat(e -> e != null && e.eventId() == event.eventId()));
+        // 同 P21：verify 只证明第 3 次"被调用"了，不证明前面的事务已提交（B3-下全量构建时偶发读到 0），等结果落库再断言
+        await().atMost(Duration.ofSeconds(10)).until(() -> count("merchant_order_notice", "event_id", event.eventId()) >= 1);
+        await().pollDelay(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(5)).until(() -> true);
         assertThat(count("merchant_order_notice", "event_id", event.eventId())).isEqualTo(1);
         assertThat(count("consumed_event", "event_id", event.eventId())).isEqualTo(1);
     }

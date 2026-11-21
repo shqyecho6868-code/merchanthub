@@ -3,6 +3,7 @@ package com.merchanthub.order.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.id.SnowflakeIdGenerator;
 import com.merchanthub.order.client.dto.SkuSnapshot;
 import com.merchanthub.order.mapper.OrderItemMapper;
 import com.merchanthub.order.mapper.OrderStatusLogMapper;
@@ -13,6 +14,10 @@ import com.merchanthub.order.model.entity.OrderStatusLog;
 import com.merchanthub.order.model.entity.Orders;
 import com.merchanthub.order.model.entity.TradeSnapshot;
 import com.merchanthub.order.model.enums.OrderStatus;
+import com.merchanthub.order.mq.OrderEventCodec;
+import com.merchanthub.order.mq.OrderEventTopics;
+import com.merchanthub.order.mq.outbox.OutboxWriter;
+import com.merchanthub.order.mq.timeout.PayTimeoutMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +40,9 @@ public class OrderPersistService {
     private final TradeSnapshotMapper tradeSnapshotMapper;
     private final OrderStatusLogMapper statusLogMapper;
     private final ObjectMapper objectMapper;
+    private final OutboxWriter outboxWriter;
+    private final OrderEventCodec codec;
+    private final SnowflakeIdGenerator idGenerator;
 
     /**
      * timeout = 5：本地事务最多 5 秒，超时必回滚。事务消息的免回查时间（30 秒）必须比它长，
@@ -95,6 +103,12 @@ public class OrderPersistService {
         log.setOperatorType("BUYER");
         log.setOperatorId(buyerId);
         statusLogMapper.insert(log);
+
+        // 超时关单定时消息：和订单在同一个事务里写进 outbox（两种 event-mode 都走这里）。
+        // 不在 createOrder 最后直接 send：订单提交后、send 之前进程挂了，这单就永远不会超时关单，库存永远被占着
+        PayTimeoutMessage timeout = new PayTimeoutMessage(idGenerator.nextId(), orderNo, tenantId);
+        outboxWriter.append(tenantId, timeout.eventId(), String.valueOf(orderNo), OrderEventTopics.TIMEOUT_TOPIC,
+                OrderEventTopics.TAG_PAY_TIMEOUT, codec.toJson(timeout), newOrder.expireAt());
     }
 
     private String toJson(SkuSnapshot sku) {

@@ -10,7 +10,6 @@ import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -33,7 +33,6 @@ import java.util.concurrent.ExecutorService;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "merchanthub.order.event-mode", havingValue = "OUTBOX")
 public class OutboxRelay {
 
     private final OrderOutboxMapper mapper;
@@ -55,7 +54,8 @@ public class OutboxRelay {
     @Value("${merchanthub.order.outbox.max-retries:10}")
     private int maxRetries;
 
-    public OutboxRelay(OrderOutboxMapper mapper, DefaultMQProducer producer,
+    // TX_MESSAGE 模式下还有一个事务生产者（TransactionMQProducer 也是 DefaultMQProducer），按名字指定用普通生产者
+    public OutboxRelay(OrderOutboxMapper mapper, @Qualifier("orderOutboxProducer") DefaultMQProducer producer,
                        @Qualifier("outboxSendExecutor") ExecutorService executor, Clock clock) {
         this.mapper = mapper;
         this.producer = producer;
@@ -137,6 +137,11 @@ public class OutboxRelay {
         msg.setKeys(row.getBizKey() + " " + row.getEventId());
         // 用我们自己的 event_id 做幂等键：重发时 RocketMQ 的 msgId 会变，event_id 不变（B2 笔记 Q4）
         msg.putUserProperty(OrderEventTopics.PROP_EVENT_ID, String.valueOf(row.getEventId()));
+        if (row.getDeliverAt() != null) {
+            // RocketMQ 5 定时消息：Broker 的时间轮到点才投递，精度到毫秒（4.x 只有 18 个固定延迟等级）。
+            // 补发时投递时间已经过去也照样设：Broker 会立即投递，超时关单马上执行，结果仍然正确
+            msg.setDeliverTimeMs(row.getDeliverAt().toInstant(ZoneOffset.UTC).toEpochMilli());
+        }
         return msg;
     }
 

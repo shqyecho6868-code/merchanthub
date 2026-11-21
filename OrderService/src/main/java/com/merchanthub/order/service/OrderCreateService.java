@@ -43,8 +43,13 @@ public class OrderCreateService {
     private final OrderPlacer orderPlacer;
     private final Clock clock;
 
-    @Value("${merchanthub.order.pay-timeout-minutes:15}")
-    private long payTimeoutMinutes;
+    /** 支付时限，Duration 格式（15m / 30s），实验时可调短 */
+    @Value("${merchanthub.order.pay-timeout:15m}")
+    private Duration payTimeout;
+
+    /** 只给 🧑 实验用：库存预占后、订单落库前停顿，制造"支付回调早于订单"（B3-下实验 ①）。生产保持 0 */
+    @Value("${merchanthub.order.debug.pause-before-persist-ms:0}")
+    private long pauseBeforePersistMs;
 
     public CreateOrderVO createOrder(long buyerId, CreateOrderRequest request) {
         // 1. 同一个 SKU 出现多次就合并数量；TreeMap 让后面的遍历顺序固定（按 skuId 升序）
@@ -80,8 +85,17 @@ public class OrderCreateService {
 
         // 6. 落订单 + "订单已创建"事件（同生共死，具体方案见 OrderPlacer 的两种实现）。
         // 已知缺口：如果这里失败，第 5 步占的库存不会自动释放 → B3 按预占记录补偿（B1 笔记第 2 节）
+        if (pauseBeforePersistMs > 0) {
+            log.warn("【实验】库存已预占，暂停 {} ms 后才落库 orderNo={} tenantId={} payAmount={}",
+                    pauseBeforePersistMs, orderNo, tenantId, pricing.payAmount());
+            try {
+                Thread.sleep(pauseBeforePersistMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         LocalDateTime now = LocalDateTime.now(clock);
-        LocalDateTime expireAt = now.plus(Duration.ofMinutes(payTimeoutMinutes));
+        LocalDateTime expireAt = now.plus(payTimeout);
         try {
             orderPlacer.place(new NewOrder(orderNo, tenantId, buyerId, pricing, now, expireAt));
         } catch (RuntimeException e) {

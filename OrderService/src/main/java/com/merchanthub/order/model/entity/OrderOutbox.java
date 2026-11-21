@@ -26,6 +26,8 @@ public class OrderOutbox {
     private String topic;
     private String tag;
     private String payload;
+    /** 定时投递时间（UTC）；NULL = 立即投递。超时关单消息用（V4） */
+    private LocalDateTime deliverAt;
     private Integer status;
     private Integer retryCount;
     private LocalDateTime nextRetryAt;
