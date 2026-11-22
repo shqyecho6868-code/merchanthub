@@ -276,6 +276,33 @@
 		  分开的原因：单测秒级、随时能跑；集成测试要拉镜像、起容器，慢且依赖 Docker，CI 里一起跑。
 		-->
 		<plugins>
+			<!--
+			  Maven Toolchains：编译和测试固定用 JDK 17，与运行 Maven 的 JDK 无关（P15 / P25 / D37）。
+			  本机默认 java 是 26，直接 ./mvnw verify 即可，不必再 export JAVA_HOME；
+			  Maven 从 ~/.m2/toolchains.xml 找 17 的路径（CI 由 setup-java 自动生成）。
+			  compiler / surefire / failsafe 都会用这里选中的 JDK，所以 Lombok 在 javac 17 里正常运行，
+			  测试 JVM（含 JaCoCo agent）也是 17。找不到 17 时这一步直接失败并提示缺少匹配的 toolchain。
+			-->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-toolchains-plugin</artifactId>
+				<version>3.2.0</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>toolchain</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<toolchains>
+						<jdk>
+							<!-- 写成区间而不是 "17"：纯版本号要求精确相等，CI 的 setup-java 登记的可能是 17.0.x -->
+							<version>[17,18)</version>
+						</jdk>
+					</toolchains>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>

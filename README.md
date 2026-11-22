@@ -16,7 +16,7 @@ docker compose up -d          # 启动全部中间件
 ./mvnw verify                 # 单元测试 + Testcontainers 集成测试 + 覆盖率报告（需要 Docker）
 ```
 
-需要 JDK 17。覆盖率报告在 `<模块>/target/site/jacoco/index.html`。
+需要本机装有 JDK 17 并登记到 `~/.m2/toolchains.xml`（Maven Toolchains 自动选用，默认 `java` 是别的版本也可以，见 `docs/env-setup.md`）。覆盖率报告在 `<模块>/target/site/jacoco/index.html`。
 
 ## 文档
 
