@@ -113,7 +113,36 @@ services:
     networks:
       - mh-net
 
+  sentinel:
+    # C2：Sentinel 控制台。官方没有发布 Docker 镜像（第三方镜像来源不可控），所以用官方 JRE 镜像跑官方 release 的 jar：
+    # 首次启动时下载到命名卷，之后直接用。版本与 SCA 2025.0.0.0 管理的 sentinel-core 1.8.9 一致
+    image: eclipse-temurin:17-jre
+    container_name: mh-sentinel
+    restart: unless-stopped
+    environment:
+      SENTINEL_VERSION: "1.8.9"
+      SENTINEL_PASSWORD: ${SENTINEL_PASSWORD:-sentinel}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        JAR=/opt/sentinel/sentinel-dashboard-$$SENTINEL_VERSION.jar
+        [ -s "$$JAR" ] || curl -fL -o "$$JAR" https://github.com/alibaba/Sentinel/releases/download/$$SENTINEL_VERSION/sentinel-dashboard-$$SENTINEL_VERSION.jar || exit 1
+        exec java -Xms128m -Xmx256m -Dserver.port=8858 \
+          -Dsentinel.dashboard.auth.username=sentinel -Dsentinel.dashboard.auth.password=$$SENTINEL_PASSWORD \
+          -jar "$$JAR"
+    # 控制台要主动回连各服务的 8719 拉监控、推规则；服务跑在宿主机上，用 host.docker.internal 找到它们
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8858:8858"                    # 默认 8080 会和 Nacos 控制台冲突
+    volumes:
+      - sentinel-jar:/opt/sentinel
+    networks:
+      - mh-net
+
 volumes:
+  sentinel-jar:
   mysql-data:
   redis-data:
   nacos-data:

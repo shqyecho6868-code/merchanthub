@@ -15,6 +15,13 @@ spring:
       password: ${NACOS_PASSWORD:nacos}
       discovery:
         server-addr: 127.0.0.1:8848
+    sentinel:
+      transport:
+        # Sentinel 控制台（docker-compose 的 mh-sentinel）
+        dashboard: 127.0.0.1:8858
+        # 控制台跑在容器里，要回连本机的 8719 拉数据，需要告诉它一个"容器里能访问到宿主机"的 IP。
+        # 控制台只认 IP 不认主机名（填 host.docker.internal 会报 Bad IP，P30），所以由 deploy/c2/start-order.sh 现查现传
+        client-ip: ${SENTINEL_CLIENT_IP:}
 
 merchanthub:
   rocketmq:

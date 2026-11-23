@@ -8,7 +8,9 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -33,10 +35,26 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    /**
+     * 业务失败（库存不足、订单不存在……）是"预期内的结果"，不是系统故障：记 WARN、不打堆栈（C1 遗留，C2 修）。
+     * 记成 ERROR 的话，按 ERROR 数告警的规则会被正常业务失败刷屏，真正的故障反而被淹没
+     */
     @ExceptionHandler(BusinessException.class)
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
-        log.error("BusinessException", e);
+        log.warn("业务失败 code={} message={}", e.getCode(), e.getMessage());
         return ResultUtils.error(e.getCode(), e.getMessage());
+    }
+
+    /**
+     * 被限流 → HTTP 429 + Retry-After（C2）。不能落到 RuntimeException 兜底变成 500：
+     * 500 会被监控算成"服务故障"，客户端也分不清是"稍后再试就行"还是"系统坏了"
+     */
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<BaseResponse<?>> tooManyRequestsHandler(TooManyRequestsException e) {
+        log.warn("请求被限流: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, "1")
+                .body(ResultUtils.error(e.getCode(), e.getMessage()));
     }
 
     /**

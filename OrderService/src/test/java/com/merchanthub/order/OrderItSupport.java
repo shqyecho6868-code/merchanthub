@@ -4,6 +4,7 @@ import com.merchanthub.common.common.ResultUtils;
 import com.merchanthub.order.client.ProductInventoryClient;
 import com.merchanthub.order.client.dto.SkuQueryRequest;
 import com.merchanthub.order.client.dto.SkuSnapshot;
+import com.merchanthub.order.config.SentinelRulesConfig;
 import com.merchanthub.order.model.dto.CreateOrderRequest;
 import com.merchanthub.order.mq.OrderEventTopics;
 import com.merchanthub.order.service.OrderCreateService;
@@ -44,6 +45,9 @@ abstract class OrderItSupport extends IntegrationTestBase {
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @Autowired
+    private SentinelRulesConfig sentinelRules;
+
     protected final Map<Long, SkuSnapshot> catalog = new HashMap<>();
 
     @BeforeAll
@@ -79,6 +83,12 @@ abstract class OrderItSupport extends IntegrationTestBase {
         }
     }
 
+    /** C2：Sentinel 规则 / 熔断状态是 JVM 全局的，每个用例按本上下文的配置重置，避免别的测试类留下的"已熔断"影响这里 */
+    @BeforeEach
+    void resetSentinel() {
+        sentinelRules.reload();
+    }
+
     @BeforeEach
     void resetFixture() {
         for (String t : tablesToTruncate()) {
@@ -112,12 +122,14 @@ abstract class OrderItSupport extends IntegrationTestBase {
         return s;
     }
 
-    protected static CreateOrderRequest req(Long expected, long... skuQty) {
+    /** 下单请求；tenantId 取第一个 SKU 的商家（SKU 不在目录里时用 TENANT），和真实前端"在哪个店下单"一致 */
+    protected CreateOrderRequest req(Long expected, long... skuQty) {
         List<CreateOrderRequest.Item> items = new ArrayList<>();
         for (int i = 0; i < skuQty.length; i += 2) {
             items.add(new CreateOrderRequest.Item(skuQty[i], (int) skuQty[i + 1]));
         }
-        return new CreateOrderRequest(items, expected);
+        SkuSnapshot first = catalog.get(skuQty[0]);
+        return new CreateOrderRequest(items, expected, first == null ? TENANT : first.getTenantId());
     }
 
     protected long countOrders(long orderNo) {

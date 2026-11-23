@@ -21,13 +21,43 @@ spring:
     openfeign:
       client:
         config:
-          # 跨服务调用必须有超时（行业规范）。不配的话默认读超时 60 秒，下游一慢，order 的线程全部卡死
-          product-inventory:
+          # 跨服务调用必须有超时（行业规范）。不配的话默认读超时 60 秒，下游一慢，order 的线程全部卡死。
+          # C2 踩坑（P29）：这里的 key 是 @FeignClient 的 contextId，不是服务名。之前写成 product-inventory，
+          # 配置从没生效过（实际读超时 60 秒），FeignResilienceIT 才测出来
+          productInventoryClient:
             connect-timeout: 1000
             read-timeout: 3000
+          # 兜底：任何没单独配置的客户端也有超时，key 再写错也不会退回 60 秒
+          default:
+            connect-timeout: 1000
+            read-timeout: 3000
+    # C2：LoadBalancer 自带的"换个实例再试"也关掉（需要 spring-retry 才生效，现在没引入；显式写出来防止以后被带进来）。
+    # 不重试的原因见 ProductInventoryFeignConfig
+    loadbalancer:
+      retry:
+        enabled: false
+    sentinel:
+      # 启动就连控制台，不等第一次请求（否则控制台里看不到服务，直到有人调接口）
+      eager: true
+      transport:
+        # 本机和控制台通信的端口：控制台通过它拉监控数据、推规则。被占用会自动 +1
+        port: 8719
 
 merchanthub:
   order:
+    # C2：限流 / 熔断阈值，含义与取法见 SentinelProperties 和 C2 笔记
+    sentinel:
+      rate-limit:
+        per-tenant-qps: 20
+        # 个别商家单独提额，例：'[9]': 50。租户 7 故意不配，压测时让它被限
+        tenant-overrides: {}
+      degrade:
+        slow-rt-ms: 1000
+        slow-ratio: 0.5
+        error-ratio: 0.5
+        min-requests: 10
+        stat-interval-ms: 10000
+        open-seconds: 10
     # 待支付订单的支付时限（Duration 格式）：到期由 ORDER_TIMEOUT 定时消息触发超时关单（B3-下）
     pay-timeout: 15m
     # "订单已创建"事件的发送方案，二选一：TX_MESSAGE（RocketMQ 事务消息）/ OUTBOX（本地消息表）。见 B2 笔记 Q1

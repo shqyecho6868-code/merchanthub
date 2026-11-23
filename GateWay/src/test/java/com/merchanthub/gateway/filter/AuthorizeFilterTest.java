@@ -6,8 +6,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -28,9 +28,9 @@ import static org.mockito.Mockito.when;
 /** 网关鉴权：清洗伪造头、注入身份头、挡 /internal/**（不起容器，Redis 用替身） */
 class AuthorizeFilterTest {
 
-    private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    private final ReactiveStringRedisTemplate redis = mock(ReactiveStringRedisTemplate.class);
     @SuppressWarnings("unchecked")
-    private final ValueOperations<String, String> ops = mock(ValueOperations.class);
+    private final ReactiveValueOperations<String, String> ops = mock(ReactiveValueOperations.class);
     private final AuthorizeFilter filter = new AuthorizeFilter(redis);
 
     /** 放行后下游实际收到的请求 */
@@ -48,7 +48,7 @@ class AuthorizeFilterTest {
     /** 模拟登录：签发 token 并写入 Redis（网关会核对 Redis 里存的是不是这个 token） */
     private String login(long userId, Long tenantId, String role) {
         String token = JwtUtil.generate(userId, tenantId, role, 10, TimeUnit.MINUTES);
-        when(ops.get(CommonConstant.ACCESS_TOKEN_PREFIX + userId)).thenReturn(token);
+        when(ops.get(CommonConstant.ACCESS_TOKEN_PREFIX + userId)).thenReturn(Mono.just(token));
         return token;
     }
 
@@ -124,8 +124,38 @@ class AuthorizeFilterTest {
 
         // 签名对、但 Redis 里不是这个 token（已登出 / 被挤下线）
         String stale = JwtUtil.generate(5L, 7L, "MERCHANT_ADMIN", 10, TimeUnit.MINUTES);
-        when(ops.get(anyString())).thenReturn(null);
+        when(ops.get(anyString())).thenReturn(Mono.empty());
         assertThat(run(MockServerHttpRequest.get("/api/orders/1").header("Access-Token", stale).build())
                 .getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("Access-Token 已失效但 Refresh-Token 有效 → 401 + TOKEN_EXPIRED（提示刷新）")
+    void refreshTokenValid_needRefresh() {
+        String refresh = JwtUtil.generate(6L, null, "BUYER", 10, TimeUnit.MINUTES);
+        when(ops.get(anyString())).thenReturn(Mono.empty());
+        when(ops.get(CommonConstant.REFRESH_TOKEN_PREFIX + 6L)).thenReturn(Mono.just(refresh));
+        MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/mine/1")
+                .header("Access-Token", "garbage").header("Refresh-Token", refresh).build());
+        assertThat(ex.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(ex.getResponse().getBodyAsString().block()).contains("\"code\":40103");
+        assertThat(forwarded.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("C2：Redis 出错 → 401 系统异常，不放行；下游报错不会被改写成 401")
+    void redisError_unauthorized_downstreamErrorNotSwallowed() {
+        String token = JwtUtil.generate(7L, null, "BUYER", 10, TimeUnit.MINUTES);
+        when(ops.get(anyString())).thenReturn(Mono.error(new IllegalStateException("redis down")));
+        MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/mine/1").header("Access-Token", token).build());
+        assertThat(ex.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(forwarded.get()).isNull();
+
+        String ok = login(8L, null, "BUYER");
+        GatewayFilterChain failing = e -> Mono.error(new IllegalStateException("downstream boom"));
+        MockServerWebExchange ex2 = MockServerWebExchange.from(MockServerHttpRequest.get("/api/orders/mine/1")
+                .header("Access-Token", ok).build());
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> filter.filter(ex2, failing).block())
+                .hasMessageContaining("downstream boom");
     }
 }

@@ -114,6 +114,13 @@ class OrderCreateIT extends OrderItSupport {
     }
 
     @Test
+    void requestTenantDiffersFromSkuOwner_rejected() {
+        CreateOrderRequest r = req(null, 101, 1);
+        r.setTenantId(8L);
+        assertCode(() -> orderCreateService.createOrder(BUYER, r), ErrorCode.SKU_TENANT_MISMATCH);
+    }
+
+    @Test
     void reserveFails_noOrderWritten_errorPassedThrough() {
         when(client.reserve(any())).thenReturn(
                 (BaseResponse<Void>) (BaseResponse<?>) ResultUtils.error(ErrorCode.INVENTORY_INSUFFICIENT));

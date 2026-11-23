@@ -9,6 +9,7 @@ import com.merchanthub.common.tenant.TenantContext;
 import com.merchanthub.order.model.dto.CreateOrderRequest;
 import com.merchanthub.order.model.vo.CreateOrderVO;
 import com.merchanthub.order.model.vo.OrderDetailVO;
+import com.merchanthub.order.ratelimit.OrderRateLimiter;
 import com.merchanthub.order.service.OrderCreateService;
 import com.merchanthub.order.service.OrderQueryService;
 import jakarta.validation.Valid;
@@ -27,12 +28,18 @@ public class OrderController {
 
     private final OrderCreateService orderCreateService;
     private final OrderQueryService orderQueryService;
+    private final OrderRateLimiter orderRateLimiter;
 
-    /** 下单：只有买家能下。买家 ID 取自网关解析 token 后注入的身份，不信任请求体里的任何用户字段 */
+    /**
+     * 下单：只有买家能下。买家 ID 取自网关解析 token 后注入的身份，不信任请求体里的任何用户字段。
+     * C2：先按商家限流，超阈值直接 429，不往下走（tenantId 和 SKU 归属是否一致在 service 里核对）
+     */
     @PostMapping
     @RequireRole(Role.BUYER)
     public BaseResponse<CreateOrderVO> create(@RequestBody @Valid CreateOrderRequest request) {
-        return ResultUtils.success(orderCreateService.createOrder(currentUserId(), request));
+        long buyerId = currentUserId();
+        return ResultUtils.success(orderRateLimiter.guard(request.getTenantId(),
+                () -> orderCreateService.createOrder(buyerId, request)));
     }
 
     /** 商家（管理员、员工都能看）/ 平台查订单详情：tenant_id 条件由租户插件自动拼，见 OrderQueryService */

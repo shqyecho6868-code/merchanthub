@@ -16,6 +16,8 @@ public enum ErrorCode {
     TOKEN_MISMATCH(40105, "令牌与用户不匹配"),
     FORBIDDEN_ERROR(40300, "禁止访问"),
     NOT_FOUND_ERROR(40400, "请求数据不存在"),
+    // C2：被限流（HTTP 429）。错误码和 HTTP 状态码对齐，客户端看到它应稍后重试，而不是当成"下单失败"
+    TOO_MANY_REQUESTS(42900, "当前商家下单人数过多，请稍后重试"),
     SENSITIVE_WORD_ERROR(40003, "包含敏感词，请求被拒绝"),
 
     // ============ 系统错误码（50xxx）============
@@ -35,6 +37,7 @@ public enum ErrorCode {
     INVENTORY_INSUFFICIENT(61001, "库存不足"),
     RESERVATION_CONFLICT(61002, "同一订单号的预占内容不一致"),
     ORDER_NOT_PAYABLE(60006, "订单当前不是待支付状态"),
+    SKU_TENANT_MISMATCH(60007, "商品不属于该商家"),
     // ============ 支付（62xxx）（B3）============
     PAYMENT_NOT_FOUND(62001, "支付单不存在"),
     PAY_AMOUNT_MISMATCH(62002, "回调金额与支付单金额不一致"),

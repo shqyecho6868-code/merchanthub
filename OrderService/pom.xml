@@ -71,6 +71,11 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
+        <!-- C2：Sentinel（版本 1.8.9 由 SCA BOM 管理）。下单接口按租户热点参数限流 + Feign 熔断降级 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
         <!-- 直接用原生客户端（与 Broker 同为 5.3.1，版本由 SCA BOM 管理），不用 starter，原因见 B2 笔记"技术选型" -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>

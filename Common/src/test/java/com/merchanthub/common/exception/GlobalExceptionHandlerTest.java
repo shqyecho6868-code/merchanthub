@@ -61,4 +61,14 @@ class GlobalExceptionHandlerTest {
         assertThat(resp.getCode()).isEqualTo(ErrorCode.PARAMS_ERROR.getCode());
         assertThat(resp.getMessage()).isEqualTo("数量必须大于 0");
     }
+
+    @Test
+    @DisplayName("C2 被限流：HTTP 429 + Retry-After + 错误码 42900，而不是兜底的 500")
+    void tooManyRequests_429() {
+        var resp = handler.tooManyRequestsHandler(new TooManyRequestsException("商家 7 下单过于频繁"));
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(429);
+        assertThat(resp.getHeaders().getFirst("Retry-After")).isEqualTo("1");
+        assertThat(resp.getBody().getCode()).isEqualTo(ErrorCode.TOO_MANY_REQUESTS.getCode());
+    }
 }

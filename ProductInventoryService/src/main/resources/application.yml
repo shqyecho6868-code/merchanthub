@@ -15,7 +15,11 @@ spring:
       client:
         config:
           # 跨服务调用必须有超时：悬空扫描查订单，order 慢了这一批就跳过，下一轮再查
-          order:
+          # key 是 @FeignClient 的 contextId（inventoryOrderClient），不是服务名（C2 修，P29）
+          inventoryOrderClient:
+            connect-timeout: 1000
+            read-timeout: 3000
+          default:
             connect-timeout: 1000
             read-timeout: 3000
   flyway:

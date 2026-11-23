@@ -57,7 +57,7 @@ public class OrderCreateService {
                 CreateOrderRequest.Item::getSkuId, CreateOrderRequest.Item::getQuantity, Integer::sum, TreeMap::new));
 
         // 2. 查 SKU（价格以这里为准）
-        List<SkuSnapshot> found = RemoteResults.call("querySkus",
+        List<SkuSnapshot> found = RemoteResults.call(ProductInventoryClient.RES_QUERY_SKUS,
                 () -> productInventoryClient.querySkus(new SkuQueryRequest(new ArrayList<>(quantities.keySet()))));
         Map<Long, SkuSnapshot> skus = found.stream().collect(Collectors.toMap(SkuSnapshot::getSkuId, Function.identity()));
 
@@ -67,6 +67,8 @@ public class OrderCreateService {
         List<Long> tenants = skus.values().stream().map(SkuSnapshot::getTenantId).distinct().toList();
         ThrowUtils.throwIf(tenants.size() != 1, ErrorCode.ORDER_MULTI_TENANT);
         long tenantId = tenants.get(0);
+        // C2：入口限流是按请求里的 tenantId 算的，这里核对它和 SKU 的真实归属一致（防止填别家的 ID 绕开自家配额）
+        ThrowUtils.throwIf(request.getTenantId() != null && request.getTenantId() != tenantId, ErrorCode.SKU_TENANT_MISMATCH);
 
         OrderPricing.Result pricing = OrderPricing.price(quantities, skus);
         if (request.getExpectedPayAmount() != null && request.getExpectedPayAmount() != pricing.payAmount()) {
@@ -80,7 +82,7 @@ public class OrderCreateService {
         // 5. 预占库存（product-inventory 侧事务 A：全占或全不占）
         List<ReserveRequest.Item> reserveItems = quantities.entrySet().stream()
                 .map(e -> new ReserveRequest.Item(e.getKey(), e.getValue())).toList();
-        RemoteResults.call("reserve",
+        RemoteResults.call(ProductInventoryClient.RES_RESERVE,
                 () -> productInventoryClient.reserve(new ReserveRequest(orderNo, tenantId, reserveItems)));
 
         // 6. 落订单 + "订单已创建"事件（同生共死，具体方案见 OrderPlacer 的两种实现）。

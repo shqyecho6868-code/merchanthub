@@ -105,7 +105,7 @@ class TenantIsolationIT extends OrderItSupport {
         mvc.perform(as(get("/orders/" + o7), null, BUYER, "BUYER")).andExpect(status().isForbidden());
         // 商家员工调下单接口（买家专用）→ 403
         mvc.perform(as(post("/orders"), TENANT, 2002, "MERCHANT_STAFF").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"items\":[{\"skuId\":101,\"quantity\":1}]}")).andExpect(status().isForbidden());
+                .content("{\"tenantId\":7,\"items\":[{\"skuId\":101,\"quantity\":1}]}")).andExpect(status().isForbidden());
         // 没有身份 → 401
         mvc.perform(get("/orders/" + o7)).andExpect(status().isUnauthorized());
         // 身份头自相矛盾（商家角色没有 tenantId）→ 401
@@ -115,7 +115,7 @@ class TenantIsolationIT extends OrderItSupport {
     @Test
     void buyerPlacesOrderViaHttp_badJson400() throws Exception {
         mvc.perform(as(post("/orders"), null, BUYER, "BUYER").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"items\":[{\"skuId\":101,\"quantity\":1}]}"))
+                        .content("{\"tenantId\":7,\"items\":[{\"skuId\":101,\"quantity\":1}]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value(10));
         mvc.perform(as(post("/orders"), null, BUYER, "BUYER").contentType(MediaType.APPLICATION_JSON).content("{\"items\":["))
                 .andExpect(status().isBadRequest());

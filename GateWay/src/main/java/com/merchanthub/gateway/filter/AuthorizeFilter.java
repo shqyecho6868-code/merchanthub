@@ -13,7 +13,7 @@ import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
 import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.PathContainer;
@@ -40,10 +40,14 @@ import java.util.List;
 @Component
 public class AuthorizeFilter implements GlobalFilter, Ordered {
 
-    private final StringRedisTemplate stringRedisTemplate;
+    /**
+     * C2：换成响应式客户端。网关是 WebFlux，只有少量 event-loop 线程（约等于 CPU 核数）在处理所有请求；
+     * 之前用阻塞的 StringRedisTemplate，Redis 慢 100ms，这个线程上排队的所有请求都跟着卡 100ms
+     */
+    private final ReactiveStringRedisTemplate redis;
 
-    public AuthorizeFilter(StringRedisTemplate stringRedisTemplate) {
-        this.stringRedisTemplate = stringRedisTemplate;
+    public AuthorizeFilter(ReactiveStringRedisTemplate redis) {
+        this.redis = redis;
     }
 
     // 白名单路径：不需要认证的接口
@@ -79,21 +83,17 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         String accessToken = request.getHeaders().getFirst("Access-Token");
         String refreshToken = request.getHeaders().getFirst("Refresh-Token");
 
-        try {
-            // 3. Access-Token 有效 → 4. 注入身份头
-            if (accessToken != null && !accessToken.isEmpty()) {
-                Claims acClaims = JwtUtil.parse(accessToken);
-                if (acClaims != null) {
-                    String userId = acClaims.getSubject();
-                    String redisAccessToken = stringRedisTemplate.opsForValue()
-                            .get(CommonConstant.ACCESS_TOKEN_PREFIX + userId);
-                    if (accessToken.equals(redisAccessToken)) {
-                        Identity id = Identity.from(acClaims);
-                        if (id == null) {
-                            log.warn("token 身份信息不合法 userId={} role={} tenantId={}", userId,
-                                    acClaims.get(JwtUtil.CLAIM_ROLE), acClaims.get(JwtUtil.CLAIM_TENANT_ID));
-                            return buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.TOKEN_INVALID, ErrorCode.TOKEN_INVALID.getMessage());
-                        }
+        // 3. 先得出鉴权结论（这一步可能查 Redis，异步），4. 再按结论放行或拒绝。
+        // onErrorResume 只包住"得出结论"这一段：如果包在 chain.filter 外面，下游的报错也会被改写成 401
+        // defer：JwtUtil.parse 是同步调用，万一抛异常也要变成 Mono 里的错误，才能被下面的 onErrorResume 接住
+        return Mono.defer(() -> authenticate(accessToken, refreshToken))
+                .onErrorResume(e -> {
+                    log.error("鉴权时 Redis / JWT 系统异常", e);
+                    return Mono.just(AuthResult.of(AuthOutcome.SYSTEM_ERROR));
+                })
+                .flatMap(result -> switch (result.outcome()) {
+                    case PASS -> {
+                        Identity id = result.identity();
                         cleaned.headers(h -> {
                             h.set(TenantHeaders.USER_ID, id.userId());
                             h.set(TenantHeaders.ROLE, id.role().name());
@@ -101,30 +101,61 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                                 h.set(TenantHeaders.TENANT_ID, id.tenantId());
                             }
                         });
-                        return chain.filter(exchange.mutate().request(cleaned.build()).build());
+                        yield chain.filter(exchange.mutate().request(cleaned.build()).build());
                     }
-                }
-            }
+                    case BAD_IDENTITY -> buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.TOKEN_INVALID, ErrorCode.TOKEN_INVALID.getMessage());
+                    case NEED_REFRESH -> buildErrorResponse(exchange, ErrorCode.TOKEN_EXPIRED);
+                    case NOT_LOGIN -> buildErrorResponse(exchange, ErrorCode.NOT_LOGIN_ERROR);
+                    case SYSTEM_ERROR -> buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.SYSTEM_ERROR, "登录状态确认失败");
+                });
+    }
 
-            // Access-Token 无效，但 Refresh-Token 有效 → 提示前端去刷新
-            if (refreshToken != null && !refreshToken.isEmpty()) {
-                Claims rfClaims = JwtUtil.parse(refreshToken);
-                if (rfClaims != null) {
-                    String userId = rfClaims.getSubject();
-                    String redisRefreshToken = stringRedisTemplate.opsForValue()
-                            .get(CommonConstant.REFRESH_TOKEN_PREFIX + userId);
-                    if (refreshToken.equals(redisRefreshToken)) {
-                        return buildErrorResponse(exchange, ErrorCode.TOKEN_EXPIRED);
-                    }
-                }
-            }
+    /** 鉴权结论 */
+    enum AuthOutcome { PASS, BAD_IDENTITY, NEED_REFRESH, NOT_LOGIN, SYSTEM_ERROR }
 
-            return buildErrorResponse(exchange, ErrorCode.NOT_LOGIN_ERROR);
-
-        } catch (Exception e) {
-            log.error("JWT 校验系统异常", e);
-            return buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.SYSTEM_ERROR, "登录状态确认失败");
+    record AuthResult(AuthOutcome outcome, Identity identity) {
+        static AuthResult of(AuthOutcome outcome) {
+            return new AuthResult(outcome, null);
         }
+    }
+
+    /**
+     * Access-Token 有效（签名对、没过期、和 Redis 里存的一致）→ PASS；
+     * 否则 Refresh-Token 有效 → NEED_REFRESH（提示前端去刷新）；都不行 → NOT_LOGIN
+     */
+    private Mono<AuthResult> authenticate(String accessToken, String refreshToken) {
+        Claims acClaims = JwtUtil.parse(accessToken);
+        Mono<AuthResult> byAccess = acClaims == null ? Mono.empty()
+                : sameAsStored(CommonConstant.ACCESS_TOKEN_PREFIX, acClaims.getSubject(), accessToken)
+                .flatMap(same -> {
+                    if (!same) {
+                        return Mono.empty();
+                    }
+                    Identity id = Identity.from(acClaims);
+                    if (id == null) {
+                        log.warn("token 身份信息不合法 userId={} role={} tenantId={}", acClaims.getSubject(),
+                                acClaims.get(JwtUtil.CLAIM_ROLE), acClaims.get(JwtUtil.CLAIM_TENANT_ID));
+                        return Mono.just(AuthResult.of(AuthOutcome.BAD_IDENTITY));
+                    }
+                    return Mono.just(new AuthResult(AuthOutcome.PASS, id));
+                });
+        // defer：Access-Token 通过时，根本不去解析 / 查 Refresh-Token
+        return byAccess.switchIfEmpty(Mono.defer(() -> {
+            Claims rfClaims = JwtUtil.parse(refreshToken);
+            if (rfClaims == null) {
+                return Mono.just(AuthResult.of(AuthOutcome.NOT_LOGIN));
+            }
+            return sameAsStored(CommonConstant.REFRESH_TOKEN_PREFIX, rfClaims.getSubject(), refreshToken)
+                    .map(same -> AuthResult.of(same ? AuthOutcome.NEED_REFRESH : AuthOutcome.NOT_LOGIN));
+        }));
+    }
+
+    /** Redis 里存的是不是这个 token（不是 → 已登出 / 被挤下线）。key 不存在时返回 false，而不是空 Mono */
+    private Mono<Boolean> sameAsStored(String prefix, String userId, String token) {
+        if (userId == null) {
+            return Mono.just(false);
+        }
+        return redis.opsForValue().get(prefix + userId).map(token::equals).defaultIfEmpty(false);
     }
 
     /** 任一路径段（解码后、忽略大小写）是 internal 就算内部接口 */
