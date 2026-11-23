@@ -207,7 +207,7 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("两个平台管理员同时点通过：只有一个成功，另一个 63002；审批单只记一次、只有一条待发消息")
+    @DisplayName("两个平台管理员同时点通过：只有一个成功，另一个失败（63002 或 63001）；审批单只记一次、只有一条待发消息")
     void concurrentApprove_onlyOneWins() throws Exception {
         String pid = start(M7, 1005, 1);
         call(m7Admin(post("/approvals/tasks/" + taskOf(m7Admin(get("/approvals/tasks")), pid) + "/approve")));
@@ -235,7 +235,11 @@ class ListingApprovalIT extends UserItSupport {
         }
         pool.shutdown();
 
-        assertThat(outcomes).containsExactlyInAnyOrder("OK", "63002");
+        // 输家有两种合法结局，取决于它"查任务"那一步落在赢家提交之前还是之后：
+        //   之前 → 查到了任务，complete 时撞上乐观锁（REV_ 已变 / 任务已删）→ 63002
+        //   之后 → 任务已经不在运行时表里，按"不存在"处理 → 63001（CI 这类慢机器上更容易出现）
+        assertThat(outcomes).hasSize(2).containsOnlyOnce("OK");
+        assertThat(outcomes).filteredOn(o -> !o.equals("OK")).singleElement().isIn("63001", "63002");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM approval_outbox", Integer.class)).isEqualTo(1);
         assertThat(result(M7, 1005, 1).at("/state").asText()).isEqualTo("APPROVED");
     }

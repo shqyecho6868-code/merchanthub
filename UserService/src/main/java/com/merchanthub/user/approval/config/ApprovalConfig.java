@@ -34,12 +34,9 @@ public class ApprovalConfig {
      */
     @Bean
     public EngineConfigurationConfigurer<SpringProcessEngineConfiguration> flowableAfterFlyway(FlywayMigrationInitializer flywayInitializer) {
-        return cfg -> {
-            // 流程图里的中文名（导出流程图时用），不设会是方块字；对引擎逻辑没有影响
-            cfg.setActivityFontName("宋体");
-            cfg.setLabelFontName("宋体");
-            cfg.setAnnotationFontName("宋体");
-        };
+        // 部署时不生成流程图 PNG：没有页面要展示它（流程设计器范围外），而生成要用 AWT + 系统字体，
+        // 在没装中文字体的 Linux（CI / 容器）上要么报错要么方块字
+        return cfg -> cfg.setCreateDiagramOnDeploy(false);
     }
 
     /** 普通生产者即可：一致性靠本地消息表，不需要 MQ 的事务能力（同 order） */
