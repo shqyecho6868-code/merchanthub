@@ -67,6 +67,11 @@
 		<fastjson2.version>2.0.58</fastjson2.version>
 		<minio.version>8.2.1</minio.version>
 		<shedlock.version>4.42.0</shedlock.version>
+		<!--
+		  D1：Flowable 7.2.0 官方基于 Spring Boot 3.5.4 / Spring 6.2 / MyBatis 3.5.19 构建，
+		  与本项目 Boot 3.5.x、MyBatis-Plus 3.5.12（同样依赖 MyBatis 3.5.19）一致，不会出现两个 MyBatis 版本
+		-->
+		<flowable.version>7.2.0</flowable.version>
 
 		<!-- 测试与覆盖率 -->
 		<jacoco.version>0.8.13</jacoco.version>
@@ -222,6 +227,13 @@
 				<groupId>net.javacrumbs.shedlock</groupId>
 				<artifactId>shedlock-provider-redis-spring</artifactId>
 				<version>${shedlock.version}</version>
+			</dependency>
+
+			<!-- 审批流（D1），只有 user-tenant 用 -->
+			<dependency>
+				<groupId>org.flowable</groupId>
+				<artifactId>flowable-spring-boot-starter-process</artifactId>
+				<version>${flowable.version}</version>
 			</dependency>
 
 			<!-- AI -->

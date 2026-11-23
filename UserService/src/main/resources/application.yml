@@ -3,58 +3,52 @@ server:
 
 spring:
   application:
-    name: UserService
+    # D1：旧名 UserService → user-tenant（网关路由、Feign 都用这个名字）
+    name: user-tenant
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-
   data:
     redis:
+      # 和网关同一个 db：网关要核对 Redis 里的 token 是不是当前有效的那个
       database: 2
-      timeout: 30000
-      lettuce:
-        pool:
-          min-idle: 4
-          max-idle: 8
-          max-active: 8
-          max-wait: 5000ms
+      timeout: 3000
+  # 新库（mh_user）从第一天起就用 Flyway，不需要 baseline
+  # Flowable 的事件注册引擎自带 Liquibase；本项目业务表用 Flyway，关掉 Boot 的 Liquibase 自动装配，
+  # 否则它会去找 db/changelog/db.changelog-master.yaml 然后启动失败（Flowable 自己的 FLW_* 表不受影响）
+  liquibase:
+    enabled: false
 
-  mail:
-    host: smtp.qq.com
-    port: 587
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-
-  kafka:
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
-      acks: all
-      retries: 3
-    consumer:
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      auto-offset-reset: latest
-      enable-auto-commit: true
+# Flowable 7（D1）
+flowable:
+  # 启动时自动建 / 升级 ACT_* 引擎表（任务要求"引擎表由 Flowable 自动建"）。生产常改成 false + DBA 执行官方 SQL
+  database-schema-update: true
+  # 本项目流程里没有定时器 / 异步任务，不开异步执行器：少一组轮询 ACT_RU_JOB 的线程
+  async-executor-activate: false
+  # 自动部署 classpath:/processes/*.bpmn20.xml；内容没变不会重复部署出新版本
+  check-process-definitions: true
+  # audit：记录流程实例、任务、变量的历史（ACT_HI_*），审批留痕够用；full 还会记每次变量变化，没必要
+  history-level: audit
 
 mybatis-plus:
   configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
   global-config:
     db-config:
-      logic-delete-field: isDelete
+      id-type: auto
+      logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# C1：旧 IM 代码的表没有 tenant_id，先关掉租户插件；改造成新服务时打开（见 C1 笔记）
 merchanthub:
   tenant:
-    enabled: false
+    # C1 的租户插件打开（之前旧 IM 表没有 tenant_id 所以关着）。
+    # 这三张是"平台级"表，本身就是在定义租户 / 跨租户登录，不按商家过滤：
+    #   tenant（租户本身）、account（登录时还不知道是谁）、merchant_application（申请时商家还不存在）
+    # listing_approval、approval_outbox 是商家维度的表，照常拼 tenant_id
+    ignore-tables: tenant,account,merchant_application
+  approval:
+    outbox:
+      scan-interval-ms: 5000
+      scan-enabled: true

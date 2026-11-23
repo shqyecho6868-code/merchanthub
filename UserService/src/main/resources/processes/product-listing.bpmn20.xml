@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  商品上架审批（D1）。流程定义 = 模板，全平台一份；每次商品提交审核 = 一个流程实例（businessKey = listing:商家:商品:轮次）。
+  驳回 = 实例结束（不回到初审）：商品是在 product 服务里改的，引擎不知道什么时候改完；改完再提交起新实例（D1 笔记 2.2）。
+  结束时 listingResultListener 在"完成最后一个任务"的同一个事务里写审批单 + 本地消息表 → RocketMQ → product 回写状态。
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://merchanthub.com/approval">
+
+  <process id="productListing" name="商品上架审批" isExecutable="true">
+
+    <startEvent id="start" name="提交上架"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="merchantReview"/>
+
+    <!-- 候选组带商家 ID：商家 7 的商品只进"MERCHANT_ADMIN:7"组，商家 8 的管理员查待办时根本查不到 -->
+    <userTask id="merchantReview" name="商家管理员初审" flowable:candidateGroups="MERCHANT_ADMIN:${tenantId}"/>
+    <sequenceFlow id="f2" sourceRef="merchantReview" targetRef="merchantDecision"/>
+
+    <exclusiveGateway id="merchantDecision" name="初审结果"/>
+    <sequenceFlow id="f3" sourceRef="merchantDecision" targetRef="platformReview">
+      <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="f4" sourceRef="merchantDecision" targetRef="rejectedEnd">
+      <conditionExpression xsi:type="tFormalExpression">${!approved}</conditionExpression>
+    </sequenceFlow>
+
+    <userTask id="platformReview" name="平台管理员复审" flowable:candidateGroups="PLATFORM_ADMIN"/>
+    <sequenceFlow id="f5" sourceRef="platformReview" targetRef="platformDecision"/>
+
+    <exclusiveGateway id="platformDecision" name="复审结果"/>
+    <sequenceFlow id="f6" sourceRef="platformDecision" targetRef="approvedEnd">
+      <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="f7" sourceRef="platformDecision" targetRef="rejectedEnd">
+      <conditionExpression xsi:type="tFormalExpression">${!approved}</conditionExpression>
+    </sequenceFlow>
+
+    <!--
+      用 expression 调方法并把结果当参数传进去，而不是 delegateExpression + field 注入：
+      Spring Bean 是单例，field 注入会被并发的流程实例互相覆盖（Flowable 官方文档的警告）
+    -->
+    <endEvent id="approvedEnd" name="已通过">
+      <extensionElements>
+        <flowable:executionListener event="start" expression="${listingResultListener.onEnd(execution, 'APPROVED')}"/>
+      </extensionElements>
+    </endEvent>
+    <endEvent id="rejectedEnd" name="已驳回">
+      <extensionElements>
+        <flowable:executionListener event="start" expression="${listingResultListener.onEnd(execution, 'REJECTED')}"/>
+      </extensionElements>
+    </endEvent>
+  </process>
+</definitions>

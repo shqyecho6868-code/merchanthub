@@ -5,7 +5,7 @@ import com.merchanthub.common.common.ErrorCode;
 import com.merchanthub.common.constant.CommonConstant;
 import com.merchanthub.common.tenant.Role;
 import com.merchanthub.common.tenant.TenantHeaders;
-import com.merchanthub.common.utils.JwtUtil;
+import com.merchanthub.common.security.JwtCodec;
 
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
@@ -45,17 +45,19 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
      * 之前用阻塞的 StringRedisTemplate，Redis 慢 100ms，这个线程上排队的所有请求都跟着卡 100ms
      */
     private final ReactiveStringRedisTemplate redis;
+    /** D1：密钥来自配置 merchanthub.jwt.secret，和 user-tenant 签发时用的是同一个 */
+    private final JwtCodec jwt;
 
-    public AuthorizeFilter(ReactiveStringRedisTemplate redis) {
+    public AuthorizeFilter(ReactiveStringRedisTemplate redis, JwtCodec jwt) {
         this.redis = redis;
+        this.jwt = jwt;
     }
 
     // 白名单路径：不需要认证的接口
     static final List<String> EXCLUDE_PATHS = Arrays.asList(
-            "/api/user/login/code",
+            // D1：user-tenant 的新登录接口（旧 IM 的验证码登录已删除）
+            "/api/user/login",
             "/api/user/register",
-            "/api/user/sendCaptcha",
-            "/api/user/login/password",
             "/api/user/refresh",
             // 支付渠道的异步通知：渠道没有用户 token，真实场景靠验签（B3 遗留），payment 内部以 SYSTEM 身份处理
             "/api/payments/callback/"
@@ -85,7 +87,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
 
         // 3. 先得出鉴权结论（这一步可能查 Redis，异步），4. 再按结论放行或拒绝。
         // onErrorResume 只包住"得出结论"这一段：如果包在 chain.filter 外面，下游的报错也会被改写成 401
-        // defer：JwtUtil.parse 是同步调用，万一抛异常也要变成 Mono 里的错误，才能被下面的 onErrorResume 接住
+        // defer：jwt.parse 是同步调用，万一抛异常也要变成 Mono 里的错误，才能被下面的 onErrorResume 接住
         return Mono.defer(() -> authenticate(accessToken, refreshToken))
                 .onErrorResume(e -> {
                     log.error("鉴权时 Redis / JWT 系统异常", e);
@@ -124,7 +126,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
      * 否则 Refresh-Token 有效 → NEED_REFRESH（提示前端去刷新）；都不行 → NOT_LOGIN
      */
     private Mono<AuthResult> authenticate(String accessToken, String refreshToken) {
-        Claims acClaims = JwtUtil.parse(accessToken);
+        Claims acClaims = jwt.parse(accessToken);
         Mono<AuthResult> byAccess = acClaims == null ? Mono.empty()
                 : sameAsStored(CommonConstant.ACCESS_TOKEN_PREFIX, acClaims.getSubject(), accessToken)
                 .flatMap(same -> {
@@ -134,14 +136,14 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                     Identity id = Identity.from(acClaims);
                     if (id == null) {
                         log.warn("token 身份信息不合法 userId={} role={} tenantId={}", acClaims.getSubject(),
-                                acClaims.get(JwtUtil.CLAIM_ROLE), acClaims.get(JwtUtil.CLAIM_TENANT_ID));
+                                acClaims.get(JwtCodec.CLAIM_ROLE), acClaims.get(JwtCodec.CLAIM_TENANT_ID));
                         return Mono.just(AuthResult.of(AuthOutcome.BAD_IDENTITY));
                     }
                     return Mono.just(new AuthResult(AuthOutcome.PASS, id));
                 });
         // defer：Access-Token 通过时，根本不去解析 / 查 Refresh-Token
         return byAccess.switchIfEmpty(Mono.defer(() -> {
-            Claims rfClaims = JwtUtil.parse(refreshToken);
+            Claims rfClaims = jwt.parse(refreshToken);
             if (rfClaims == null) {
                 return Mono.just(AuthResult.of(AuthOutcome.NOT_LOGIN));
             }
@@ -173,8 +175,8 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
     record Identity(String userId, Role role, String tenantId) {
         static Identity from(Claims claims) {
             String userId = claims.getSubject();
-            Role role = Role.parse(claims.get(JwtUtil.CLAIM_ROLE, String.class));
-            Object tenantClaim = claims.get(JwtUtil.CLAIM_TENANT_ID);
+            Role role = Role.parse(claims.get(JwtCodec.CLAIM_ROLE, String.class));
+            Object tenantClaim = claims.get(JwtCodec.CLAIM_TENANT_ID);
             String tenantId = tenantClaim == null ? null : String.valueOf(tenantClaim);
             if (userId == null || !userId.matches("\\d+") || role == null || !role.isUserRole()) {
                 return null;

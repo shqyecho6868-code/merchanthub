@@ -1,23 +1,13 @@
 package com.merchanthub.common.constant;
 
-import java.util.concurrent.TimeUnit;
-
 public class CommonConstant {
 
 
-    public static final String TOKEN_SECRET_KEY = "shanyangcodebackendInfiniteChatshanyangcodebackendInfiniteChat";
-
-    public static final Integer ACCESS_TOKEN_EXPIRE_TIME =  3000;
-
-    public static final Integer REFRESH_TOKEN_EXPIRE_TIME =  7;
+    // D1：JWT 密钥已移到配置 merchanthub.jwt.secret（见 JwtCodec），有效期见 JwtProperties
 
     public static final String ACCESS_TOKEN_PREFIX = "access:token:";
 
     public static final String REFRESH_TOKEN_PREFIX = "refresh:token:";
-
-    public static final TimeUnit ACCESS_TOKEN_UNIT = TimeUnit.MINUTES; // 分钟
-
-    public static final TimeUnit REFRESH_TOKEN_UNIT = TimeUnit.DAYS; // 天
 
     public static final String KAFKA_MESSAGE_TOPIC_STORE = "store-topic";
 

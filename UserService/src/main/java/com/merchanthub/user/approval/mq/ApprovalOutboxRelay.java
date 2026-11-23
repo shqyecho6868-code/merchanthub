@@ -1,0 +1,155 @@
+package com.merchanthub.user.approval.mq;
+
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.user.approval.mapper.ApprovalOutboxMapper;
+import com.merchanthub.user.approval.model.entity.ApprovalOutbox;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendResult;
+import org.apache.rocketmq.client.producer.SendStatus;
+import org.apache.rocketmq.common.message.Message;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+
+/**
+ * 审批结果本地消息表的投递与补偿（照搬 order 的 OutboxRelay，B2）：把 approval_outbox 里 status = 0 的记录发到 MQ。
+ * <p>
+ * 两个入口走同一个 {@link #publish}：
+ * <ul>
+ *   <li>{@link #publishAsync}：审批事务提交后立即发一次（快路径）</li>
+ *   <li>{@link #scan}：定时扫描到期记录补发（兜底：MQ 不可用、进程在发送前挂掉、快路径任务被丢弃）</li>
+ * </ul>
+ * 多个实例同时扫描时，靠 {@link ApprovalOutboxMapper#claim} 的条件更新保证同一条记录同一时刻只有一个实例在发。
+ */
+@Slf4j
+@Component
+public class ApprovalOutboxRelay {
+
+    private final ApprovalOutboxMapper mapper;
+    private final DefaultMQProducer producer;
+    private final ExecutorService executor;
+    private final Clock clock;
+
+    /** 扫描开关。集成测试里，非补偿类的测试把它关掉，避免多个缓存的 Spring 上下文互相抢着补发（pitfalls P17 同类问题） */
+    @Value("${merchanthub.approval.outbox.scan-enabled:true}")
+    private boolean scanEnabled;
+    @Value("${merchanthub.approval.outbox.batch-size:100}")
+    private int batchSize;
+    @Value("${merchanthub.approval.outbox.lease-seconds:30}")
+    private long leaseSeconds;
+    @Value("${merchanthub.approval.outbox.base-backoff-seconds:10}")
+    private long baseBackoffSeconds;
+    @Value("${merchanthub.approval.outbox.max-backoff-seconds:600}")
+    private long maxBackoffSeconds;
+    @Value("${merchanthub.approval.outbox.max-retries:10}")
+    private int maxRetries;
+
+    public ApprovalOutboxRelay(ApprovalOutboxMapper mapper, @Qualifier("approvalOutboxProducer") DefaultMQProducer producer,
+                       @Qualifier("approvalOutboxSendExecutor") ExecutorService executor, Clock clock) {
+        this.mapper = mapper;
+        this.producer = producer;
+        this.executor = executor;
+        this.clock = clock;
+    }
+
+    /**
+     * 快路径：提交后立即异步发送，不占用审批请求的线程。
+     * 线程池的线程<b>没有</b>提交事务那个线程的租户上下文（ThreadLocal 不跨线程），这里显式用 SYSTEM：
+     * 发件箱是基础设施，按 id 处理任意商家的记录；消息属于哪个商家由 outbox 行的 tenant_id 决定（见 toMessage）
+     */
+    public void publishAsync(long outboxId) {
+        executor.execute(() -> TenantContext.runAsSystem(() -> {
+            ApprovalOutbox row = mapper.selectById(outboxId);
+            if (row != null && row.getStatus() == ApprovalOutbox.PENDING) {
+                publish(row);
+            }
+        }));
+    }
+
+    /** 兜底：定时扫描到期的待发送记录 */
+    @Scheduled(fixedDelayString = "${merchanthub.approval.outbox.scan-interval-ms:5000}")
+    public void scan() {
+        if (!scanEnabled) {
+            return;
+        }
+        // 定时任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
+        TenantContext.runAsSystem(this::scanOnce);
+    }
+
+    private void scanOnce() {
+        List<ApprovalOutbox> due = mapper.selectDue(LocalDateTime.now(clock), batchSize);
+        if (!due.isEmpty()) {
+            log.info("本地消息表扫描：{} 条到期待发送", due.size());
+        }
+        for (ApprovalOutbox row : due) {
+            publish(row);   // 每条单独处理、单独 catch：一条失败不影响同批其他记录
+        }
+    }
+
+    public void publish(ApprovalOutbox row) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (mapper.claim(row.getId(), now, now.plusSeconds(leaseSeconds)) != 1) {
+            return;   // 被别的实例 / 线程抢走了，或者已经不是待发送状态
+        }
+        try {
+            SendResult result = producer.send(toMessage(row));
+            if (result.getSendStatus() == SendStatus.SEND_OK) {
+                mapper.markSent(row.getId(), LocalDateTime.now(clock));
+                log.info("本地消息表投递成功 outboxId={} eventId={} bizKey={} tenantId={} msgId={}",
+                        row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), result.getMsgId());
+            } else {
+                onFailure(row, "sendStatus=" + result.getSendStatus());
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            onFailure(row, "interrupted");
+        } catch (Exception e) {
+            onFailure(row, e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    private void onFailure(ApprovalOutbox row, String error) {
+        int newCount = row.getRetryCount() + 1;
+        boolean giveUp = newCount >= maxRetries;
+        LocalDateTime next = LocalDateTime.now(clock).plus(backoff(newCount));
+        int updated = mapper.markRetry(row.getId(), row.getRetryCount(), newCount,
+                giveUp ? ApprovalOutbox.FAILED : ApprovalOutbox.PENDING, next, truncate(error));
+        if (giveUp) {
+            // 生产环境这里接告警，人工排查后把 status 改回 0 即可重新投递
+            log.error("本地消息表投递失败已达上限 {} 次，停止自动重试 outboxId={} eventId={} bizKey={} tenantId={} error={}",
+                    newCount, row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), error);
+        } else {
+            log.warn("本地消息表投递失败，第 {} 次，{} 后重试 outboxId={} eventId={} bizKey={} tenantId={} updated={} error={}",
+                    newCount, next, row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), updated, error);
+        }
+    }
+
+    /** 第 n 次失败后等待 base × 2^(n-1)，封顶 max：MQ 短暂抖动很快恢复，长时间故障时不会每秒狂刷 */
+    Duration backoff(int failures) {
+        long seconds = baseBackoffSeconds << Math.min(failures - 1, 20);
+        return Duration.ofSeconds(Math.min(seconds, maxBackoffSeconds));
+    }
+
+    private Message toMessage(ApprovalOutbox row) {
+        Message msg = new Message(row.getTopic(), row.getTag(), row.getPayload().getBytes(StandardCharsets.UTF_8));
+        msg.setKeys(row.getBizKey() + " " + row.getEventId());
+        // 用我们自己的 event_id 做幂等键：重发时 RocketMQ 的 msgId 会变，event_id 不变（B2 笔记 Q4）
+        msg.putUserProperty("EVENT_ID", String.valueOf(row.getEventId()));
+        // C1：用 outbox 行自己的 tenant_id，不用线程上下文（这里是 SYSTEM，不代表任何商家）
+        return TenantMessages.stamp(msg, row.getTenantId());
+    }
+
+    private static String truncate(String s) {
+        return s == null || s.length() <= 500 ? s : s.substring(0, 500);
+    }
+}

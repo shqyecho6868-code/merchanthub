@@ -1,7 +1,7 @@
 package com.merchanthub.gateway.filter;
 
 import com.merchanthub.common.constant.CommonConstant;
-import com.merchanthub.common.utils.JwtUtil;
+import com.merchanthub.common.security.JwtCodec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +17,8 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,7 +32,8 @@ class AuthorizeFilterTest {
     private final ReactiveStringRedisTemplate redis = mock(ReactiveStringRedisTemplate.class);
     @SuppressWarnings("unchecked")
     private final ReactiveValueOperations<String, String> ops = mock(ReactiveValueOperations.class);
-    private final AuthorizeFilter filter = new AuthorizeFilter(redis);
+    private final JwtCodec jwt = new JwtCodec(Base64.getEncoder().encodeToString("gateway-test-secret-0123456789abc".getBytes()));
+    private final AuthorizeFilter filter = new AuthorizeFilter(redis, jwt);
 
     /** 放行后下游实际收到的请求 */
     private final AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
@@ -47,7 +49,7 @@ class AuthorizeFilterTest {
 
     /** 模拟登录：签发 token 并写入 Redis（网关会核对 Redis 里存的是不是这个 token） */
     private String login(long userId, Long tenantId, String role) {
-        String token = JwtUtil.generate(userId, tenantId, role, 10, TimeUnit.MINUTES);
+        String token = jwt.issue(userId, tenantId, role, Duration.ofMinutes(10));
         when(ops.get(CommonConstant.ACCESS_TOKEN_PREFIX + userId)).thenReturn(Mono.just(token));
         return token;
     }
@@ -123,7 +125,7 @@ class AuthorizeFilterTest {
                 .getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         // 签名对、但 Redis 里不是这个 token（已登出 / 被挤下线）
-        String stale = JwtUtil.generate(5L, 7L, "MERCHANT_ADMIN", 10, TimeUnit.MINUTES);
+        String stale = jwt.issue(5L, 7L, "MERCHANT_ADMIN", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.empty());
         assertThat(run(MockServerHttpRequest.get("/api/orders/1").header("Access-Token", stale).build())
                 .getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -132,7 +134,7 @@ class AuthorizeFilterTest {
     @Test
     @DisplayName("Access-Token 已失效但 Refresh-Token 有效 → 401 + TOKEN_EXPIRED（提示刷新）")
     void refreshTokenValid_needRefresh() {
-        String refresh = JwtUtil.generate(6L, null, "BUYER", 10, TimeUnit.MINUTES);
+        String refresh = jwt.issue(6L, null, "BUYER", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.empty());
         when(ops.get(CommonConstant.REFRESH_TOKEN_PREFIX + 6L)).thenReturn(Mono.just(refresh));
         MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/mine/1")
@@ -145,7 +147,7 @@ class AuthorizeFilterTest {
     @Test
     @DisplayName("C2：Redis 出错 → 401 系统异常，不放行；下游报错不会被改写成 401")
     void redisError_unauthorized_downstreamErrorNotSwallowed() {
-        String token = JwtUtil.generate(7L, null, "BUYER", 10, TimeUnit.MINUTES);
+        String token = jwt.issue(7L, null, "BUYER", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.error(new IllegalStateException("redis down")));
         MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/mine/1").header("Access-Token", token).build());
         assertThat(ex.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);

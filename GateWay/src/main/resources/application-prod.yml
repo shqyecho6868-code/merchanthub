@@ -1,3 +1,7 @@
+merchanthub:
+  jwt:
+    secret: ${JWT_SECRET}
+
 spring:
   data:
     redis:
@@ -39,10 +43,12 @@ spring:
                 maxAge: 36000
 
           routes:
-            - id: UserService
-              uri: lb://UserService
+            - id: user-tenant
+              uri: lb://user-tenant
               predicates:
-                - Path=/api/user/**,/api/contact/**,/api/group/**
+                - Path=/api/user/**,/api/merchant-applications/**,/api/approvals/**
+              filters:
+                - RewritePath=/api/(?<segment>.*), /$\{segment}
 
             - id: OfflineDataService
               uri: lb://OfflineDataService

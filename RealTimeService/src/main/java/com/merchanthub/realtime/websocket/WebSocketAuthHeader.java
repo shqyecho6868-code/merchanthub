@@ -2,7 +2,7 @@ package com.merchanthub.realtime.websocket;
 
 
 import com.merchanthub.common.constant.CommonConstant;
-import com.merchanthub.common.utils.JwtUtil;
+import com.merchanthub.common.security.JwtCodec;
 import io.jsonwebtoken.Claims;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -16,6 +16,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 public class WebSocketAuthHeader extends ChannelInboundHandlerAdapter {
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final JwtCodec jwtCodec;
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg)  {
@@ -29,7 +30,7 @@ public class WebSocketAuthHeader extends ChannelInboundHandlerAdapter {
                 return;
             }
             try {
-                Claims claims = JwtUtil.parse(authHeader);
+                Claims claims = jwtCodec.parse(authHeader);
                 if (claims == null) {
                     ctx.close();
                     return;

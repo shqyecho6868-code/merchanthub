@@ -37,7 +37,8 @@ public class ProductAdminService {
                 .stream()
                 .map(s -> new ProductDetailVO.SkuItem(s.getId(), s.getSkuCode(), s.getSpecJson(), s.getPrice(), s.getStatus()))
                 .toList();
-        return new ProductDetailVO(p.getId(), p.getTenantId(), p.getName(), p.getStatus(), skus);
+        return new ProductDetailVO(p.getId(), p.getTenantId(), p.getName(), p.getStatus(),
+                p.getAuditRound() == null ? 0 : p.getAuditRound(), p.getRejectReason(), skus);
     }
 
     /** 改 SKU 售价。已下的订单不受影响：订单里存的是交易快照（B1） */

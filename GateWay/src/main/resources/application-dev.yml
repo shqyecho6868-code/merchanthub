@@ -1,3 +1,8 @@
+# D1：校验 token 的密钥，必须和 user-tenant 签发时一致（来自 .env 的 JWT_SECRET）
+merchanthub:
+  jwt:
+    secret: ${JWT_SECRET}
+
 spring:
   data:
     redis:
@@ -39,10 +44,13 @@ spring:
                 maxAge: 36000
 
           routes:
-            - id: UserService
-              uri: lb://UserService
+            # D1：旧 IM 的 UserService 改造为 user-tenant（账号 / 登录 / 商家入驻 / 审批待办），和交易服务一样去掉 /api 前缀
+            - id: user-tenant
+              uri: lb://user-tenant
               predicates:
-                - Path=/api/user/**,/api/contact/**,/api/group/**
+                - Path=/api/user/**,/api/merchant-applications/**,/api/approvals/**
+              filters:
+                - RewritePath=/api/(?<segment>.*), /$\{segment}
 
             - id: OfflineDataService
               uri: lb://OfflineDataService

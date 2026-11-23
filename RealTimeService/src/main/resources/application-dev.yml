@@ -34,3 +34,7 @@ spring:
       password: ${NACOS_PASSWORD:nacos}
       discovery:
         server-addr: 127.0.0.1:8848
+# D1：WebSocket 握手校验 token 的密钥，与网关 / user-tenant 一致
+merchanthub:
+  jwt:
+    secret: ${JWT_SECRET}

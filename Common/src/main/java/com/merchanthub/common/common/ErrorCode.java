@@ -38,10 +38,20 @@ public enum ErrorCode {
     RESERVATION_CONFLICT(61002, "同一订单号的预占内容不一致"),
     ORDER_NOT_PAYABLE(60006, "订单当前不是待支付状态"),
     SKU_TENANT_MISMATCH(60007, "商品不属于该商家"),
+    // D1：只有草稿 / 已驳回的商品能提交上架审核（审核中、已上架的再提交就是重复发起）
+    PRODUCT_NOT_SUBMITTABLE(60008, "商品当前状态不能提交上架审核"),
     // ============ 支付（62xxx）（B3）============
     PAYMENT_NOT_FOUND(62001, "支付单不存在"),
     PAY_AMOUNT_MISMATCH(62002, "回调金额与支付单金额不一致"),
     CHANNEL_TRADE_NO_CONFLICT(62003, "渠道流水号已被其他支付单使用"),
+
+    // ============ 审批（63xxx）（D1）============
+    // 不说"无权处理"：别的商家的待办和不存在的待办返回同一个结果，不暴露"这个 ID 存在"（同 C1 跨租户查订单返回 404）
+    APPROVAL_TASK_NOT_FOUND(63001, "待办不存在"),
+    APPROVAL_TASK_CONFLICT(63002, "该待办已被处理，请刷新"),
+    APPLICATION_STATE_INVALID(63003, "申请当前状态不允许此操作"),
+    USERNAME_TAKEN(63004, "登录名已被占用"),
+    APPLICATION_IN_PROGRESS(63005, "已有进行中的入驻申请"),
 
     // ============ 用户相关错误码（70xxx）============
     PHONE_EMAIL_ERROR(70000, "手机号/邮箱格式错误"),

@@ -8,26 +8,11 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
+    <!-- 目录和 artifactId 沿用旧名 UserService，服务名（Nacos 注册名）是 user-tenant（D1） -->
     <artifactId>UserService</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
     <name>UserService</name>
-    <description>UserService</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
-    <properties>
-        <java.version>17</java.version>
-    </properties>
+    <description>user-tenant：账号 / 登录 / 租户 / 商家入驻与商品上架审批（Flowable 引擎所在地）</description>
+
     <dependencies>
         <dependency>
             <groupId>com.merchanthub</groupId>
@@ -41,11 +26,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        <!-- 启用 Common 的请求日志切面 LogInterceptor -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
@@ -55,11 +35,20 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
-        <!-- Common 中的分页插件依赖 jsqlparser -->
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
+        <!-- 业务表由 Flyway 管理；Flowable 的 ACT_* 表由引擎自己建（database-schema-update） -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+        <!-- token 存 Redis（网关核对"是不是当前有效的那个"）；雪花 ID 的 workerId 租约 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -68,30 +57,26 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
+        <!-- 审批引擎：只要 BPMN 流程引擎这一个 starter，不要 REST / 设计器 / IDM（范围外） -->
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
+            <groupId>org.flowable</groupId>
+            <artifactId>flowable-spring-boot-starter-process</artifactId>
         </dependency>
-        <!-- A2 不改动 Kafka 代码，后续任务替换为 RocketMQ -->
+        <!-- 上架审批结果经本地消息表发到 RocketMQ，和 order / payment 一样用原生客户端 -->
         <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
         </dependency>
+        <!-- 只要 BCrypt，不引入整个 Spring Security（鉴权在网关 + C1 拦截器里做） -->
         <dependency>
-            <groupId>net.javacrumbs.shedlock</groupId>
-            <artifactId>shedlock-spring</artifactId>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
         </dependency>
+
         <dependency>
-            <groupId>net.javacrumbs.shedlock</groupId>
-            <artifactId>shedlock-provider-redis-spring</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
+            <groupId>com.merchanthub</groupId>
+            <artifactId>TestSupport</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 

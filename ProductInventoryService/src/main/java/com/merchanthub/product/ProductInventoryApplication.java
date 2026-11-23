@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication(scanBasePackages = {"com.merchanthub.product", "com.merchanthub.common"})
 @MapperScan({"com.merchanthub.product.catalog.mapper", "com.merchanthub.product.inventory.mapper"})
-@EnableFeignClients(basePackages = "com.merchanthub.product.inventory.client")
+@EnableFeignClients(basePackages = {"com.merchanthub.product.inventory.client", "com.merchanthub.product.catalog.client"})
 @EnableScheduling
 public class ProductInventoryApplication {
 

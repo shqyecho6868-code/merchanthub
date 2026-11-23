@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  商家入驻审批（D1）。驳回后不结束，在同一个实例里等申请人修改：申请单就在 user-tenant 自己的表里，
+  "提交 → 驳回 → 重提 → 通过"整段历史都挂在一个实例上。申请人也可以撤回（不加撤回出口，被驳回后不理会的实例会永远挂在运行时表里）。
+  通过 / 驳回的业务动作（建租户、开账号、改申请状态）在 ServiceTask 里做，和完成审批任务是同一个数据库事务。
+-->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://merchanthub.com/approval">
+
+  <process id="merchantOnboarding" name="商家入驻审批" isExecutable="true">
+
+    <startEvent id="start" name="提交申请"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="platformReview"/>
+
+    <userTask id="platformReview" name="平台管理员审核入驻" flowable:candidateGroups="PLATFORM_ADMIN"/>
+    <sequenceFlow id="f2" sourceRef="platformReview" targetRef="reviewDecision"/>
+
+    <exclusiveGateway id="reviewDecision" name="审核结果"/>
+    <sequenceFlow id="f3" sourceRef="reviewDecision" targetRef="openMerchant">
+      <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="f4" sourceRef="reviewDecision" targetRef="markRejected">
+      <conditionExpression xsi:type="tFormalExpression">${!approved}</conditionExpression>
+    </sequenceFlow>
+
+    <serviceTask id="openMerchant" name="创建租户并开通商家管理员" flowable:expression="${onboardingDelegate.approve(execution)}"/>
+    <sequenceFlow id="f5" sourceRef="openMerchant" targetRef="approvedEnd"/>
+    <endEvent id="approvedEnd" name="已开店"/>
+
+    <serviceTask id="markRejected" name="标记驳回" flowable:expression="${onboardingDelegate.reject(execution)}"/>
+    <sequenceFlow id="f6" sourceRef="markRejected" targetRef="applicantRevise"/>
+
+    <!-- 办理人是申请人本人（不是候选组）：别的买家看不到、也改不了这张申请 -->
+    <userTask id="applicantRevise" name="申请人修改后重提" flowable:assignee="${applicantUserId}"/>
+    <sequenceFlow id="f7" sourceRef="applicantRevise" targetRef="reviseDecision"/>
+
+    <exclusiveGateway id="reviseDecision" name="重提还是撤回"/>
+    <sequenceFlow id="f8" sourceRef="reviseDecision" targetRef="platformReview">
+      <conditionExpression xsi:type="tFormalExpression">${resubmit}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="f9" sourceRef="reviseDecision" targetRef="withdrawnEnd">
+      <conditionExpression xsi:type="tFormalExpression">${!resubmit}</conditionExpression>
+    </sequenceFlow>
+    <endEvent id="withdrawnEnd" name="已撤回"/>
+  </process>
+</definitions>
