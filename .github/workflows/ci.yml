@@ -23,6 +23,22 @@ jobs:
           java-version: '17'
           cache: maven
 
+      # Maven Wrapper 第一次运行要从 Maven Central 下载 Maven 本体。runner 偶发下载失败（D1 连续两次 0 秒就红，P31）：
+      # 缓存下载结果（setup-java 的 maven 缓存只管 ~/.m2/repository，不含 wrapper），并重试 3 次
+      - name: Cache Maven wrapper distribution
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      - name: Download Maven (retry)
+        run: |
+          for i in 1 2 3; do
+            ./mvnw -B -v && exit 0
+            echo "第 $i 次下载 Maven 失败，20 秒后重试"; sleep 20
+          done
+          exit 1
+
       # GitHub 的 ubuntu runner 自带 Docker，Testcontainers 直接可用，不需要额外配置
       - name: Build and test
         run: ./mvnw -B -ntp verify
