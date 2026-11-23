@@ -85,6 +85,20 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                      P33：java -jar 启动时部署 BPMN 报 "Cannot resolve the name 'extension'"。
+                      Flowable 校验 BPMN 用的 XSD 在这个 jar 里，且 XSD 之间用相对路径互相引用；
+                      Boot 3.2+ 的嵌套 jar URL（jar:nested:...）解析不了相对引用。启动时把它解压成普通文件即可。
+                      测试 / IDE 里依赖本来就是普通 jar 文件，所以集成测试发现不了这个问题。
+                    -->
+                    <requiresUnpack>
+                        <dependency>
+                            <groupId>org.flowable</groupId>
+                            <artifactId>flowable-bpmn-converter</artifactId>
+                        </dependency>
+                    </requiresUnpack>
+                </configuration>
                 <executions>
                     <execution>
                         <id>repackage</id>
