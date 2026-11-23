@@ -1,6 +1,7 @@
 package com.merchanthub.user;
 
 import com.merchanthub.testsupport.IntegrationTestBase;
+import org.flowable.engine.RuntimeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -33,6 +34,8 @@ public abstract class UserItSupport extends IntegrationTestBase {
     protected JdbcTemplate jdbc;
     @Autowired
     protected PasswordEncoder passwordEncoder;
+    @Autowired
+    protected RuntimeService runtimeService;
 
     /** 模拟网关注入的身份头 */
     protected static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder b, Long tenant, long user, String role) {
@@ -56,8 +59,16 @@ public abstract class UserItSupport extends IntegrationTestBase {
         jdbc.update("INSERT INTO tenant (id, name, status) VALUES (?, ?, ?)", id, name, status);
     }
 
-    /** 业务表清空；Flowable 的表不清（实例之间靠各自的 processInstanceId 区分，互不影响） */
+    /**
+     * 每个用例从干净状态开始：业务表清空 + 引擎里还在跑的流程实例全部删除。
+     * <p>
+     * 只清业务表不够（P32）：上一个测试类留下的待办还在 ACT_RU_TASK 里。CI（Linux）上测试类的执行顺序和 macOS 不同，
+     * ListingApprovalIT 先跑时，它留下的"商家 7 初审"待办让 MerchantOnboardingIT 的"商家 7 管理员待办为空"断言失败。
+     * 用引擎 API 删而不是 TRUNCATE ACT_* 表：引擎表之间有外键和缓存，直接删表会让引擎状态不一致。历史表保留，不影响断言（都按实例 ID 查）
+     */
     protected void cleanBusinessTables() {
+        runtimeService.createProcessInstanceQuery().list()
+                .forEach(pi -> runtimeService.deleteProcessInstance(pi.getId(), "测试清理"));
         for (String t : new String[]{"account", "tenant", "merchant_application", "listing_approval", "approval_outbox"}) {
             jdbc.execute("TRUNCATE TABLE " + t);
         }

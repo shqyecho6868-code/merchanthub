@@ -255,8 +255,13 @@ class ListingApprovalIT extends UserItSupport {
 
         // 把它改回"待发送"，相当于快路径从没执行过
         jdbc.update("UPDATE approval_outbox SET status = 0, sent_at = NULL, next_retry_at = NOW(3) - INTERVAL 1 SECOND");
-        ReflectionScan.enable(relay);
-        relay.scan();
+        ReflectionScan.enable(relay, true);
+        try {
+            relay.scan();
+        } finally {
+            // 上下文是所有测试类共享的，开着会让后面的用例多一个定时扫描线程在跑
+            ReflectionScan.enable(relay, false);
+        }
         assertThat(jdbc.queryForObject("SELECT status FROM approval_outbox", Integer.class)).isEqualTo(1);
         // 消息至少到了一次（重复投递由 product 消费端的 CAS 挡住，见 product 的 ListingResultConsumerIT）
         await().atMost(Duration.ofSeconds(60)).until(() -> received(pid) != null);
@@ -264,8 +269,8 @@ class ListingApprovalIT extends UserItSupport {
 
     /** scan-enabled 在测试配置里关着，补偿用例临时打开 */
     static final class ReflectionScan {
-        static void enable(ApprovalOutboxRelay relay) {
-            org.springframework.test.util.ReflectionTestUtils.setField(relay, "scanEnabled", true);
+        static void enable(ApprovalOutboxRelay relay, boolean on) {
+            org.springframework.test.util.ReflectionTestUtils.setField(relay, "scanEnabled", on);
         }
     }
 }
