@@ -4,7 +4,7 @@ import com.merchanthub.common.common.ErrorCode;
 import com.merchanthub.common.exception.BusinessException;
 import com.merchanthub.product.inventory.model.dto.ReserveRequest;
 import com.merchanthub.product.inventory.service.InventoryReservationService;
-import com.merchanthub.testsupport.IntegrationTestBase;
+import com.merchanthub.product.ProductItSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 恢复后本测试即为回归测试：任何人删掉这个条件，CI 会变红。
  */
 @SpringBootTest
-class ConcurrentOversellIT extends IntegrationTestBase {
+class ConcurrentOversellIT extends ProductItSupport {
 
     private static final long TENANT = 7L;
     private static final long SKU = 101L;

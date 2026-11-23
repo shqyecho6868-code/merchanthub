@@ -53,3 +53,26 @@ spring:
               uri: lb://AiService
               predicates:
                 - Path=/api/ai/**
+
+            # C1：交易服务。对外统一 /api 前缀，转发时去掉（/api/orders/1 → order 的 /orders/1）。
+            # /internal/** 两层挡：这里没有它的路由；AuthorizeFilter 再按路径段兜底拦截（防 /api/orders/../internal 之类）
+            - id: order
+              uri: lb://order
+              predicates:
+                - Path=/api/orders/**
+              filters:
+                - RewritePath=/api/(?<segment>.*), /$\{segment}
+
+            - id: product-inventory
+              uri: lb://product-inventory
+              predicates:
+                - Path=/api/products/**,/api/skus/**
+              filters:
+                - RewritePath=/api/(?<segment>.*), /$\{segment}
+
+            - id: payment
+              uri: lb://payment
+              predicates:
+                - Path=/api/payments/**
+              filters:
+                - RewritePath=/api/(?<segment>.*), /$\{segment}

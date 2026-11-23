@@ -1,5 +1,9 @@
 package com.merchanthub.payment;
 
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
+import org.junit.jupiter.api.AfterEach;
+
 import com.merchanthub.common.common.ErrorCode;
 import com.merchanthub.common.common.ResultUtils;
 import com.merchanthub.common.exception.BusinessException;
@@ -101,9 +105,18 @@ class PaymentCallbackIT extends IntegrationTestBase {
         observer.shutdown();
     }
 
+    private TenantContext.Scope tenantScope;
+
+    /** C1：测试线程直接调 service（绕过 Controller），默认给 SYSTEM 身份；租户插件 fail-closed，不给会直接报错 */
     @BeforeEach
     void reset() {
         jdbc.execute("TRUNCATE TABLE payment");
+        tenantScope = TenantContext.open(TenantInfo.system());
+    }
+
+    @AfterEach
+    void closeTenantScope() {
+        tenantScope.close();
     }
 
     private long pendingOrder() {
@@ -209,7 +222,8 @@ class PaymentCallbackIT extends IntegrationTestBase {
         for (int i = 0; i < n; i++) {
             fs.add(pool.submit(() -> {
                 start.await();
-                return service.handleMockCallback(req);
+                // 和 Controller 一样以 SYSTEM 身份处理回调；子线程要自己设上下文（C1）
+                return TenantContext.callAsSystem(() -> service.handleMockCallback(req));
             }));
         }
         start.countDown();
@@ -283,7 +297,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
     @Test
     void http_createAndCallback() throws Exception {
         long orderNo = pendingOrder();
-        mvc.perform(post("/payments").header("X-User-Id", BUYER).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/payments").header("X-User-Id", BUYER).header("X-Role", "BUYER").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"orderNo\":" + orderNo + "}"))
                 .andExpect(jsonPath("$.data.amount").value(9900));
         long payNo = jdbc.queryForObject("SELECT pay_no FROM payment WHERE order_no = ?", Long.class, orderNo);

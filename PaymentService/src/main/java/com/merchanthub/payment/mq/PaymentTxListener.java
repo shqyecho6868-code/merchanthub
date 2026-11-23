@@ -1,5 +1,7 @@
 package com.merchanthub.payment.mq;
 
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
 import com.merchanthub.payment.mapper.PaymentMapper;
 import com.merchanthub.payment.model.entity.Payment;
 import com.merchanthub.payment.model.enums.PaymentStatus;
@@ -59,7 +61,8 @@ public class PaymentTxListener implements TransactionListener {
         }
         Payment p;
         try {
-            p = paymentMapper.selectByPayNo(event.payNo());
+            // 回查跑在 RocketMQ 的线程上，没有租户上下文：按事件里的商家查
+            p = TenantContext.callAs(TenantInfo.systemOf(event.tenantId()), () -> paymentMapper.selectByPayNo(event.payNo()));
         } catch (RuntimeException e) {
             log.warn("支付事务回查：查库失败，稍后重查 payNo={}", event.payNo(), e);
             return LocalTransactionState.UNKNOW;

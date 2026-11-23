@@ -4,7 +4,10 @@ import com.merchanthub.common.common.ErrorCode;
 import com.merchanthub.common.exception.BusinessException;
 import com.merchanthub.product.inventory.model.dto.ReserveRequest;
 import com.merchanthub.product.inventory.service.InventoryReservationService;
-import com.merchanthub.testsupport.IntegrationTestBase;
+import com.merchanthub.common.tenant.Role;
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
+import com.merchanthub.product.ProductItSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 真实 MySQL 上验证预占的四个性质：全占或全不占、幂等、租户隔离、并发不死锁。
  */
 @SpringBootTest
-class InventoryReservationIT extends IntegrationTestBase {
+class InventoryReservationIT extends ProductItSupport {
 
     private static final long TENANT = 7L;
     private static final AtomicLong ORDER_NO = new AtomicLong(1_000_000);
@@ -187,9 +190,14 @@ class InventoryReservationIT extends IntegrationTestBase {
             List<Future<Void>> futures = new ArrayList<>();
             for (int i = 0; i < threads; i++) {
                 Callable<Void> task = factory.create(i);
+                long buyerId = 50_000L + i;
                 futures.add(pool.submit(() -> {
                     start.await();
-                    return task.call();
+                    // C1：子线程拿不到测试线程的 ThreadLocal，要自己设置上下文。
+                    // 生产里预占是买家下单时 order 用 Feign 调过来的，下游看到的身份是 BUYER
+                    try (var ignored = TenantContext.open(new TenantInfo(null, buyerId, Role.BUYER))) {
+                        return task.call();
+                    }
                 }));
             }
             start.countDown();

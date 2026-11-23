@@ -95,6 +95,18 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- C1 租户上下文透传：Feign 拦截器、RocketMQ 消息带 tenantId。optional：用到的服务自己声明，版本由 Spring Cloud / SCA BOM 管理 -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-client</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- 共享容器与测试基类（B1 从这里抽出去），test 范围，不会传递 -->
         <dependency>
             <groupId>com.merchanthub</groupId>

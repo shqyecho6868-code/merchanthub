@@ -1,5 +1,7 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.tenant.mq.TenantMessages;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.order.mq.payment.PaySuccessEvent;
 import com.merchanthub.testsupport.SharedContainers;
@@ -50,7 +52,7 @@ class OrderPaidMqIT extends OrderItSupport {
         byte[] body = objectMapper.writeValueAsBytes(
                 new PaySuccessEvent(payNo, payNo, orderNo, TENANT, BUYER, 9900, "T" + payNo, LocalDateTime.now()));
         for (int i = 0; i < 3; i++) {
-            producer.send(new Message(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG, body));
+            producer.send(TenantMessages.stamp(new Message(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG, body), TENANT));
         }
         await().atMost(Duration.ofSeconds(60)).until(() ->
                 jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo) == 20);

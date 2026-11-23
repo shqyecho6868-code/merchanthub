@@ -1,5 +1,8 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
+
 import com.merchanthub.order.mq.payment.OrderPaidService;
 import com.merchanthub.order.mq.payment.PaySuccessEvent;
 import com.merchanthub.order.mq.timeout.PayTimeoutMessage;
@@ -62,12 +65,13 @@ class PayTimeoutRaceIT extends OrderItSupport {
             long timeoutEventId = base + 1_000_000 + i;
             futures.add(pool.submit(() -> {
                 start.await();
-                return paidService.handle(new PaySuccessEvent(payNo, payNo, orderNo, TENANT, BUYER, 9900,
-                        "T" + payNo, LocalDateTime.now()));
+                return TenantContext.callAs(TenantInfo.systemOf(TENANT), () -> paidService.handle(
+                        new PaySuccessEvent(payNo, payNo, orderNo, TENANT, BUYER, 9900, "T" + payNo, LocalDateTime.now())));
             }));
             futures.add(pool.submit(() -> {
                 start.await();
-                return timeoutService.handle(new PayTimeoutMessage(timeoutEventId, orderNo, TENANT));
+                return TenantContext.callAs(TenantInfo.systemOf(TENANT),
+                        () -> timeoutService.handle(new PayTimeoutMessage(timeoutEventId, orderNo, TENANT)));
             }));
         }
         start.countDown();

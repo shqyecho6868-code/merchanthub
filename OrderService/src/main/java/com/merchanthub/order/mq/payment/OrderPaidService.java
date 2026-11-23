@@ -1,6 +1,5 @@
 package com.merchanthub.order.mq.payment;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.merchanthub.common.id.SnowflakeIdGenerator;
 import com.merchanthub.order.mapper.ConsumedEventMapper;
 import com.merchanthub.order.mapper.OrdersMapper;
@@ -60,7 +59,7 @@ public class OrderPaidService {
             return false;
         }
 
-        Orders order = ordersMapper.selectOne(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, event.orderNo()));
+        Orders order = ordersMapper.selectByOrderNoAcrossTenants(event.orderNo());
         if (order == null) {
             // 回调早于订单：订单可能马上就提交。抛异常 → 事务回滚（去重记录一起撤销）→ RocketMQ 重投（10s、30s、1m…）。
             // 订单始终不出现：重试 16 次（累计约 4 小时 46 分）后进死信队列 %DLQ%order-pay-success，交给 E3 对账

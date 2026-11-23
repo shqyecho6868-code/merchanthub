@@ -3,7 +3,8 @@ package com.merchanthub.product.inventory;
 import com.merchanthub.product.inventory.model.dto.ReserveRequest;
 import com.merchanthub.product.inventory.mq.OrderSettledEvent;
 import com.merchanthub.product.inventory.service.InventoryReservationService;
-import com.merchanthub.testsupport.IntegrationTestBase;
+import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.product.ProductItSupport;
 import com.merchanthub.testsupport.SharedContainers;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.common.message.Message;
@@ -24,7 +25,7 @@ import static org.awaitility.Awaitility.await;
 
 /** 端到端：ORDER_EVENT 上的 ORDER_CLOSED / ORDER_PAID（各重复投递 3 次）→ 消费者 → 库存只改一次 */
 @SpringBootTest(properties = "merchanthub.inventory.settle-consumer.enabled=true")
-class OrderSettleConsumerIT extends IntegrationTestBase {
+class OrderSettleConsumerIT extends ProductItSupport {
 
     private static final long TENANT = 7L;
     private static DefaultMQProducer producer;
@@ -64,7 +65,8 @@ class OrderSettleConsumerIT extends IntegrationTestBase {
         String json = "{\"eventId\":" + System.nanoTime() + ",\"orderNo\":" + orderNo + ",\"tenantId\":" + TENANT
                 + ",\"event\":\"" + (tag.equals(OrderSettledEvent.TAG_ORDER_PAID) ? "PAY_SUCCESS" : "PAY_TIMEOUT") + "\"}";
         for (int i = 0; i < 3; i++) {
-            producer.send(new Message(OrderSettledEvent.TOPIC, tag, json.getBytes(StandardCharsets.UTF_8)));
+            // C1：和 order 发出的消息一样带上 tenantId，消费端据此恢复租户上下文
+            producer.send(TenantMessages.stamp(new Message(OrderSettledEvent.TOPIC, tag, json.getBytes(StandardCharsets.UTF_8)), TENANT));
         }
     }
 

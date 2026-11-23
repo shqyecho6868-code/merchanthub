@@ -53,3 +53,8 @@ mybatis-plus:
       logic-delete-field: isDelete
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# C1：旧 IM 代码的表没有 tenant_id，先关掉租户插件；改造成新服务时打开（见 C1 笔记）
+merchanthub:
+  tenant:
+    enabled: false

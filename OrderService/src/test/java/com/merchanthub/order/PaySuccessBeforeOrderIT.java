@@ -1,5 +1,7 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.tenant.mq.TenantMessages;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.order.mq.payment.OrderNotVisibleException;
 import com.merchanthub.order.mq.payment.OrderPaidService;
@@ -93,7 +95,8 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
     @Test
     void endToEnd_eventArrivesFirst_redeliveredAfterOrderCommitted_orderPaid() throws Exception {
         long orderNo = System.nanoTime();
-        producer.send(new Message(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG, objectMapper.writeValueAsBytes(event(orderNo))));
+        producer.send(TenantMessages.stamp(
+                new Message(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG, objectMapper.writeValueAsBytes(event(orderNo))), TENANT));
 
         // 等消费者至少处理过一次（失败、等待重投）再落单
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> true);

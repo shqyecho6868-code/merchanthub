@@ -1,5 +1,7 @@
 package com.merchanthub.order.mq.outbox;
 
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import com.merchanthub.order.mq.OrderEventTopics;
@@ -63,14 +65,18 @@ public class OutboxRelay {
         this.clock = clock;
     }
 
-    /** 快路径：提交后立即异步发送，不占用下单请求的线程 */
+    /**
+     * 快路径：提交后立即异步发送，不占用下单请求的线程。
+     * 线程池的线程<b>没有</b>提交事务那个线程的租户上下文（ThreadLocal 不跨线程），这里显式用 SYSTEM：
+     * 发件箱是基础设施，按 id 处理任意商家的记录；消息属于哪个商家由 outbox 行的 tenant_id 决定（见 toMessage）
+     */
     public void publishAsync(long outboxId) {
-        executor.execute(() -> {
+        executor.execute(() -> TenantContext.runAsSystem(() -> {
             OrderOutbox row = mapper.selectById(outboxId);
             if (row != null && row.getStatus() == OrderOutbox.PENDING) {
                 publish(row);
             }
-        });
+        }));
     }
 
     /** 兜底：定时扫描到期的待发送记录 */
@@ -79,6 +85,11 @@ public class OutboxRelay {
         if (!scanEnabled) {
             return;
         }
+        // 定时任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
+        TenantContext.runAsSystem(this::scanOnce);
+    }
+
+    private void scanOnce() {
         List<OrderOutbox> due = mapper.selectDue(LocalDateTime.now(clock), batchSize);
         if (!due.isEmpty()) {
             log.info("本地消息表扫描：{} 条到期待发送", due.size());
@@ -142,7 +153,8 @@ public class OutboxRelay {
             // 补发时投递时间已经过去也照样设：Broker 会立即投递，超时关单马上执行，结果仍然正确
             msg.setDeliverTimeMs(row.getDeliverAt().toInstant(ZoneOffset.UTC).toEpochMilli());
         }
-        return msg;
+        // C1：用 outbox 行自己的 tenant_id，不用线程上下文（这里是 SYSTEM，不代表任何商家）
+        return TenantMessages.stamp(msg, row.getTenantId());
     }
 
     private static String truncate(String s) {

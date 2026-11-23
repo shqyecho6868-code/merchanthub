@@ -2,6 +2,7 @@ package com.merchanthub.order.mq;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import lombok.RequiredArgsConstructor;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.stereotype.Component;
@@ -39,17 +40,18 @@ public class OrderEventCodec {
         }
     }
 
-    public Message toMessage(long eventId, long orderNo, String json) {
+    public Message toMessage(long eventId, long orderNo, long tenantId, String json) {
         Message msg = new Message(OrderEventTopics.TOPIC, OrderEventTopics.TAG_ORDER_CREATED,
                 json.getBytes(StandardCharsets.UTF_8));
         // keys 建索引：控制台 / mqadmin 能按订单号或事件 ID 查到这条消息，排查问题时最常用
         msg.setKeys(orderNo + " " + eventId);
         msg.putUserProperty(OrderEventTopics.PROP_EVENT_ID, String.valueOf(eventId));
-        return msg;
+        // C1：消息属于哪个商家，消费端据此恢复租户上下文
+        return TenantMessages.stamp(msg, tenantId);
     }
 
     public Message toMessage(OrderCreatedEvent event) {
-        return toMessage(event.eventId(), event.orderNo(), toJson(event));
+        return toMessage(event.eventId(), event.orderNo(), event.tenantId(), toJson(event));
     }
 
     public OrderCreatedEvent fromMessage(Message msg) {

@@ -3,6 +3,7 @@ package com.merchanthub.order.mq.consumer;
 import com.merchanthub.order.mq.OrderCreatedEvent;
 import com.merchanthub.order.mq.OrderEventCodec;
 import com.merchanthub.order.mq.OrderEventTopics;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -48,7 +49,8 @@ public class MerchantNoticeConsumerConfig {
                     continue;
                 }
                 try {
-                    service.handle(event);
+                    // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                    TenantMessages.consumeAs(m, () -> service.handle(event));
                 } catch (RuntimeException e) {
                     // 业务失败（如数据库不可用）：让 RocketMQ 稍后重投。去重记录已随事务回滚，重投时能重新处理
                     log.warn("处理订单事件失败，稍后重投 eventId={} orderNo={} tenantId={} reconsumeTimes={}",

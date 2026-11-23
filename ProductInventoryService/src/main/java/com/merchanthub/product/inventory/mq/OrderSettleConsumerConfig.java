@@ -1,6 +1,7 @@
 package com.merchanthub.product.inventory.mq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import com.merchanthub.product.inventory.service.ReservationSettleService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -47,11 +48,14 @@ public class OrderSettleConsumerConfig {
                     continue;
                 }
                 try {
-                    if (OrderSettledEvent.TAG_ORDER_PAID.equals(m.getTags())) {
-                        settleService.confirm(event.orderNo(), event.tenantId());
-                    } else {
-                        settleService.release(event.orderNo(), event.tenantId(), event.event());
-                    }
+                    // C1：按消息里的商家恢复租户上下文，预占记录、库存的 SQL 都会自动带上 tenant_id
+                    TenantMessages.consumeAs(m, () -> {
+                        if (OrderSettledEvent.TAG_ORDER_PAID.equals(m.getTags())) {
+                            settleService.confirm(event.orderNo(), event.tenantId());
+                        } else {
+                            settleService.release(event.orderNo(), event.tenantId(), event.event());
+                        }
+                    });
                 } catch (RuntimeException e) {
                     // 数据库不可用 / reserved 不足（数据不一致）：事务已整体回滚，让 RocketMQ 稍后重投
                     log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",

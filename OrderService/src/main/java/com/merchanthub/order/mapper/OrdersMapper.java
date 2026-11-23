@@ -1,5 +1,6 @@
 package com.merchanthub.order.mapper;
 
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.merchanthub.order.model.entity.Orders;
 import org.apache.ibatis.annotations.Mapper;
@@ -30,6 +31,15 @@ public interface OrdersMapper extends BaseMapper<Orders> {
      * InnoDB 可重复读下，普通 SELECT 读的是本事务第一次读时的快照 —— CAS 前已经读过订单，
      * 再普通 SELECT 拿到的还是旧的"待支付"，会把"关单后支付"误判成"重复支付"（B3-下 PayTimeoutRaceIT 抓到，pitfalls P22）
      */
+    /**
+     * <b>显式跨租户</b>按订单号查（C1）：只给"支付成功"消费用 —— 它要能发现"事件里的商家和订单的商家对不上"并记异常，
+     * 带着租户条件查的话对不上的订单直接"查不到"，会被当成"回调早于订单"一直重投到死信，异常就被埋没了。
+     * 绕过租户插件必须像这样单独写一个方法、写清理由，不能在通用查询上随手关掉。
+     */
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("SELECT * FROM orders WHERE order_no = #{orderNo} AND deleted = 0")
+    Orders selectByOrderNoAcrossTenants(@Param("orderNo") long orderNo);
+
     @Select("SELECT status FROM orders WHERE order_no = #{orderNo} AND deleted = 0 FOR UPDATE")
     Integer selectStatusForUpdate(@Param("orderNo") long orderNo);
 }

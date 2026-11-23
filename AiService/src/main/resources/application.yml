@@ -53,3 +53,9 @@ management:
   endpoint:
     health:
       show-details: always
+
+
+# C1：旧 IM 代码的表没有 tenant_id，先关掉租户插件；改造成新服务时打开（见 C1 笔记）
+merchanthub:
+  tenant:
+    enabled: false

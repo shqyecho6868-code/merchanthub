@@ -9,6 +9,9 @@ import com.merchanthub.order.mq.OrderEventTopics;
 import com.merchanthub.order.service.OrderCreateService;
 import com.merchanthub.testsupport.IntegrationTestBase;
 import com.merchanthub.testsupport.SharedContainers;
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +50,33 @@ abstract class OrderItSupport extends IntegrationTestBase {
     static void createTopics() {
         SharedContainers.rocketmq().createTopic(OrderEventTopics.TOPIC);
         SharedContainers.rocketmq().createTopic(OrderEventTopics.TIMEOUT_TOPIC);
+    }
+
+    private TenantContext.Scope tenantScope;
+
+    /**
+     * C1：租户插件 fail-closed，没有上下文的线程碰业务表会报错。这些用例直接在测试线程上调 service（相当于绕过了
+     * Web / MQ 入口），默认给测试线程一个跨租户的 SYSTEM 身份；租户隔离本身由 TenantIsolationIT 专门验证。
+     * 走真实 MQ 的用例，消费线程上的上下文仍然要靠消息里的 tenantId 恢复，不受这里影响。
+     */
+    /**
+     * 走 MockMvc 的用例覆盖成 false：MockMvc 在测试线程上执行请求，测试线程上已有的 SYSTEM 身份会让
+     * "没带身份头的请求"看起来像有身份，401 / 403 的用例就测不准了
+     */
+    protected boolean defaultSystemContext() {
+        return true;
+    }
+
+    @BeforeEach
+    void openSystemTenantScope() {
+        tenantScope = defaultSystemContext() ? TenantContext.open(TenantInfo.system()) : null;
+    }
+
+    @AfterEach
+    void closeTenantScope() {
+        if (tenantScope != null) {
+            tenantScope.close();
+        }
     }
 
     @BeforeEach

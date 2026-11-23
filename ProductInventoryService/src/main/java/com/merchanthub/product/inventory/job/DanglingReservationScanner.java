@@ -1,6 +1,8 @@
 package com.merchanthub.product.inventory.job;
 
 import com.merchanthub.common.common.BaseResponse;
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
 import com.merchanthub.product.inventory.client.OrderClient;
 import com.merchanthub.product.inventory.mapper.InventoryReservationMapper;
 import com.merchanthub.product.inventory.model.entity.InventoryReservation;
@@ -51,8 +53,17 @@ public class DanglingReservationScanner {
         }
     }
 
-    /** @return 本轮释放的订单数 */
+    /**
+     * 扫描本身跨所有商家，用 SYSTEM 身份（Feign 查 order 时也带着 X-Role: SYSTEM）；
+     * 真正释放某一单时切到<b>那一单的商家</b>，释放的 SQL 带上 tenant_id，处理完自动回到 SYSTEM。
+     *
+     * @return 本轮释放的订单数
+     */
     public int scan() {
+        return TenantContext.callAsSystem(this::scanOnce);
+    }
+
+    private int scanOnce() {
         List<InventoryReservation> stale = reservationMapper.selectStaleReserved(olderThan.toSeconds(), batchSize);
         if (stale.isEmpty()) {
             return 0;
@@ -77,7 +88,9 @@ public class DanglingReservationScanner {
             if (existing.contains(r.getOrderNo())) {
                 continue;   // 订单存在：由支付 / 超时关单了结，这里不碰
             }
-            if (settleService.release(r.getOrderNo(), r.getTenantId(), "DANGLING") > 0) {
+            int n = TenantContext.callAs(TenantInfo.systemOf(r.getTenantId()),
+                    () -> settleService.release(r.getOrderNo(), r.getTenantId(), "DANGLING"));
+            if (n > 0) {
                 log.warn("【悬空预占】订单不存在，已释放预占 orderNo={} tenantId={}", r.getOrderNo(), r.getTenantId());
                 released++;
             }

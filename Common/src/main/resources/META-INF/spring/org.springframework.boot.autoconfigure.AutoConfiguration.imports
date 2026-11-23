@@ -1,1 +1,2 @@
 com.merchanthub.common.id.SnowflakeAutoConfiguration
+com.merchanthub.common.tenant.redis.TenantRedisAutoConfiguration

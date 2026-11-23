@@ -1,6 +1,8 @@
 package com.merchanthub.order.mq.tx;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
 import com.merchanthub.order.mapper.OrdersMapper;
 import com.merchanthub.order.model.entity.Orders;
 import com.merchanthub.order.mq.OrderCreatedEvent;
@@ -91,7 +93,9 @@ public class OrderTxListener implements TransactionListener {
         try {
             // 按订单号判断本地事务结果。能这样判断的前提：回查时本地事务一定已经结束
             // （本地事务超时 5s < 免回查时间 30s，B2 笔记 Q2）
-            exists = ordersMapper.exists(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, event.orderNo()));
+            // 回查线程是 RocketMQ 的线程，没有租户上下文：按事件里的商家查（同时也校验了订单确实属于这个商家）
+            exists = TenantContext.callAs(TenantInfo.systemOf(event.tenantId()), () ->
+                    ordersMapper.exists(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, event.orderNo())));
         } catch (RuntimeException e) {
             // 查库失败 ≠ 订单不存在。这里返回 ROLLBACK 会把一个可能已经建好的订单的消息删掉；
             // 返回 UNKNOW 让 Broker 过一会儿再来问

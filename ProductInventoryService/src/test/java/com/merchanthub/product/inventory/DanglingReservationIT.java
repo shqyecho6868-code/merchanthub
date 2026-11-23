@@ -5,7 +5,7 @@ import com.merchanthub.product.inventory.client.OrderClient;
 import com.merchanthub.product.inventory.job.DanglingReservationScanner;
 import com.merchanthub.product.inventory.model.dto.ReserveRequest;
 import com.merchanthub.product.inventory.service.InventoryReservationService;
-import com.merchanthub.testsupport.IntegrationTestBase;
+import com.merchanthub.product.ProductItSupport;
 import feign.FeignException;
 import feign.Request;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +30,7 @@ import static org.mockito.Mockito.when;
  * 三种不能释放的情况各一个用例：订单存在、预占太新、查询订单失败。
  */
 @SpringBootTest(properties = "merchanthub.inventory.dangling-scan.older-than=30m")
-class DanglingReservationIT extends IntegrationTestBase {
+class DanglingReservationIT extends ProductItSupport {
 
     private static final long TENANT = 7L;
 

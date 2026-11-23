@@ -1,5 +1,8 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.tenant.TenantContext;
+import com.merchanthub.common.tenant.TenantInfo;
+
 import com.merchanthub.order.model.enums.OrderEvent;
 import com.merchanthub.order.mq.payment.OrderPaidService;
 import com.merchanthub.order.mq.payment.PaySuccessEvent;
@@ -114,7 +117,8 @@ class OrderPaidIT extends OrderItSupport {
             PaySuccessEvent e = paid(orderNo, 9900);
             results.add(pool.submit(() -> {
                 start.await();
-                return service.handle(e);
+                // 子线程没有测试线程的上下文：和真实消费者一样按消息的商家设置（C1）
+                return TenantContext.callAs(TenantInfo.systemOf(TENANT), () -> service.handle(e));
             }));
         }
         start.countDown();

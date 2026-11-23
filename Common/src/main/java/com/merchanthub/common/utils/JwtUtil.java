@@ -34,6 +34,30 @@ public final class JwtUtil {
                 .compact();
     }
 
+    /** JWT 里的身份字段名（C1）。网关解析后转成 X-Tenant-Id / X-Role 请求头 */
+    public static final String CLAIM_TENANT_ID = "tenantId";
+    public static final String CLAIM_ROLE = "role";
+
+    /**
+     * 生成带身份的 JWT（C1）：subject = userId，另带 role，商家角色再带 tenantId。
+     * 身份放进签名过的 token 里，客户端改不了；网关只信 token，不信客户端自己带的请求头。
+     *
+     * @param tenantId 商家角色必填；买家 / 平台管理员传 null
+     */
+    public static String generate(long userId, Long tenantId, String role, long timeout, TimeUnit unit) {
+        Date now = new Date();
+        JwtBuilder builder = Jwts.builder()
+                .setSubject(String.valueOf(userId))
+                .claim(CLAIM_ROLE, role)
+                .setIssuedAt(now)
+                .setExpiration(new Date(now.getTime() + unit.toMillis(timeout)))
+                .signWith(getSignInKey(), SignatureAlgorithm.HS256);
+        if (tenantId != null) {
+            builder.claim(CLAIM_TENANT_ID, String.valueOf(tenantId));
+        }
+        return builder.compact();
+    }
+
     /**
      * 获取签名密钥（从常量类读取，避免硬编码）
      */

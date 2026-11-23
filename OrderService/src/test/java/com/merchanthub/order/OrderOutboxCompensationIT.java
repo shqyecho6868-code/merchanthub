@@ -1,5 +1,7 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.tenant.TenantContext;
+
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import com.merchanthub.order.mq.OrderEventTopics;
@@ -136,7 +138,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         for (int i = 0; i < 8; i++) {
             pool.submit(() -> {
                 start.await();
-                relay.publish(row);
+                TenantContext.runAsSystem(() -> relay.publish(row));   // 子线程自己设上下文（C1）
                 return null;
             });
         }

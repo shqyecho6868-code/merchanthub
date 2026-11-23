@@ -1,6 +1,7 @@
 package com.merchanthub.order.mq.payment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -42,7 +43,8 @@ public class PaySuccessConsumerConfig {
                     continue;
                 }
                 try {
-                    service.handle(event);
+                    // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                    TenantMessages.consumeAs(m, () -> service.handle(event));
                 } catch (OrderNotVisibleException e) {
                     log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                             event.eventId(), event.orderNo(), m.getReconsumeTimes());

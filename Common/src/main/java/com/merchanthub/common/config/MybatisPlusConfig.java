@@ -3,10 +3,17 @@ package com.merchanthub.common.config;
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
 import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
+import com.baomidou.mybatisplus.extension.plugins.inner.TenantLineInnerInterceptor;
+import com.merchanthub.common.tenant.mybatis.TenantSqlHandler;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * MyBatis-Plus 统一配置
@@ -28,8 +35,18 @@ public class MybatisPlusConfig {
      * - 防止全表更新删除
      */
     @Bean
-    public MybatisPlusInterceptor mybatisPlusInterceptor() {
+    public MybatisPlusInterceptor mybatisPlusInterceptor(Environment env) {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+
+        // 租户插件（C1）：业务表自动拼 tenant_id 条件，规则见 TenantSqlHandler。
+        // 必须加在分页插件之前：先改写成带 tenant_id 的 SQL，分页插件再基于改写后的 SQL 生成 count 和 LIMIT，
+        // 反过来 count 语句会漏掉租户条件（MyBatis-Plus 官方文档要求的顺序）。
+        // 旧 IM 服务（user / ai / offline）的表没有 tenant_id，在它们的配置里关掉（改造时再打开）
+        if (env.getProperty("merchanthub.tenant.enabled", Boolean.class, true)) {
+            Set<String> ignore = Arrays.stream(env.getProperty("merchanthub.tenant.ignore-tables", "").split(","))
+                    .map(String::trim).filter(t -> !t.isEmpty()).collect(Collectors.toSet());
+            interceptor.addInnerInterceptor(new TenantLineInnerInterceptor(new TenantSqlHandler(ignore)));
+        }
 
         // 分页插件（指定数据库类型为 MySQL）
         PaginationInnerInterceptor paginationInterceptor = new PaginationInnerInterceptor(DbType.MYSQL);

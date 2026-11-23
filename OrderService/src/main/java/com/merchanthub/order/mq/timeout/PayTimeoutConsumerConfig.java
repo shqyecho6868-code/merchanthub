@@ -2,6 +2,7 @@ package com.merchanthub.order.mq.timeout;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.order.mq.OrderEventTopics;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -39,7 +40,8 @@ public class PayTimeoutConsumerConfig {
                     continue;
                 }
                 try {
-                    service.handle(msg);
+                    // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                    TenantMessages.consumeAs(m, () -> service.handle(msg));
                 } catch (RuntimeException e) {
                     log.warn("处理超时关单消息失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                             msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);

@@ -2,6 +2,7 @@ package com.merchanthub.payment.mq;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.tenant.mq.TenantMessages;
 import lombok.RequiredArgsConstructor;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.stereotype.Component;
@@ -22,7 +23,8 @@ public class PaymentEventCodec {
             msg.setKeys(event.orderNo() + " " + event.payNo());
             msg.putUserProperty(PaymentEventTopics.PROP_EVENT_ID, String.valueOf(event.eventId()));
             msg.putUserProperty(PaymentEventTopics.PROP_ATTEMPT, attempt);
-            return msg;
+            // C1：order 消费时据此恢复租户上下文
+            return TenantMessages.stamp(msg, event.tenantId());
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);
         }

@@ -8,10 +8,15 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
@@ -32,6 +37,44 @@ public class GlobalExceptionHandler {
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
         log.error("BusinessException", e);
         return ResultUtils.error(e.getCode(), e.getMessage());
+    }
+
+    /**
+     * 越权 → HTTP 403（C1）。和其他业务错误不同，这里用真正的 HTTP 状态码：
+     * 网关、监控、Sentinel 都按状态码统计，"被拒绝的越权请求"要能和"正常业务失败"区分开。
+     * Spring 按异常类型就近匹配，ForbiddenException 虽然是 BusinessException 的子类，也会走这里
+     */
+    @ExceptionHandler(ForbiddenException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public BaseResponse<?> forbiddenHandler(ForbiddenException e) {
+        log.warn("越权访问被拒绝: {}", e.getMessage());
+        return ResultUtils.error(e.getCode(), e.getMessage());
+    }
+
+    @ExceptionHandler(UnauthorizedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public BaseResponse<?> unauthorizedHandler(UnauthorizedException e) {
+        log.warn("身份校验失败: {}", e.getMessage());
+        return ResultUtils.error(e.getCode(), e.getMessage());
+    }
+
+    /**
+     * 请求体不是合法 JSON / 字段类型对不上（如数量传了 "abc"）→ HTTP 400。
+     * 之前被下面的 RuntimeException 兜底成 500"系统错误"（P23）：客户端的错被算成服务端故障，告警误报、调用方也不知道该改请求
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public BaseResponse<?> notReadableHandler(HttpMessageNotReadableException e) {
+        log.warn("请求体无法解析: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "请求体格式错误");
+    }
+
+    /** 缺必填请求头 / 路径参数类型不对（如订单号传了字母）→ 400，同属客户端错误 */
+    @ExceptionHandler({MissingRequestHeaderException.class, MethodArgumentTypeMismatchException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public BaseResponse<?> badRequestHandler(Exception e) {
+        log.warn("请求参数错误: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "请求参数错误");
     }
 
     @ExceptionHandler(RuntimeException.class)

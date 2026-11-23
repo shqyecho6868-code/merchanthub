@@ -3,7 +3,7 @@ package com.merchanthub.product.inventory;
 import com.merchanthub.product.inventory.model.dto.ReserveRequest;
 import com.merchanthub.product.inventory.service.InventoryReservationService;
 import com.merchanthub.product.inventory.service.ReservationSettleService;
-import com.merchanthub.testsupport.IntegrationTestBase;
+import com.merchanthub.product.ProductItSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 这里验证的都是"重复 / 并发也只改一次库存"，对应 B3-下笔记第 2 节。
  */
 @SpringBootTest
-class ReservationSettleIT extends IntegrationTestBase {
+class ReservationSettleIT extends ProductItSupport {
 
     private static final long TENANT = 7L;
     private static final AtomicLong ORDER_NO = new AtomicLong(2_000_000);
