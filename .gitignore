@@ -45,3 +45,7 @@ app.env
 *.jar
 ### 本地密码，不提交 ###
 .env
+
+### F1 压测产物 ###
+perf/results/*
+!perf/results/.gitkeep

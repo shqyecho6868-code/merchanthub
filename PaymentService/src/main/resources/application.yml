@@ -1,5 +1,9 @@
 server:
   port: 8108
+  # F1：让 Micrometer 能读到 Tomcat 线程池指标（busy / max），压测时判断是不是线程池先满
+  tomcat:
+    mbeanregistry:
+      enabled: true
 
 spring:
   application:
@@ -68,3 +72,18 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
+
+# F1：压测监控。只暴露 health 和 prometheus（不暴露 env / heapdump 等敏感端点）；
+# 服务端口不经网关对外，/actuator 不在网关路由里，外部访问不到。
+# http.server.requests 开直方图桶，Prometheus 才能用 histogram_quantile 算 P99（默认只有 count / sum / max）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

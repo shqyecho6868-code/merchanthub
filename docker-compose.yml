@@ -204,6 +204,41 @@ services:
     networks:
       - mh-net
 
+  # F1：压测监控，默认不启动（profiles），压测时 docker compose --profile perf up -d。
+  # Prometheus 抓宿主机上各服务的 /actuator/prometheus；Grafana 预置数据源和"MerchantHub 压测"看板（匿名只读即可看）
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: mh-prometheus
+    profiles: ["perf"]
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9091:9090"                    # 宿主机 9090 常被 MinIO 控制台占用，换 9091
+    volumes:
+      - ./perf/monitor/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - mh-net
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    container_name: mh-grafana
+    profiles: ["perf"]
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"        # 本地看板免登录（只读）；改看板用 admin / .env 的 GRAFANA_PASSWORD
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./perf/monitor/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./perf/monitor/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - mh-net
+
 volumes:
   es-data:
   sentinel-jar:

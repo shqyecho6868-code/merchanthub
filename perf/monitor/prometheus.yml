@@ -1,0 +1,18 @@
+# F1：压测监控。各服务跑在宿主机上，Prometheus 在容器里，用 host.docker.internal 访问
+# 指标来自各服务的 /actuator/prometheus（Micrometer：http.server.requests 直方图、hikaricp_*、jvm_*、tomcat_*）
+global:
+  scrape_interval: 5s       # 压测一般就几分钟，默认 15s 太粗，看不清抖动
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: merchanthub
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['host.docker.internal:10010']
+        labels: { service: gateway }
+      - targets: ['host.docker.internal:8107']
+        labels: { service: order }
+      - targets: ['host.docker.internal:8106']
+        labels: { service: product-inventory }
+      - targets: ['host.docker.internal:8108']
+        labels: { service: payment }
