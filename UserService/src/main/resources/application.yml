@@ -48,7 +48,9 @@ merchanthub:
     #   tenant（租户本身）、account（登录时还不知道是谁）、merchant_application（申请时商家还不存在）
     # listing_approval、approval_outbox 是商家维度的表，照常拼 tenant_id
     ignore-tables: tenant,account,merchant_application
-  approval:
-    outbox:
-      scan-interval-ms: 5000
-      scan-enabled: true
+  # E3：补偿扫描由 XXL-Job 的 approvalOutboxRelayJob 触发（频率在调度中心配）
+  job:
+    xxl:
+      enabled: false
+      appname: user-tenant
+      port: 9204

@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
+import org.apache.ibatis.annotations.Delete;
+import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
@@ -44,4 +47,23 @@ public interface OrderOutboxMapper extends BaseMapper<OrderOutbox> {
     int markRetry(@Param("id") long id, @Param("oldRetryCount") int oldRetryCount,
                   @Param("newRetryCount") int newRetryCount, @Param("status") int status,
                   @Param("nextRetryAt") LocalDateTime nextRetryAt, @Param("error") String error);
+
+    /** E3 归档：一批"已发送且早于 before"的记录 id（走索引 (status, sent_at)） */
+    @Select("SELECT id FROM order_outbox WHERE status = 1 AND sent_at < #{before} ORDER BY id LIMIT #{limit}")
+    List<Long> selectArchivable(@Param("before") LocalDateTime before, @Param("limit") int limit);
+
+    /** 先复制到归档表（INSERT IGNORE：上一轮复制了但没删掉时重跑不报错），再删主表，两步在同一个事务里 */
+    @InterceptorIgnore(tenantLine = "true")   // 归档是跨商家的系统任务；INSERT ... SELECT 不需要租户插件改写
+    @Insert("<script>INSERT IGNORE INTO order_outbox_archive SELECT * FROM order_outbox WHERE status = 1 AND id IN "
+            + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
+    int copyToArchive(@Param("ids") List<Long> ids);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Delete("<script>DELETE FROM order_outbox WHERE status = 1 AND id IN "
+            + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
+    int deleteSent(@Param("ids") List<Long> ids);
+
+    /** E3 告警：投递失败达到上限（status = 2）的记录 */
+    @Select("SELECT * FROM order_outbox WHERE status = 2 AND deleted = 0 ORDER BY id LIMIT #{limit}")
+    List<OrderOutbox> selectFailed(@Param("limit") int limit);
 }

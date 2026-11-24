@@ -1,3 +1,5 @@
 com.merchanthub.common.id.SnowflakeAutoConfiguration
 com.merchanthub.common.tenant.redis.TenantRedisAutoConfiguration
 com.merchanthub.common.security.JwtAutoConfiguration
+com.merchanthub.common.job.XxlJobAutoConfiguration
+com.merchanthub.common.recon.ReconAlarmAutoConfiguration

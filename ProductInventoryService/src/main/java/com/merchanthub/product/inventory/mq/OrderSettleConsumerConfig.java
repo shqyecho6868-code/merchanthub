@@ -9,6 +9,9 @@ import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.springframework.beans.factory.ObjectProvider;
+import com.merchanthub.common.recon.DeadLetters;
+import com.merchanthub.common.recon.ReconAlarm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -32,11 +35,15 @@ public class OrderSettleConsumerConfig {
 
     @Bean(destroyMethod = "shutdown")
     public DefaultMQPushConsumer orderSettleConsumer(ReservationSettleService settleService, ObjectMapper objectMapper,
-                                                     @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr)
+                                                     ObjectProvider<ReconAlarm> alarm,
+                                                     @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr,
+                                                     // 最大重试次数，-1 = RocketMQ 默认 16 次；死信测试调成 0（第一次失败就进死信）
+                                                     @Value("${merchanthub.inventory.settle-consumer.max-reconsume-times:-1}") int maxReconsume)
             throws MQClientException {
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(CONSUMER_GROUP);
         consumer.setNamesrvAddr(namesrvAddr);
         consumer.setVipChannelEnabled(false);
+        consumer.setMaxReconsumeTimes(maxReconsume);
         consumer.subscribe(OrderSettledEvent.TOPIC, OrderSettledEvent.TAG_ORDER_PAID + " || " + OrderSettledEvent.TAG_ORDER_CLOSED);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
@@ -60,6 +67,9 @@ public class OrderSettleConsumerConfig {
                     // 数据库不可用 / reserved 不足（数据不一致）：事务已整体回滚，让 RocketMQ 稍后重投
                     log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",
                             m.getTags(), event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
+                    // E3：重试耗尽进死信前告警；预占对账（reservationReconJob）会按订单真实状态兜底了结
+                    DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
+                            event.tenantId(), e);
                     return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 }
             }

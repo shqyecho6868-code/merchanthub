@@ -9,7 +9,10 @@ import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import com.merchanthub.common.recon.DeadLetters;
+import com.merchanthub.common.recon.ReconAlarm;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,7 +26,7 @@ import java.io.IOException;
 public class PayTimeoutConsumerConfig {
 
     @Bean(destroyMethod = "shutdown")
-    public DefaultMQPushConsumer payTimeoutConsumer(PayTimeoutService service, ObjectMapper objectMapper,
+    public DefaultMQPushConsumer payTimeoutConsumer(PayTimeoutService service, ObjectMapper objectMapper, ObjectProvider<ReconAlarm> alarm,
                                                     @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr)
             throws MQClientException {
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(PayTimeoutService.CONSUMER_GROUP);
@@ -45,6 +48,9 @@ public class PayTimeoutConsumerConfig {
                 } catch (RuntimeException e) {
                     log.warn("处理超时关单消息失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                             msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);
+                    // E3：重试耗尽进死信前告警；超时订单扫描（orderTimeoutScanJob）也会兜底关单
+                    DeadLetters.onFailure(alarm.getIfAvailable(), PayTimeoutService.CONSUMER_GROUP, m,
+                            consumer.getMaxReconsumeTimes(), msg.tenantId(), e);
                     return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 }
             }

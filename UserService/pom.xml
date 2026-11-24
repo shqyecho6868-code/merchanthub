@@ -73,6 +73,11 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
+        <!-- E3：XXL-Job 执行器（任务入口 job/UserJobs） -->
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.merchanthub</groupId>
             <artifactId>TestSupport</artifactId>

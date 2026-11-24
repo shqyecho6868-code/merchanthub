@@ -107,6 +107,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- E3：XXL-Job 执行器自动装配。optional：只有声明了它的服务才会注册成执行器 -->
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- 共享容器与测试基类（B1 从这里抽出去），test 范围，不会传递 -->
         <dependency>
             <groupId>com.merchanthub</groupId>

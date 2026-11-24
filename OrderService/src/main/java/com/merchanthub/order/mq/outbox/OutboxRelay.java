@@ -12,7 +12,6 @@ import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -29,7 +28,8 @@ import java.util.concurrent.ExecutorService;
  * 两个入口走同一个 {@link #publish}：
  * <ul>
  *   <li>{@link #publishAsync}：订单事务提交后立即发一次（快路径）</li>
- *   <li>{@link #scan}：定时扫描到期记录补发（兜底：MQ 不可用、进程在发送前挂掉、快路径任务被丢弃）</li>
+ *   <li>{@link #scan}：定时扫描到期记录补发（兜底：MQ 不可用、进程在发送前挂掉、快路径任务被丢弃）。
+ *       E3 起由 XXL-Job 调度（{@code orderOutboxRelayJob}），不再用 Spring @Scheduled</li>
  * </ul>
  * 多个实例同时扫描时，靠 {@link OrderOutboxMapper#claim} 的条件更新保证同一条记录同一时刻只有一个实例在发。
  */
@@ -42,9 +42,6 @@ public class OutboxRelay {
     private final ExecutorService executor;
     private final Clock clock;
 
-    /** 扫描开关。集成测试里，非补偿类的测试把它关掉，避免多个缓存的 Spring 上下文互相抢着补发（pitfalls P17 同类问题） */
-    @Value("${merchanthub.order.outbox.scan-enabled:true}")
-    private boolean scanEnabled;
     @Value("${merchanthub.order.outbox.batch-size:100}")
     private int batchSize;
     @Value("${merchanthub.order.outbox.lease-seconds:30}")
@@ -79,17 +76,18 @@ public class OutboxRelay {
         }));
     }
 
-    /** 兜底：定时扫描到期的待发送记录 */
-    @Scheduled(fixedDelayString = "${merchanthub.order.outbox.scan-interval-ms:5000}")
-    public void scan() {
-        if (!scanEnabled) {
-            return;
-        }
-        // 定时任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
-        TenantContext.runAsSystem(this::scanOnce);
+    /**
+     * 兜底：扫描到期的待发送记录。E3 起由 XXL-Job 触发（调度中心保证同一时刻只调一台实例）；
+     * 即使手动在两台上同时触发也安全：每条记录靠 claim 的条件更新只会被一个实例发送。
+     *
+     * @return 本轮扫到的到期记录数
+     */
+    public int scan() {
+        // 任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
+        return TenantContext.callAsSystem(this::scanOnce);
     }
 
-    private void scanOnce() {
+    private int scanOnce() {
         List<OrderOutbox> due = mapper.selectDue(LocalDateTime.now(clock), batchSize);
         if (!due.isEmpty()) {
             log.info("本地消息表扫描：{} 条到期待发送", due.size());
@@ -97,6 +95,7 @@ public class OutboxRelay {
         for (OrderOutbox row : due) {
             publish(row);   // 每条单独处理、单独 catch：一条失败不影响同批其他记录
         }
+        return due.size();
     }
 
     public void publish(OrderOutbox row) {

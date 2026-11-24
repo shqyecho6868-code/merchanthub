@@ -19,3 +19,11 @@ spring:
 merchanthub:
   rocketmq:
     namesrv-addr: 127.0.0.1:9876
+  # E3：注册到 XXL-Job 调度中心
+  job:
+    xxl:
+      enabled: true
+      admin-addresses: http://127.0.0.1:8090/xxl-job-admin
+      # 调度中心在容器里，回调宿主机上的执行器要走 host.docker.internal
+      address: http://host.docker.internal:9202/
+      access-token: ${XXL_JOB_ACCESS_TOKEN}

@@ -15,7 +15,14 @@ spring:
       password: ${NACOS_PASSWORD:nacos}
       discovery:
         server-addr: nacos:8848
+  elasticsearch:
+    uris: http://elasticsearch:9200
 
 merchanthub:
   rocketmq:
     namesrv-addr: namesrv:9876
+  job:
+    xxl:
+      enabled: true
+      admin-addresses: http://xxl-job-admin:8080/xxl-job-admin
+      access-token: ${XXL_JOB_ACCESS_TOKEN}

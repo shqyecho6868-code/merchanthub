@@ -24,7 +24,8 @@ class SchemaIT extends IntegrationTestBase {
         assertThat(jdbc.queryForList(
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()", String.class))
                 .contains("orders", "order_item", "trade_snapshot", "order_status_log", "order_outbox",
-                        "consumed_event", "merchant_order_notice", "flyway_schema_history");
+                        "consumed_event", "pay_anomaly", "recon_exception", "order_outbox_archive", "flyway_schema_history")
+                .doesNotContain("merchant_order_notice");   // E1 迁到 realtime
     }
 
     @Test

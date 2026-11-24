@@ -28,6 +28,9 @@ public class Payment {
     private LocalDateTime paidAt;
     /** 赢得成功 CAS 的那次回调的尝试 ID（事务回查用） */
     private String successAttempt;
+    /** E3：0 未核对 / 1 已一致 / 3 补发耗尽已告警 */
+    private Integer reconStatus;
+    private Integer reconRetry;
 
     private Long tenantId;
     private LocalDateTime createdAt;

@@ -9,14 +9,17 @@ import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import com.merchanthub.common.recon.DeadLetters;
+import com.merchanthub.common.recon.ReconAlarm;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 
-/** 订阅 payment 的"支付成功"事件。结构同 MerchantNoticeConsumerConfig */
+/** 订阅 payment 的"支付成功"事件。E3：最后一次重试仍失败时（即将进死信）告警并记 recon_exception */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(name = "merchanthub.order.pay-consumer.enabled", havingValue = "true", matchIfMissing = true)
@@ -24,7 +27,7 @@ public class PaySuccessConsumerConfig {
 
     @Bean(destroyMethod = "shutdown")
     public DefaultMQPushConsumer paySuccessConsumer(
-            OrderPaidService service, ObjectMapper objectMapper,
+            OrderPaidService service, ObjectMapper objectMapper, ObjectProvider<ReconAlarm> alarm,
             @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr,
             @Value("${merchanthub.order.pay-consumer.consume-from:CONSUME_FROM_LAST_OFFSET}") ConsumeFromWhere from)
             throws MQClientException {
@@ -48,11 +51,16 @@ public class PaySuccessConsumerConfig {
                 } catch (OrderNotVisibleException e) {
                     log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                             event.eventId(), event.orderNo(), m.getReconsumeTimes());
+                    // 订单始终不出现（重试 16 次约 4 小时 46 分）：进死信前告警，交给对账
+                    DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
+                            consumer.getMaxReconsumeTimes(), event.tenantId(), e);
                     return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 } catch (RuntimeException e) {
                     // 数据库不可用等：整个事务（含去重记录）已回滚，让 RocketMQ 稍后重投
                     log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                             event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
+                    DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
+                            consumer.getMaxReconsumeTimes(), event.tenantId(), e);
                     return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 }
             }

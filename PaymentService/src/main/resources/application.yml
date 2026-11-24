@@ -17,16 +17,47 @@ spring:
     openfeign:
       client:
         config:
-          # 跨服务调用必须有超时：建支付单时查订单，order 慢了就快速失败，不拖住支付请求线程
-          order:
+          # 跨服务调用必须有超时：建支付单时查订单，order 慢了就快速失败，不拖住支付请求线程。
+          # key 是 @FeignClient 的 contextId（P29）；E3 起 contextId = paymentOrderClient
+          paymentOrderClient:
             connect-timeout: 1000
             read-timeout: 3000
+          default:
+            connect-timeout: 1000
+            read-timeout: 3000
+    sentinel:
+      eager: true
+      transport:
+        port: 8720   # 和 order 的 8719 错开，同一台机器上两个服务都能被控制台连上
 
 merchanthub:
   payment:
+    # E3：payment → order 的熔断阈值（含义同 order，C2 笔记 Q3）
+    sentinel:
+      degrade:
+        slow-rt-ms: 1000
+        slow-ratio: 0.5
+        error-ratio: 0.5
+        min-requests: 10
+        stat-interval-ms: 10000
+        open-seconds: 10
+    # E3：对账参数（任务 paymentReconJob，频率在 XXL-Job 调度中心配）
+    recon:
+      # 支付成功超过这么久才核对：更早的事件可能还在路上
+      grace: 2m
+      # 待支付超过这么久才考虑关闭：大于订单支付时限 15m，订单此时一定已有结果
+      pending-close-after: 30m
+      # 补发几次 order 仍未处理就转人工
+      max-resend: 3
+      batch-size: 200
     tx:
       # 回查时支付单仍是待支付、且消息不满这么久 → UNKNOW 稍后重查（同 B2 order 的第二道防线）
       rollback-min-age-seconds: 30
+  job:
+    xxl:
+      enabled: false
+      appname: payment
+      port: 9202
 
 mybatis-plus:
   configuration:

@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface OrdersMapper extends BaseMapper<Orders> {
@@ -39,6 +40,14 @@ public interface OrdersMapper extends BaseMapper<Orders> {
     @InterceptorIgnore(tenantLine = "true")
     @Select("SELECT * FROM orders WHERE order_no = #{orderNo} AND deleted = 0")
     Orders selectByOrderNoAcrossTenants(@Param("orderNo") long orderNo);
+
+    /**
+     * E3 超时订单扫描：过了支付截止时间 + 宽限期仍是待支付（正常情况下 ORDER_TIMEOUT 定时消息早该把它关了）。
+     * 跨租户：扫描任务以 SYSTEM 身份跑，本来就不拼 tenant_id；走索引 (status, expire_at)
+     */
+    @Select("SELECT order_no, tenant_id FROM orders WHERE status = 10 AND expire_at < #{before} AND deleted = 0"
+            + " ORDER BY expire_at LIMIT #{limit}")
+    List<Orders> selectExpiredPending(@Param("before") LocalDateTime before, @Param("limit") int limit);
 
     @Select("SELECT status FROM orders WHERE order_no = #{orderNo} AND deleted = 0 FOR UPDATE")
     Integer selectStatusForUpdate(@Param("orderNo") long orderNo);

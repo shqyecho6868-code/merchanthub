@@ -50,16 +50,6 @@ spring:
               filters:
                 - RewritePath=/api/(?<segment>.*), /$\{segment}
 
-            - id: OfflineDataService
-              uri: lb://OfflineDataService
-              predicates:
-                - Path=/api/message/**
-
-            - id: AiService
-              uri: lb://AiService
-              predicates:
-                - Path=/api/ai/**
-
             # C1：交易服务。对外统一 /api 前缀，转发时去掉（/api/orders/1 → order 的 /orders/1）。
             # /internal/** 两层挡：这里没有它的路由；AuthorizeFilter 再按路径段兜底拦截（防 /api/orders/../internal 之类）
             - id: order

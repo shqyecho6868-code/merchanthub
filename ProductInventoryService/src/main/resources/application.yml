@@ -45,10 +45,9 @@ merchanthub:
     settle-consumer:
       # 订阅订单的 ORDER_PAID / ORDER_CLOSED，做确认扣减 / 释放（B3-下）
       enabled: true
-    dangling-scan:
-      # 悬空预占扫描（B3-下）：预占超过 older-than 仍是 RESERVED、且 order 确认订单不存在 → 释放
-      enabled: true
-      interval-ms: 60000
+    reservation-recon:
+      # 预占对账（E3，原 B3-下悬空预占扫描）：预占超过 older-than 仍是 RESERVED → 按订单真实状态释放 / 确认。
+      # 由 XXL-Job 的 reservationReconJob 触发，频率在调度中心配。
       # 必须远大于下单事务超时（5 秒）：过了这么久还查不到订单，才能确定它以后也不会出现。
       # 还要大于订单支付时限（15m）+ 余量：正常的待支付订单本来就占着库存，不该每轮都被捞出来问一遍
       older-than: 30m
@@ -58,9 +57,13 @@ merchanthub:
       # 订阅 user-tenant 的上架审批结果，回写商品状态（D1）
       enabled: true
     listing-compensate:
-      # "审核中"超过 older-than 还没结果 → 反查 user-tenant：消息丢了就按反查回写，没发起成功就重新发起（D1）
-      enabled: true
-      interval-ms: 60000
+      # "审核中"超过 older-than 还没结果 → 反查 user-tenant：消息丢了就按反查回写，没发起成功就重新发起（D1）。
+      # E3 起由 XXL-Job 的 listingCompensateJob 触发
       # 远大于"审批结束 → 消息到达"的正常耗时（秒级），避免和正常消费抢；又不能太长，否则消息丢了商家要等很久
       older-than: 2m
       batch-size: 100
+  job:
+    xxl:
+      enabled: false
+      appname: product-inventory
+      port: 9203

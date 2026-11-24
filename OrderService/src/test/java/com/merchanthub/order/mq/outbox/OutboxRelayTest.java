@@ -36,7 +36,6 @@ class OutboxRelayTest {
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(relay, "scanEnabled", true);
         ReflectionTestUtils.setField(relay, "batchSize", 100);
         ReflectionTestUtils.setField(relay, "leaseSeconds", 30L);
         ReflectionTestUtils.setField(relay, "baseBackoffSeconds", 10L);

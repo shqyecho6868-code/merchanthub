@@ -76,6 +76,16 @@
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client</artifactId>
         </dependency>
+        <!-- E3（C2 遗留）：调 order 的 Feign 加熔断（版本 1.8.9 由 SCA BOM 管理） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+        <!-- E3：XXL-Job 执行器（任务入口 job/PaymentJobs） -->
+        <dependency>
+            <groupId>com.xuxueli</groupId>
+            <artifactId>xxl-job-core</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>com.merchanthub</groupId>

@@ -106,7 +106,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
 
     protected List<String> tablesToTruncate() {
         return List.of("orders", "order_item", "trade_snapshot", "order_status_log", "order_outbox",
-                "consumed_event", "merchant_order_notice", "pay_anomaly");
+                "consumed_event", "pay_anomaly", "recon_exception", "order_outbox_archive");
     }
 
     protected static SkuSnapshot sku(long id, long tenant, long price, String spec) {

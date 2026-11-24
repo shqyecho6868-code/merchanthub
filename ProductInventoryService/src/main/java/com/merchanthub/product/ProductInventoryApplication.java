@@ -4,7 +4,6 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * product-inventory 服务。包内分两个子域（D2）：
@@ -14,7 +13,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = {"com.merchanthub.product", "com.merchanthub.common"})
 @MapperScan({"com.merchanthub.product.catalog.mapper", "com.merchanthub.product.inventory.mapper"})
 @EnableFeignClients(basePackages = {"com.merchanthub.product.inventory.client", "com.merchanthub.product.catalog.client"})
-@EnableScheduling
 public class ProductInventoryApplication {
 
     public static void main(String[] args) {

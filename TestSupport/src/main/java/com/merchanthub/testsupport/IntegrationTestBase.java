@@ -30,5 +30,10 @@ public abstract class IntegrationTestBase {
         // 测试不连 Nacos：只测本服务，跨服务调用用 Mock 或 WireMock 替代
         registry.add("spring.cloud.nacos.discovery.enabled", () -> "false");
         registry.add("spring.cloud.service-registry.auto-registration.enabled", () -> "false");
+
+        // E3：测试不注册 XXL-Job 执行器（不起调度中心，任务方法由测试直接调用）。
+        // 必须放在这里而不是 test 的 application.properties：测试也激活 dev profile，
+        // application-dev.yml 里的 enabled=true 优先级高于非 profile 的配置文件，会把它盖掉
+        registry.add("merchanthub.job.xxl.enabled", () -> "false");
     }
 }

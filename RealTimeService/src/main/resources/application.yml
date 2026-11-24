@@ -3,6 +3,31 @@ server:
 
 spring:
   application:
-    name: RealTimeService
+    name: realtime
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      # 和 user-tenant 同一个库：握手时要校验登录 token（access:token:{userId}）
+      database: 2
+      timeout: 3000
+
+merchanthub:
+  realtime:
+    # 节点 ID：路由表里记的就是它，节点间转发的 Tag 也是它。默认 rt-{本机IP}-{Netty端口}；多实例部署时也可以显式配置
+    node-id: ${REALTIME_NODE_ID:}
+    # WebSocket 端口（Netty）。0 = 随机端口（测试里同一个 JVM 起两个节点用）
+    netty-port: 9101
+    # 路由过期时间：客户端每 30 秒发一次 ping 续期；节点宕机没人续期，最多这么久路由自动消失
+    route-ttl: 90s
+    # 读空闲超过这么久（客户端连 ping 都不发了）就断开连接
+    idle-timeout: 90s
+    # 订单事件消费者（集群消费：任意一台节点消费到都行）
+    order-consumer:
+      enabled: true
+      consume-from: CONSUME_FROM_LAST_OFFSET
+  # 握手校验 token 的密钥，与网关 / user-tenant 一致
+  jwt:
+    secret: ${JWT_SECRET}

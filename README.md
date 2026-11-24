@@ -4,8 +4,8 @@
 
 多商家（多租户）电商交易平台后端，学习项目。由分布式 IM 项目“千言 IM”改造而来。
 
-- 技术栈：Spring Boot 3.5 · Java 17 · Spring Cloud Alibaba（Nacos）· RocketMQ 5 · MySQL 8 · Redis 7 · Netty · Elasticsearch 8 · Flowable 7 · LangChain4j
-- 业务范围：租户（平台 → 商家 → 员工）、商品与 SKU、库存预占/确认/释放、订单状态机与交易快照、模拟支付、审批流、订单推送、对账补偿、按租户隔离的 AI 客服
+- 技术栈：Spring Boot 3.5 · Java 17 · Spring Cloud Alibaba（Nacos）· RocketMQ 5 · MySQL 8 · Redis 7 · Netty · Elasticsearch 8 + Canal · Flowable 7 · XXL-Job · Sentinel
+- 业务范围：租户（平台 → 商家 → 员工）、商品与 SKU、库存预占/确认/释放、订单状态机与交易快照、模拟支付、审批流、订单实时推送（多节点路由 + 离线补发）、订单搜索、对账补偿
 
 ## 快速开始
 

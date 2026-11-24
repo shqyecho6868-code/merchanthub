@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+import com.merchanthub.order.search.OrderSearchDoc;
+import com.merchanthub.order.search.OrderSearchService;
+import java.util.List;
 
 @RestController
 @RequestMapping("/orders")
@@ -29,6 +33,7 @@ public class OrderController {
     private final OrderCreateService orderCreateService;
     private final OrderQueryService orderQueryService;
     private final OrderRateLimiter orderRateLimiter;
+    private final OrderSearchService orderSearchService;
 
     /**
      * 下单：只有买家能下。买家 ID 取自网关解析 token 后注入的身份，不信任请求体里的任何用户字段。
@@ -47,6 +52,19 @@ public class OrderController {
     @RequireRole({Role.MERCHANT_ADMIN, Role.MERCHANT_STAFF, Role.PLATFORM_ADMIN})
     public BaseResponse<OrderDetailVO> getForMerchant(@PathVariable long orderNo) {
         return ResultUtils.success(orderQueryService.getForMerchant(orderNo));
+    }
+
+    /**
+     * E2：商家按关键词搜订单（商品名 / 规格 / 订单号），查的是 ES 副本，有秒级延迟。
+     * 商家 ID 只从网关注入的身份取（不接受参数传入），在 ES 查询里作为强制过滤条件
+     */
+    @GetMapping("/search")
+    @RequireRole({Role.MERCHANT_ADMIN, Role.MERCHANT_STAFF})
+    public BaseResponse<List<OrderSearchDoc>> search(@RequestParam(required = false) String keyword,
+                                                     @RequestParam(defaultValue = "1") int page,
+                                                     @RequestParam(defaultValue = "20") int size) {
+        return ResultUtils.success(orderSearchService.search(TenantContext.requireTenantId(), keyword, page,
+                Math.min(Math.max(size, 1), 100)));
     }
 
     /** 买家查自己的订单：按 buyer_id 过滤 */

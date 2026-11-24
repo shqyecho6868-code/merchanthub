@@ -11,7 +11,6 @@ import com.merchanthub.product.catalog.service.ListingStateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -25,7 +24,7 @@ import java.util.List;
  *   <li>RUNNING → 审批人还没处理，正常情况，不动（实例 ID 没回填的顺手补上）</li>
  *   <li>反查失败 → 跳过，下一轮再查：查不到 ≠ 没结果</li>
  * </ul>
- * 多实例同时扫描安全：回写是 CAS，发起是幂等的。以后引入 XXL-Job 时迁移（同 outbox 扫描）。
+ * 多实例同时扫描安全：回写是 CAS，发起是幂等的。E3 起由 XXL-Job 的 listingCompensateJob 调度（原 @Scheduled）。
  */
 @Slf4j
 @Component
@@ -36,19 +35,10 @@ public class ListingAuditCompensator {
     private final ListingApprovalClient approvalClient;
     private final ListingStateService stateService;
 
-    @Value("${merchanthub.product.listing-compensate.enabled:true}")
-    private boolean enabled;
     @Value("${merchanthub.product.listing-compensate.older-than:2m}")
     private Duration olderThan;
     @Value("${merchanthub.product.listing-compensate.batch-size:100}")
     private int batchSize;
-
-    @Scheduled(fixedDelayString = "${merchanthub.product.listing-compensate.interval-ms:60000}")
-    public void scheduledScan() {
-        if (enabled) {
-            scan();
-        }
-    }
 
     /** @return 本轮修复（回写 + 重新发起 + 补实例 ID）的商品数 */
     public int scan() {

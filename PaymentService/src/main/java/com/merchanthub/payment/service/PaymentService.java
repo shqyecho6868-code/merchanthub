@@ -1,9 +1,9 @@
 package com.merchanthub.payment.service;
 
-import com.merchanthub.common.common.BaseResponse;
 import com.merchanthub.common.common.ErrorCode;
 import com.merchanthub.common.exception.BusinessException;
 import com.merchanthub.common.id.SnowflakeIdGenerator;
+import com.merchanthub.common.recon.ReconAlarm;
 import com.merchanthub.payment.client.OrderClient;
 import com.merchanthub.payment.client.dto.OrderBrief;
 import com.merchanthub.payment.mapper.PaymentMapper;
@@ -14,7 +14,7 @@ import com.merchanthub.payment.model.enums.PaymentStatus;
 import com.merchanthub.payment.mq.CasTx;
 import com.merchanthub.payment.mq.PaySuccessEvent;
 import com.merchanthub.payment.mq.PaymentEventCodec;
-import feign.FeignException;
+import com.merchanthub.payment.client.OrderRemote;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.exception.MQClientException;
@@ -44,6 +44,7 @@ public class PaymentService {
     private final PaymentEventCodec codec;
     private final TransactionTemplate txTemplate;
     private final Clock clock;
+    private final ReconAlarm reconAlarm;
 
     /** 建支付单：每次"去支付"都建一条新的（订单与支付单一对多），金额以订单为准，不信任客户端 */
     public PaymentVO create(long buyerId, long orderNo) {
@@ -107,8 +108,11 @@ public class PaymentService {
             return CallbackOutcome.DUPLICATE;
         }
         if (p.getStatus() != PaymentStatus.PENDING.getCode()) {
-            // 支付单已关闭 / 失败后钱又到了：需要退款，属于对账补偿范围（B3 下 / 退款不做）
-            log.error("支付单状态为 {}，收到支付成功回调，需对账退款 payNo={} orderNo={}", p.getStatus(), p.getPayNo(), p.getOrderNo());
+            // 支付单已关闭 / 失败后钱又到了（例：对账刚关掉遗留支付单，买家还在旧页面付了款）：钱收了货不发，待退款（退款不做）。
+            // E3：记异常表 + 告警，转人工
+            reconAlarm.raise(p.getTenantId(), ReconAlarm.PAID_AFTER_CLOSED, "payNo:" + p.getPayNo(),
+                    "支付单状态 " + p.getStatus() + " 时收到支付成功回调，待退款 orderNo=" + p.getOrderNo()
+                            + " amount=" + p.getAmount() + " channelTradeNo=" + req.channelTradeNo());
             return CallbackOutcome.IGNORED;
         }
 
@@ -143,18 +147,8 @@ public class PaymentService {
         return CallbackOutcome.PAID;
     }
 
+    /** 超时 / 连不上 / 熔断中 → DOWNSTREAM_UNAVAILABLE（降级）；订单不存在等业务失败原样透传（E3 起经 Sentinel 熔断） */
     private OrderBrief queryOrder(long orderNo) {
-        BaseResponse<OrderBrief> resp;
-        try {
-            resp = orderClient.getOrder(orderNo);
-        } catch (FeignException e) {
-            // 超时 / 连不上：快速失败给明确提示（降级）
-            log.warn("查询订单失败 orderNo={}", orderNo, e);
-            throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
-        }
-        if (resp == null || resp.getCode() != 200) {
-            throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
-        }
-        return resp.getData();
+        return OrderRemote.call(OrderClient.RES_GET_ORDER, () -> orderClient.getOrder(orderNo));
     }
 }

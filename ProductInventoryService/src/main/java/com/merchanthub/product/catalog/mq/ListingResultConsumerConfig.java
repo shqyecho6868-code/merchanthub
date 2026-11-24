@@ -9,6 +9,9 @@ import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.message.MessageExt;
+import org.springframework.beans.factory.ObjectProvider;
+import com.merchanthub.common.recon.DeadLetters;
+import com.merchanthub.common.recon.ReconAlarm;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -31,6 +34,7 @@ public class ListingResultConsumerConfig {
 
     @Bean(destroyMethod = "shutdown")
     public DefaultMQPushConsumer listingResultConsumer(ListingStateService stateService, ObjectMapper objectMapper,
+                                                       ObjectProvider<ReconAlarm> alarm,
                                                        @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr)
             throws MQClientException {
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(CONSUMER_GROUP);
@@ -55,6 +59,9 @@ public class ListingResultConsumerConfig {
                     // 数据库不可用等：事务已回滚，稍后重投；重投仍失败 16 次进死信，补偿扫描反查兜底
                     log.warn("处理审批结果失败，稍后重投 eventId={} productId={} reconsumeTimes={}",
                             e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
+                    // E3：最后一次重试也失败 → 告警 + 记 recon_exception
+                    DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
+                            TenantMessages.tenantIdOf(m), ex);
                     return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                 }
             }

@@ -91,7 +91,7 @@ public class OrderPaidService {
         }
         // 和 CAS 在同一个事务里写"已支付"事件：订单成了已支付，库存确认扣减就一定会发生
         OrderSettledEvent paid = new OrderSettledEvent(idGenerator.nextId(), event.orderNo(), event.tenantId(),
-                OrderEvent.PAY_SUCCESS.name());
+                OrderEvent.PAY_SUCCESS.name(), order.getBuyerId());
         outboxWriter.append(event.tenantId(), paid.eventId(), String.valueOf(event.orderNo()), OrderEventTopics.TOPIC,
                 OrderEventTopics.TAG_ORDER_PAID, codec.toJson(paid), null);
         return true;

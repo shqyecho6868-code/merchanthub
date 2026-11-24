@@ -3,7 +3,6 @@ package com.merchanthub.user;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * user-tenant 服务（D1 从旧 IM 的 UserService 改造）。两个子域：
@@ -15,7 +14,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication(scanBasePackages = {"com.merchanthub.user", "com.merchanthub.common"})
 @MapperScan({"com.merchanthub.user.account.mapper", "com.merchanthub.user.approval.mapper"})
-@EnableScheduling
 public class UserTenantApplication {
 
     public static void main(String[] args) {

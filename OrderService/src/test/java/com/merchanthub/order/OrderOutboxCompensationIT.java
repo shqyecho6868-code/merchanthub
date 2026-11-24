@@ -10,7 +10,10 @@ import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.common.message.Message;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import java.util.concurrent.ScheduledExecutorService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,13 +41,11 @@ import static org.mockito.Mockito.verify;
  * 不直接停共享的 RocketMQ 容器：同一个 JVM 里其他测试类也在用它。真实停 Broker 的手动实验记录在 B2 笔记 7.4。
  * <p>
  * 退避调成 1 秒、扫描 500 毫秒一次，让几次重试在几秒内跑完。
- * 测试配置默认关闭扫描、只有这里打开：第一次跑时，补发全被别的缓存上下文（没 spy 的生产者）抢走了，
- * 这在生产里等价于"别的实例接手补发"，是正常行为，但会让这里的断言失真。
+ * E3 起扫描由 XXL-Job 调度，服务里不再有自己的定时器：这里用一个后台线程每 500 毫秒调一次 relay.scan()，
+ * 模拟调度中心触发。只扫这个上下文的 relay（带 spy 生产者），不会被别的缓存上下文抢走补发（P17）。
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
-        "merchanthub.order.outbox.scan-enabled=true",
-        "merchanthub.order.outbox.scan-interval-ms=500",
         "merchanthub.order.outbox.base-backoff-seconds=1",
         "merchanthub.order.outbox.max-backoff-seconds=1",
         "merchanthub.order.outbox.max-retries=4"})
@@ -61,9 +62,29 @@ class OrderOutboxCompensationIT extends OrderItSupport {
     @Autowired
     private OrderOutboxMapper outboxMapper;
 
+    private ScheduledExecutorService scheduler;
+
     @BeforeAll
     static void startObserver() throws Exception {
         observer = new OrderEventObserver();
+    }
+
+    /** 模拟 XXL-Job：每 500 毫秒触发一次 orderOutboxRelayJob */
+    @BeforeEach
+    void startScanTrigger() {
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleWithFixedDelay(() -> {
+            try {
+                relay.scan();
+            } catch (RuntimeException ignored) {
+                // 和调度中心一样：一次执行失败不影响下一次
+            }
+        }, 500, 500, TimeUnit.MILLISECONDS);
+    }
+
+    @AfterEach
+    void stopScanTrigger() {
+        scheduler.shutdownNow();
     }
 
     @AfterAll

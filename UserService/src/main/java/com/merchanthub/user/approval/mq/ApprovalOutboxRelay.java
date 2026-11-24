@@ -11,7 +11,6 @@ import org.apache.rocketmq.client.producer.SendStatus;
 import org.apache.rocketmq.common.message.Message;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -39,10 +38,6 @@ public class ApprovalOutboxRelay {
     private final DefaultMQProducer producer;
     private final ExecutorService executor;
     private final Clock clock;
-
-    /** 扫描开关。集成测试里，非补偿类的测试把它关掉，避免多个缓存的 Spring 上下文互相抢着补发（pitfalls P17 同类问题） */
-    @Value("${merchanthub.approval.outbox.scan-enabled:true}")
-    private boolean scanEnabled;
     @Value("${merchanthub.approval.outbox.batch-size:100}")
     private int batchSize;
     @Value("${merchanthub.approval.outbox.lease-seconds:30}")
@@ -76,17 +71,13 @@ public class ApprovalOutboxRelay {
         }));
     }
 
-    /** 兜底：定时扫描到期的待发送记录 */
-    @Scheduled(fixedDelayString = "${merchanthub.approval.outbox.scan-interval-ms:5000}")
-    public void scan() {
-        if (!scanEnabled) {
-            return;
-        }
-        // 定时任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
-        TenantContext.runAsSystem(this::scanOnce);
+    /** 兜底：扫描到期的待发送记录。E3 起由 XXL-Job 的 approvalOutboxRelayJob 触发（原 @Scheduled 5 秒一次） */
+    public int scan() {
+        // 任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
+        return TenantContext.callAsSystem(this::scanOnce);
     }
 
-    private void scanOnce() {
+    private int scanOnce() {
         List<ApprovalOutbox> due = mapper.selectDue(LocalDateTime.now(clock), batchSize);
         if (!due.isEmpty()) {
             log.info("本地消息表扫描：{} 条到期待发送", due.size());
@@ -94,6 +85,7 @@ public class ApprovalOutboxRelay {
         for (ApprovalOutbox row : due) {
             publish(row);   // 每条单独处理、单独 catch：一条失败不影响同批其他记录
         }
+        return due.size();
     }
 
     public void publish(ApprovalOutbox row) {

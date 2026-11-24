@@ -22,9 +22,7 @@
 		<module>OrderService</module>
 		<module>PaymentService</module>
 		<module>UserService</module>
-		<module>AiService</module>
 		<module>GateWay</module>
-		<module>OfflineDataService</module>
 		<module>RealTimeService</module>
 	</modules>
 
@@ -52,8 +50,6 @@
 		<jjwt.version>0.11.5</jjwt.version>
 		<hutool.version>5.7.17</hutool.version>
 		<commons-lang3.version>3.12.0</commons-lang3.version>
-		<langchain4j.version>1.1.0</langchain4j.version>
-		<langchain4j-beta.version>1.1.0-beta7</langchain4j-beta.version>
 		<!--
 		  不要在这里定义 netty.version：它和 Spring Boot 父 pom 的同名属性重名，会把全项目所有 Netty 模块
 		  （Gateway 的 Reactor Netty、Lettuce、RocketMQ remoting）一起覆盖。A2+ 曾因此用 4.2.0 导致 RocketMQ 客户端
@@ -65,8 +61,8 @@
 		  版本错位会在运行时 NoSuchMethodError。原先为对齐 canal 1.1.7 锁在 2.0.31，导致 RocketMQ 客户端发请求失败（pitfalls P12）。
 		-->
 		<fastjson2.version>2.0.58</fastjson2.version>
-		<minio.version>8.2.1</minio.version>
-		<shedlock.version>4.42.0</shedlock.version>
+		<!-- E3：替换 ShedLock 的分布式调度。3.x 要求 JDK 17 / Spring 6，与本项目基线一致 -->
+		<xxl-job.version>3.4.2</xxl-job.version>
 		<!--
 		  D1：Flowable 7.2.0 官方基于 Spring Boot 3.5.4 / Spring 6.2 / MyBatis 3.5.19 构建，
 		  与本项目 Boot 3.5.x、MyBatis-Plus 3.5.12（同样依赖 MyBatis 3.5.19）一致，不会出现两个 MyBatis 版本
@@ -204,6 +200,11 @@
 
 			<!-- 中间件客户端 -->
 			<dependency>
+				<groupId>com.xuxueli</groupId>
+				<artifactId>xxl-job-core</artifactId>
+				<version>${xxl-job.version}</version>
+			</dependency>
+			<dependency>
 				<groupId>com.alibaba.otter</groupId>
 				<artifactId>canal.client</artifactId>
 				<version>${canal.version}</version>
@@ -213,59 +214,12 @@
 				<artifactId>canal.protocol</artifactId>
 				<version>${canal.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>io.minio</groupId>
-				<artifactId>minio</artifactId>
-				<version>${minio.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>net.javacrumbs.shedlock</groupId>
-				<artifactId>shedlock-spring</artifactId>
-				<version>${shedlock.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>net.javacrumbs.shedlock</groupId>
-				<artifactId>shedlock-provider-redis-spring</artifactId>
-				<version>${shedlock.version}</version>
-			</dependency>
 
 			<!-- 审批流（D1），只有 user-tenant 用 -->
 			<dependency>
 				<groupId>org.flowable</groupId>
 				<artifactId>flowable-spring-boot-starter-process</artifactId>
 				<version>${flowable.version}</version>
-			</dependency>
-
-			<!-- AI -->
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j</artifactId>
-				<version>${langchain4j.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-community-dashscope-spring-boot-starter</artifactId>
-				<version>${langchain4j-beta.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-pgvector</artifactId>
-				<version>${langchain4j-beta.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-mcp</artifactId>
-				<version>${langchain4j-beta.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-community-redis-spring-boot-starter</artifactId>
-				<version>${langchain4j-beta.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>dev.langchain4j</groupId>
-				<artifactId>langchain4j-reactor</artifactId>
-				<version>${langchain4j-beta.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

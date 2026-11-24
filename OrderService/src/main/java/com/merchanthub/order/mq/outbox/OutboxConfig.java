@@ -5,7 +5,6 @@ import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -19,7 +18,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * event-mode 只决定"订单已创建"事件走事务消息还是本地消息表
  */
 @Configuration
-@EnableScheduling
 public class OutboxConfig {
 
     /** 普通生产者即可：一致性靠本地消息表，不需要 MQ 的事务能力 */

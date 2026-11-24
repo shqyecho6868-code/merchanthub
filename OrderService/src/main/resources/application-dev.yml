@@ -23,6 +23,18 @@ spring:
         # 控制台只认 IP 不认主机名（填 host.docker.internal 会报 Bad IP，P30），所以由 deploy/c2/start-order.sh 现查现传
         client-ip: ${SENTINEL_CLIENT_IP:}
 
+  # E2：订单搜索副本（docker-compose 的 mh-es，本地关了安全认证）
+  elasticsearch:
+    uris: http://127.0.0.1:9200
+
 merchanthub:
   rocketmq:
     namesrv-addr: 127.0.0.1:9876
+  # E3：本地注册到 docker-compose 的 XXL-Job 调度中心（控制台 http://127.0.0.1:8090/xxl-job-admin）
+  job:
+    xxl:
+      enabled: true
+      admin-addresses: http://127.0.0.1:8090/xxl-job-admin
+      # 调度中心在容器里，回调宿主机上的执行器要走 host.docker.internal
+      address: http://host.docker.internal:9201/
+      access-token: ${XXL_JOB_ACCESS_TOKEN}
