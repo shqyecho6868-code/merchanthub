@@ -1,6 +1,7 @@
 #!/bin/bash
 # F1：压测后的数据一致性检查。压测只证明"快"，这个脚本证明"压完数据还是对的"。
-#   ./perf/check/check.sh [最长等待秒数=60]
+#   ./perf/check/check.sh [RUN_ID] [最长等待秒数=60]
+#   带 RUN_ID 时额外核对：k6 统计的"下单成功"次数 = 库里该商家的订单数（被限流 / 库存不足的请求没有留下订单）
 # 下单后的确认扣减 / 释放是异步消息驱动的，所以先等"在途"状态收敛（预占数与订单状态对上），再逐项判定。
 # 每一项输出 PASS / FAIL；任何一项 FAIL 退出码为 1（G 阶段可直接接进流水线）。
 #
@@ -8,9 +9,16 @@
 # 所以对每个 SKU 恒有：初始可售 - 当前可售 = 预占中(10) + 已确认(20) 的数量；reserved = 预占中(10) 的数量
 cd "$(dirname "$0")/../.." || exit 1
 set -a; . ./.env; set +a
-WAIT=${1:-60}
+RUN_ID=$1
+WAIT=${2:-60}
 T="901,902"
-INIT_SQL="IF(i.tenant_id = 901, 1000000, 100000)"   # 与 perf/data/seed.sql 的初始库存一致
+# 初始库存与 perf/data/seed.sql 一致；S2b 用 HOT_STOCK 改过 SKU 90101（seed.sh 记在 seed-baseline.env）
+HOT_STOCK=""; [ -f perf/results/seed-baseline.env ] && . perf/results/seed-baseline.env
+if [ -n "$HOT_STOCK" ]; then
+  INIT_SQL="IF(i.sku_id = 90101, $HOT_STOCK, IF(i.tenant_id = 901, 1000000, 100000))"
+else
+  INIT_SQL="IF(i.tenant_id = 901, 1000000, 100000)"
+fi
 q() { docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -N -e "$1"; }
 qt() { docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -t -e "$1"; }
 FAIL=0
@@ -92,6 +100,22 @@ result "实收金额 = 订单应付金额" "$(q "SELECT COUNT(*) FROM ($SQL) x")
 
 ANOMALY=$(q "SELECT COUNT(*) FROM mh_order.pay_anomaly WHERE tenant_id IN ($T)")
 echo "  INFO  支付异常记录 pay_anomaly：$ANOMALY 条（关单后到账 / 重复支付，待对账人工处理）"
+
+if [ -n "$RUN_ID" ]; then
+  echo "== k6 统计 ↔ 库里订单（${RUN_ID}）=="
+  SUMMARY=perf/results/$RUN_ID/summary.json
+  [ -f "$SUMMARY" ] || { echo "  找不到 $SUMMARY"; exit 1; }
+  for t in 901 902; do
+    K6=$(python3 -c "import json,sys; m=json.load(open('$SUMMARY'))['metrics'].get('biz_order{tenant:$t,result:ok}'); print(int(m['values']['count']) if m else -1)")
+    [ "$K6" = "-1" ] && continue      # 这个场景没压该商家
+    DB=$(q "SELECT COUNT(*) FROM mh_order.orders WHERE tenant_id = $t")
+    if [ "$K6" = "$DB" ]; then
+      printf '  \033[32mPASS\033[0m  商家 %s：k6 下单成功 %s 次 = 库里订单 %s 条\n' "$t" "$K6" "$DB"
+    else
+      printf '  \033[31mFAIL\033[0m  商家 %s：k6 下单成功 %s 次 ≠ 库里订单 %s 条\n' "$t" "$K6" "$DB"; FAIL=1
+    fi
+  done
+fi
 
 echo
 [ "$FAIL" = 0 ] && echo "全部检查通过" || echo "有检查未通过，见上方 FAIL 明细"

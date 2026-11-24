@@ -1,9 +1,24 @@
 // F1：业务接口封装。每个请求打 name 标签，k6 按接口分别统计 P50 / P99 / 错误率（否则 URL 里带订单号会被拆成无数条）。
 import http from 'k6/http';
 import { check } from 'k6';
+import { Counter } from 'k6/metrics';
 import { config, buyerUsername } from './config.js';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+// F1 第二部分：按"业务结果"计数（k6 自带指标只分 HTTP 成功 / 失败，分不出限流、库存不足、真错误）。
+// 带 tenant / result 标签，summary.js 会把它们列成一张表；check.sh 用 biz_order{result:ok} 和库里订单数对账
+export const bizOrder = new Counter('biz_order');
+export const bizCallback = new Counter('biz_callback');
+export const ORDER_RESULTS = ['ok', 'rate_limited', 'insufficient', 'error'];
+export const CALLBACK_RESULTS = ['PAID', 'DUPLICATE', 'IGNORED', 'error'];
+
+function classifyOrder(res, b) {
+  if (res.status === 200 && b && b.code === 200) return 'ok';
+  if (res.status === 429) return 'rate_limited';
+  if (b && b.code === 61001) return 'insufficient';   // ErrorCode.INVENTORY_INSUFFICIENT
+  return 'error';
+}
 
 function url(service, path) {
   // gateway 模式：/api/orders、/api/payments；direct 模式：直连 order / payment 端口
@@ -66,10 +81,13 @@ export function loginBuyers(n) {
 export function createOrder(buyer, tenantId, items) {
   const res = http.post(url('order', '/orders'), JSON.stringify({ tenantId, items }),
     { headers: authHeaders(buyer), tags: { name: 'create_order' }, timeout: config.timeout });
-  const ok = bizOk(res);
-  check(res, { '下单成功': () => ok });
-  const b = ok ? body(res) : null;
-  return { res, orderNo: b ? b.data.orderNo : null, payAmount: b ? b.data.payAmount : null };
+  const parsed = body(res);
+  const result = classifyOrder(res, parsed);
+  bizOrder.add(1, { tenant: String(tenantId), result });
+  // 限流和库存不足是"系统按设计拒绝"，不算失败；只有 error 才是问题
+  check(res, { '下单没有出错（成功 / 限流 / 库存不足都算正常）': () => result !== 'error' });
+  const b = result === 'ok' ? parsed : null;
+  return { res, result, orderNo: b ? b.data.orderNo : null, payAmount: b ? b.data.payAmount : null };
 }
 
 /** 建支付单，返回 {res, payNo, amount} */
@@ -88,14 +106,26 @@ export function createPayment(buyer, orderNo) {
 /**
  * 模拟渠道回调。同一 channelTradeNo 重复调用 = 渠道重复通知，服务端应只生效一次（返回 PAID / DUPLICATE / IGNORED）
  */
-export function mockCallback(payNo, channelTradeNo, amount) {
-  const res = http.post(url('payment', '/payments/callback/mock'),
+export function callbackRequest(payNo, channelTradeNo, amount) {
+  return ['POST', url('payment', '/payments/callback/mock'),
     `{"payNo":${payNo},"channelTradeNo":"${channelTradeNo}","amount":${amount}}`,
-    { headers: JSON_HEADERS, tags: { name: 'pay_callback' }, timeout: config.timeout });
+    { headers: JSON_HEADERS, tags: { name: 'pay_callback' }, timeout: config.timeout }];
+}
+
+export function mockCallback(payNo, channelTradeNo, amount) {
+  const [m, u, b, p] = callbackRequest(payNo, channelTradeNo, amount);
+  const res = http.request(m, u, b, p);
+  return callbackResult(res);
+}
+
+/** 解析一次回调响应并计数（http.batch 并发发回调时也复用） */
+export function callbackResult(res) {
   const ok = bizOk(res);
   check(res, { '回调已受理': () => ok });
   const b = ok ? body(res) : null;
-  return { res, result: b ? b.data : null };
+  const result = b ? b.data : 'error';
+  bizCallback.add(1, { result: CALLBACK_RESULTS.includes(result) ? result : 'error' });
+  return { res, result };
 }
 
 /** 买家查自己的订单 */

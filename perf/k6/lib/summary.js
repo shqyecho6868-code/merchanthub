@@ -11,17 +11,20 @@ function fmt(v) {
   return v === undefined || v === null ? '-' : v.toFixed(1);
 }
 
-function rowsByName(data) {
-  // 按 name 标签拆分的子指标形如 http_req_duration{name:create_order}，需要在 thresholds 里声明才会出现
+function rowsByName(data, opts) {
+  // 按 name 标签拆分的子指标形如 http_req_duration{name:create_order}，需要在 thresholds 里声明才会出现；
+  // 阶梯场景还有 {name:create_order,stage:r50}（该级保持段），QPS 按每级时长算
   const rows = [];
-  const durSec = data.state.testRunDurationMs / 1000;
-  for (const key of Object.keys(data.metrics)) {
-    const m = /^http_req_duration\{name:(.+)\}$/.exec(key);
+  const totalSec = data.state.testRunDurationMs / 1000;
+  for (const key of Object.keys(data.metrics).sort()) {
+    const m = /^http_req_duration\{name:([^,}]+)(,stage:([^}]+))?\}$/.exec(key);
     if (!m) continue;
-    const name = m[1];
+    const name = m[3] ? `${m[1]}{${m[3]}}` : m[1];
+    const tagPart = m[3] ? `name:${m[1]},stage:${m[3]}` : `name:${m[1]}`;
+    const durSec = m[3] && opts.stageSeconds ? opts.stageSeconds : totalSec;
     const d = data.metrics[key].values;
-    const reqs = data.metrics[`http_reqs{name:${name}}`];
-    const failed = data.metrics[`http_req_failed{name:${name}}`];
+    const reqs = data.metrics[`http_reqs{${tagPart}}`];
+    const failed = data.metrics[`http_req_failed{${tagPart}}`];
     const count = reqs ? reqs.values.count : 0;
     rows.push({
       name,
@@ -36,11 +39,11 @@ function rowsByName(data) {
   return rows;
 }
 
-export function makeHandleSummary(scenarioName) {
+export function makeHandleSummary(scenarioName, opts = {}) {
   return function (data) {
     const runId = __ENV.RUN_ID || `${scenarioName}-${Date.now()}`;
     const dir = `${__ENV.RESULT_DIR || 'perf/results'}/${runId}`;
-    const rows = rowsByName(data);
+    const rows = rowsByName(data, opts);
     const checks = data.metrics.checks ? data.metrics.checks.values.rate * 100 : 0;
     let md = `# 压测结果：${scenarioName}\n\n`;
     md += `- 运行 ID：${runId}\n- 时长：${(data.state.testRunDurationMs / 1000).toFixed(1)}s\n`;
@@ -50,7 +53,18 @@ export function makeHandleSummary(scenarioName) {
     for (const r of rows) {
       md += `| ${r.name} | ${r.count} | ${fmt(r.qps)} | ${fmt(r.p50)} | ${fmt(r.p90)} | ${fmt(r.p99)} | ${r.errRate.toFixed(2)}% |\n`;
     }
-    md += '\n> HTTP 错误率只算 4xx/5xx 与超时；限流 429 也计入。业务失败（HTTP 200 但 code≠200，如库存不足）看 checks。\n';
+    const biz = Object.keys(data.metrics).filter((k) => /^biz_[a-z_]+\{/.test(k)).sort();
+    if (biz.length) {
+      md += '\n| 业务结果 | 次数 |\n|---|---|\n';
+      for (const k of biz) {
+        const c = data.metrics[k].values.count;
+        if (c > 0) md += `| ${k} | ${c} |\n`;
+      }
+    }
+    if (data.metrics.dropped_iterations) {
+      md += `\n- 丢弃的迭代（dropped_iterations）：${data.metrics.dropped_iterations.values.count}（到达率模式下 VU 不够用 = 系统跟不上）\n`;
+    }
+    md += '\n> HTTP 错误率只算 4xx/5xx 与超时；限流 429 也计入（S1 把 429 声明为预期状态，不计入）。业务失败（HTTP 200 但 code≠200，如库存不足）看 checks。\n';
     return {
       stdout: textSummary(data, { indent: ' ', enableColors: true }) + '\n\n' + md,
       [`${dir}/summary.json`]: JSON.stringify(data, null, 2),
@@ -66,6 +80,16 @@ export function perEndpointThresholds(names) {
     t[`http_req_duration{name:${n}}`] = ['max>=0'];
     t[`http_reqs{name:${n}}`] = ['count>=0'];
     t[`http_req_failed{name:${n}}`] = ['rate>=0'];
+  }
+  return t;
+}
+
+/** 声明业务计数器的所有标签组合，让它们出现在汇总里（同 perEndpointThresholds 的用途） */
+export function bizThresholds(metric, tagSets) {
+  const t = {};
+  for (const tags of tagSets) {
+    const inner = Object.entries(tags).map(([k, v]) => `${k}:${v}`).join(',');
+    t[`${metric}{${inner}}`] = ['count>=0'];
   }
   return t;
 }

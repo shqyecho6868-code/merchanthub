@@ -3,6 +3,8 @@
 # 清理是动态的：除 mh_user 外所有 mh_* 库里带 tenant_id 列的表，删 tenant_id IN (901, 902) 的行；
 # 只保留商品、SKU、库存这三张基础表（由 seed.sql 重置）。以后加了新表也会被自动清理。
 #   ./perf/data/seed.sh
+#   HOT_STOCK=500 ./perf/data/seed.sh     # S2b：只把 SKU 90101 的库存设成 500（卖光场景）
+# 初始库存会记到 perf/results/seed-baseline.env，check.sh 按它对账
 cd "$(dirname "$0")/../.." || exit 1
 set -a; . ./.env; set +a
 TENANTS="901,902"
@@ -19,6 +21,11 @@ done
 
 echo "灌基础数据（商家、账号、商品、SKU、库存重置）"
 sql < perf/data/seed.sql || exit 1
+if [ -n "$HOT_STOCK" ]; then
+  sql -e "UPDATE mh_product.inventory SET available = $HOT_STOCK WHERE sku_id = 90101"
+  echo "SKU 90101 库存设为 $HOT_STOCK"
+fi
+mkdir -p perf/results && echo "HOT_STOCK=${HOT_STOCK}" > perf/results/seed-baseline.env
 docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -t -e "SELECT tenant_id, COUNT(*) skus, SUM(available) available, SUM(reserved) reserved
   FROM mh_product.inventory WHERE tenant_id IN ($TENANTS) GROUP BY tenant_id;
   SELECT COUNT(*) buyers FROM mh_user.account WHERE username LIKE 'perf_buyer_%';"

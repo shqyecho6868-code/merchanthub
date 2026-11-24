@@ -104,9 +104,15 @@ Requires Docker and JDK 17 (picked automatically via Maven Toolchains, see [docs
 
 k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh perf/k6/scenarios/<scenario>.js -e VUS=50 -e DURATION=1m` (steps in runbook 3.8). After each run `perf/check/check.sh` verifies no negative stock, reservation bookkeeping, and that duplicate callbacks took effect only once.
 
-| Scenario | Concurrency / rate | QPS | P50 | P99 | Error rate | Data check |
-|---|---|---|---|---|---|---|
-| (TBD) | | | | | | |
+| Scenario | Load | Result | P99 | Data check |
+|---|---|---|---|---|
+| Per-merchant rate limit | big merchant 100 orders/s (limit 20) + small merchant 5/s | big merchant passed exactly 20/s (1200/6001), rest 429; small merchant 301/301 succeeded | big merchant 72 ms (P50 2.5 ms, mostly rejected at entry); small merchant 86 ms | ✅ successes = orders in DB, no partial data |
+| Hot SKU (single stock row) | stepped up to 400 orders/s | ceiling ≈ **240 orders/s** (row lock + commit fsync serialize) | 231 ms at 200/s | ✅ no overselling |
+| Spread over 10 SKUs | stepped up to 400 orders/s | stable at 300/s; only 385 at 400/s | 204 ms at 300/s | ✅ |
+| Sell-out | stock 500, 2000 concurrent orders | **exactly 500 sold**, 1500 "insufficient stock", 0 errors | 1.57 s | ✅ stock 0, never negative |
+| Duplicate payment callbacks | 20 tx/s × 1 min, same callback ×3 concurrently | 1200 tx: PAID 1200 / DUPLICATE 2400 | callback 30 ms | ✅ no double payment or double transition |
+
+Tuning experiment: raising the connection pool from 10 to 30 made throughput worse (COMMIT 6 → 16 ms, row-lock wait ×15) and was reverted — the bottleneck is the database; pool queueing was only the symptom.
 
 Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only. Details in [docs/perf-report.md](docs/perf-report.md).
 
