@@ -1,3 +1,9 @@
-# 构建上下文只要各服务的可执行 jar，其他（源码、docs、.env）一律不进镜像
+# 构建上下文只要各服务的可执行 jar，其他（源码、docs、.env）一律不进镜像。
+# 逐个列出而不写 !*/target/*.jar：先 * 排除了顶层目录后，通配的"反排除"在旧版构建器里不会再进子目录找（P48）
 *
-!*/target/*-0.0.1-SNAPSHOT.jar
+!GateWay/target/GateWay-0.0.1-SNAPSHOT.jar
+!UserService/target/UserService-0.0.1-SNAPSHOT.jar
+!ProductInventoryService/target/ProductInventoryService-0.0.1-SNAPSHOT.jar
+!OrderService/target/OrderService-0.0.1-SNAPSHOT.jar
+!PaymentService/target/PaymentService-0.0.1-SNAPSHOT.jar
+!RealTimeService/target/RealTimeService-0.0.1-SNAPSHOT.jar
