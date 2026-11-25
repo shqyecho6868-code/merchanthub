@@ -123,13 +123,24 @@ class FeignResilienceIT extends IntegrationTestBase {
             assertDownstreamUnavailable();
         }
         int hitsBeforeOpen = HITS.get();
+        long elapsedMs = timedUnavailableCall();
 
-        long start = System.nanoTime();
-        assertDownstreamUnavailable();
-        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        // G-上 CI 偶发（P47）：Sentinel 熔断统计是"按整 10 秒对齐的单个桶"（LeapArray(1, statIntervalMs)），
+        // 3 次调用恰好跨过 10 秒边界时被拆进两个窗口，凑不够 min-requests=3，熔断器还没打开。
+        // 这时这次调用仍然打到了下游；最多再补 3 次，直到某次调用没打到下游（= 熔断已打开）
+        for (int extra = 0; extra < 3 && HITS.get() != hitsBeforeOpen; extra++) {
+            hitsBeforeOpen = HITS.get();
+            elapsedMs = timedUnavailableCall();
+        }
 
         assertThat(HITS.get()).as("熔断后不再发请求").isEqualTo(hitsBeforeOpen);
         assertThat(elapsedMs).as("熔断后快速失败，不用等 300ms 超时").isLessThan(100);
+    }
+
+    private long timedUnavailableCall() {
+        long start = System.nanoTime();
+        assertDownstreamUnavailable();
+        return (System.nanoTime() - start) / 1_000_000;
     }
 
     private void assertDownstreamUnavailable() {
