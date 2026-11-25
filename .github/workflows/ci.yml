@@ -11,6 +11,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # G-上：基础设施代码也要过 CI —— 格式、语法、引用关系（不连 AWS，不需要凭证；真正的 plan 在本机跑）
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.2
+      - name: terraform fmt
+        run: terraform fmt -check -recursive infra
+      - name: terraform validate
+        run: |
+          for d in infra/bootstrap infra/env; do
+            terraform -chdir="$d" init -backend=false -input=false > /dev/null
+            terraform -chdir="$d" validate
+          done
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30

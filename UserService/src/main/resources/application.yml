@@ -54,3 +54,13 @@ merchanthub:
       enabled: false
       appname: user-tenant
       port: 9204
+
+# G-上（补 F1 遗留）：只暴露 health 和 prometheus，和其他服务一致。ALB 目标组直接打容器的 /actuator/health 做健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -14,6 +14,15 @@
     <description>user-tenant：账号 / 登录 / 租户 / 商家入驻与商品上架审批（Flowable 引擎所在地）</description>
 
     <dependencies>
+        <!-- G-上（补 F1 遗留）：ALB 目标组健康检查打 /actuator/health；prometheus 端点和其他服务保持一致 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.merchanthub</groupId>
             <artifactId>Common</artifactId>

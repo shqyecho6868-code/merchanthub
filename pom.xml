@@ -70,6 +70,8 @@
 		<flowable.version>7.2.0</flowable.version>
 
 		<!-- 测试与覆盖率 -->
+		<!-- G-上：商品图片存 S3（替换 MinIO）。只用 s3 模块的预签名和 HeadObject，HTTP 客户端用 JDK 自带的 url-connection（见 ProductInventoryService/pom.xml） -->
+		<aws-sdk.version>2.34.0</aws-sdk.version>
 		<jacoco.version>0.8.13</jacoco.version>
 		<!--
 		  覆盖率门禁默认关闭：现在只出报告不卡阈值。
@@ -120,6 +122,13 @@
 			  升级 Boot 时自动跟着升，不会出现两处版本打架。
 			  注意：Testcontainers 1.21.x 没有 RocketMQ 模块，RocketMQ 用 GenericContainer 启动（见 Common 的示例 IT）。
 			-->
+			<dependency>
+				<groupId>software.amazon.awssdk</groupId>
+				<artifactId>bom</artifactId>
+				<version>${aws-sdk.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.junit</groupId>
 				<artifactId>junit-bom</artifactId>

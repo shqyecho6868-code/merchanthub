@@ -1,0 +1,64 @@
+# G-上：中间件 EC2 上的 docker compose（由 middleware-init.sh.tftpl 写到 /opt/mh/compose.yml）。
+# 版本与本地 docker-compose.yml 一致；和本地不同的地方都写了注释
+name: mh
+
+x-cloudwatch: &cloudwatch
+  # 容器日志直接进 CloudWatch Logs（/merchanthub/middleware），不用登录机器看 docker logs
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION}
+    awslogs-group: ${LOG_GROUP}
+    # 每个容器一个日志流，流名 = 容器名（awslogs-stream 不支持模板，用 tag）
+    tag: "{{.Name}}"
+
+services:
+  nacos:
+    image: nacos/nacos-server:v3.0.3
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      # 云上关鉴权：只在私有子网、安全组只放行 ECS；省掉 3.x 首次启动要手动初始化管理员密码的步骤。
+      # 3.x 关了鉴权也要求配置 token / identity，否则启动失败，所以仍然给随机值
+      NACOS_AUTH_ENABLE: "false"
+      NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
+      NACOS_AUTH_IDENTITY_KEY: mh
+      NACOS_AUTH_IDENTITY_VALUE: ${NACOS_IDENTITY}
+      JVM_XMS: 512m
+      JVM_XMX: 512m
+      JVM_XMN: 256m
+    ports: ["8848:8848", "9848:9848", "8080:8080"]
+    logging: *cloudwatch
+
+  namesrv:
+    image: apache/rocketmq:5.3.1
+    restart: unless-stopped
+    command: sh mqnamesrv
+    environment:
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"
+    ports: ["9876:9876"]
+    logging: *cloudwatch
+
+  broker:
+    image: apache/rocketmq:5.3.1
+    restart: unless-stopped
+    depends_on: [namesrv]
+    command: sh mqbroker -n namesrv:9876 -c /home/rocketmq/broker.conf
+    environment:
+      JAVA_OPT_EXT: "-Xms1g -Xmx1g -Xmn512m"
+    ports: ["10911:10911", "10909:10909"]
+    volumes:
+      - /opt/mh/broker.conf:/home/rocketmq/broker.conf:ro
+      # 目录已在 init 脚本里改属主为 uid 3000（镜像以 3000 运行，root 的目录写不进去，同本地 broker-init）
+      - /opt/mh/rocketmq-store:/home/rocketmq/store
+    logging: *cloudwatch
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.18.8
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      # 同本地：靠私有子网 + 安全组；生产要开认证和 TLS
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+    ports: ["9200:9200"]
+    logging: *cloudwatch

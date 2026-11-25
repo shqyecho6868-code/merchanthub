@@ -86,6 +86,26 @@
             <artifactId>xxl-job-core</artifactId>
         </dependency>
 
+        <!-- G-上：商品图片存 S3。排除 SDK 默认的 Netty / Apache HTTP 客户端：Netty 版本由 Spring Boot 管，混进 SDK 的 Netty 客户端容易冲突；
+             本服务只有"签 URL"（纯本地计算）和偶尔一次 HeadObject，JDK 自带的 url-connection 客户端足够 -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.merchanthub</groupId>
             <artifactId>TestSupport</artifactId>

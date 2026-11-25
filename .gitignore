@@ -49,3 +49,11 @@ app.env
 ### F1 压测产物 ###
 perf/results/*
 !perf/results/.gitkeep
+
+### G-上 Terraform：state 里有数据库密码等明文，tfvars 里有邮箱，都不提交；.terraform.lock.hcl 要提交（锁 provider 版本）###
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+crash.log

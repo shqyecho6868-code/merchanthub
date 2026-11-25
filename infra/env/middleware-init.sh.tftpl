@@ -1,0 +1,61 @@
+#!/bin/bash
+# G-上：中间件 EC2 首次启动脚本。cloud-init 以 root 执行，输出在 /var/log/cloud-init-output.log
+# （本机也能看：aws ec2 get-console-output --instance-id <id> --latest --output text）。
+# 由 Terraform templatefile 渲染：$${...} 是 Terraform 变量，$$ 转义后才是 shell 的 $
+set -euxo pipefail
+
+dnf install -y docker
+systemctl enable --now docker
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+  https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# ES 要求 vm.max_map_count >= 262144，否则启动检查失败
+echo 'vm.max_map_count=262144' > /etc/sysctl.d/99-es.conf
+sysctl --system
+
+# Broker 注册到 NameServer 的地址必须是本机私网 IP：ECS task 拿到这个地址后直连 Broker 收发消息。
+# 不配的话注册的是容器内网 IP（172.x），task 连不上 → 发消息超时（本地同一个问题，见 deploy/rocketmq/broker.conf）
+TOKEN=$(curl -sX PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')
+PRIVATE_IP=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+
+mkdir -p /opt/mh/rocketmq-store
+chown 3000:3000 /opt/mh/rocketmq-store
+cat > /opt/mh/broker.conf <<CONF
+brokerClusterName=DefaultCluster
+brokerName=broker-a
+brokerId=0
+brokerRole=ASYNC_MASTER
+flushDiskType=ASYNC_FLUSH
+brokerIP1=$PRIVATE_IP
+# 云上关闭自动建 Topic，下面提前创建（行业做法：Topic 是规划出来的，不是发消息时顺手建的）
+autoCreateTopicEnable=false
+transactionCheckInterval=10000
+CONF
+
+cat > /opt/mh/compose.yml <<'COMPOSE'
+${compose_file}
+COMPOSE
+
+cat > /opt/mh/.env <<ENV
+AWS_REGION=${region}
+LOG_GROUP=${log_group}
+NACOS_AUTH_TOKEN=$(openssl rand -base64 32)
+NACOS_IDENTITY=$(openssl rand -hex 16)
+ENV
+
+cd /opt/mh
+docker compose -f compose.yml --env-file .env up -d
+
+# 等 Broker 注册到 NameServer 后建 Topic（同 deploy/b3/create-topics.sh）；Broker 冷启动要几十秒，每个 Topic 最多重试约 5 分钟
+for T in ORDER_EVENT ORDER_TIMEOUT PAYMENT_EVENT PRODUCT_LISTING_RESULT; do
+  for i in $(seq 1 30); do
+    if docker compose -f compose.yml --env-file .env exec -T broker sh -c \
+        "cd /home/rocketmq/rocketmq-*/bin && ./mqadmin updateTopic -n namesrv:9876 -c DefaultCluster -t $T" | grep -q success; then
+      echo "Topic $T ready"; break
+    fi
+    sleep 10
+  done
+done
+echo "MIDDLEWARE_READY"
