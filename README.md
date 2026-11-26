@@ -2,140 +2,146 @@
 
 [![CI](https://github.com/shqyecho6868-code/merchanthub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shqyecho6868-code/merchanthub/actions/workflows/ci.yml)
 
-**中文** | [English](README.en.md)
+**English** | [中文](README.zh-CN.md)
 
-多商家（多租户）电商交易平台后端。平台 → 商家 → 员工三级租户，买家是平台级用户；覆盖商品与 SKU、库存预占 / 确认 / 释放、订单状态机与交易快照、模拟支付与回调、Flowable 审批、Netty 订单实时推送、ES 订单搜索、对账补偿。学习项目，由分布式 IM 项目改造而来，重点在**交易一致性和多租户隔离的工程做法**，不做前端。
+Backend of a multi-merchant (multi-tenant) e-commerce trading platform. Tenancy is platform → merchant → staff, with buyers as platform-level users. Covers products & SKUs, inventory reserve / confirm / release, an order state machine with trade snapshots, mock payments with callbacks, Flowable approvals, real-time order push over Netty, order search on Elasticsearch, and reconciliation jobs. A learning project rebuilt from a distributed IM system; the focus is on **the engineering practices behind transactional consistency and tenant isolation**. No frontend.
 
-## 架构
+## Architecture
 
 ```mermaid
 flowchart LR
-    Client[客户端 / k6] --> GW[gateway<br/>JWT 鉴权 · 注入身份头]
-    Client -. WebSocket .-> RT[realtime<br/>Netty 推送]
+    Client[Client / k6] --> GW[gateway<br/>JWT auth · identity headers]
+    Client -. WebSocket .-> RT[realtime<br/>Netty push]
 
-    GW --> UT[user-tenant<br/>账号 · 租户 · Flowable 审批]
-    GW --> PI[product-inventory<br/>商品 · SKU · 库存预占]
-    GW --> OD[order<br/>下单 · 状态机 · 按商家限流]
-    GW --> PAY[payment<br/>支付单 · 模拟渠道回调]
+    GW --> UT[user-tenant<br/>accounts · tenants · Flowable approvals]
+    GW --> PI[product-inventory<br/>products · SKUs · stock reservation]
+    GW --> OD[order<br/>checkout · state machine · per-merchant rate limit]
+    GW --> PAY[payment<br/>payments · mock channel callback]
 
-    OD -- Feign + 熔断 --> PI
-    PAY -- Feign + 熔断 --> OD
+    OD -- Feign + circuit breaker --> PI
+    PAY -- Feign + circuit breaker --> OD
     PI -- Feign --> UT
 
-    MQ[(RocketMQ 5<br/>事务 / 定时消息)]
+    MQ[(RocketMQ 5<br/>transactional / scheduled msgs)]
     OD -- outbox --> MQ
-    PAY -- 事务消息 --> MQ
+    PAY -- transactional msg --> MQ
     UT -- outbox --> MQ
     MQ --> OD & PI & RT
 
     OD -. Canal binlog .-> ES[(Elasticsearch)]
-    XXL[XXL-Job] -. 对账 / 补偿 .-> OD & PAY & PI
-    DB[(MySQL · 每服务一库)]
+    XXL[XXL-Job] -. reconciliation .-> OD & PAY & PI
+    DB[(MySQL · one DB per service)]
     RDS[(Redis)]
 ```
 
-更多时序图（下单预占、支付回调四层幂等、超时关单竞争、推送路由）见 [docs/architecture.md](docs/architecture.md)。
+Sequence diagrams (checkout & reservation, 4-layer callback idempotency, payment-vs-timeout race, push routing) are in [docs/architecture.md](docs/architecture.md) (Chinese).
 
-## 三个重点
+## Highlights
 
-### 1. 订单一致性
-- **库存预占 → 确认 → 释放**：`UPDATE ... WHERE available >= ?` 条件更新防超卖；多 SKU 按 ID 升序加锁防死锁；预占记录 `(order_no, sku_id)` 唯一键做幂等
-- **状态机 CAS**：所有状态变更 `UPDATE ... WHERE status = 旧状态`，同事务写状态流水；支付成功与超时关单并发时只有一个赢
-- **可靠事件**：订单侧本地消息表（outbox）、支付侧 RocketMQ 事务消息（半消息 + 回查）；消费端按 eventId 去重，去重记录与业务同事务
-- **回调幂等四层**：支付单快速路径 → 支付单 CAS → 消费去重 → 订单 CAS；关单后到账记 `pay_anomaly` 不复活订单
-- **兜底**：悬空预占扫描、支付 ↔ 订单 / 预占 ↔ 订单对账（XXL-Job），修复走正常的幂等链路
-- 金额 `long` 分、订单与支付单分离、交易快照、雪花订单号（Redis 租约分配 workerId）
+### 1. Order consistency
+- **Reserve → confirm → release** inventory: conditional `UPDATE ... WHERE available >= ?` prevents overselling; multi-SKU rows are locked in ascending ID order to avoid deadlocks; a unique key on `(order_no, sku_id)` makes reservation idempotent
+- **State-machine CAS**: every transition is `UPDATE ... WHERE status = <old>` plus a status-log row in the same transaction; when payment success and timeout-close race, exactly one wins
+- **Reliable events**: transactional outbox on the order side, RocketMQ transactional messages (half message + check-back) on the payment side; consumers dedupe by eventId inside the business transaction
+- **4-layer callback idempotency**: payment fast path → payment CAS → consumer dedupe → order CAS; money arriving after the order is closed goes to `pay_anomaly` instead of resurrecting the order
+- **Safety nets**: dangling-reservation scanner and payment ↔ order / reservation ↔ order reconciliation (XXL-Job); fixes go through the normal idempotent path
+- Amounts in `long` cents, orders separate from payment attempts, trade snapshots, Snowflake order numbers (workerId leased from Redis)
 
-### 2. 多租户
-- 网关解析 JWT，**先删客户端同名头**再注入 `X-Tenant-Id / X-User-Id / X-Role`；`/internal/**` 不对外
-- `TenantContext` 贯穿 Web / Feign / MQ / 定时任务；MyBatis-Plus 租户插件自动拼 `tenant_id`，**没有上下文直接报错（fail-closed）**
-- `@RequireRole` 接口级 RBAC；跨租户访问返回 404（不泄露存在性）
-- Sentinel 按商家热点参数限流：大商家打满自己的配额，不影响小商家
-- 商家入驻、商品上架走 Flowable 审批，待办按租户候选组隔离
+### 2. Multi-tenancy
+- The gateway parses the JWT, **strips client-supplied identity headers**, then injects `X-Tenant-Id / X-User-Id / X-Role`; `/internal/**` is never exposed
+- `TenantContext` propagates across Web / Feign / MQ / scheduled jobs; a MyBatis-Plus tenant interceptor appends `tenant_id` automatically and **fails closed when no context is set**
+- Endpoint-level RBAC via `@RequireRole`; cross-tenant access returns 404 (does not leak existence)
+- Sentinel hot-parameter rate limiting per merchant: a big merchant exhausts only its own quota
+- Merchant onboarding and product listing go through Flowable approvals, with to-do lists isolated by tenant candidate groups
 
-### 3. 实时推送
-- Netty WebSocket，握手校验 JWT；Redis Hash + 字段级过期做"用户 → 节点"路由表
-- 订单事件集群消费后按路由转发到目标节点（Tag = 节点），多实例下推给正确的连接
-- **先存后推**：推送前落"待送达"，写进连接才标记已送达，重连补发
+### 3. Real-time push
+- Netty WebSocket with JWT check at handshake; a Redis hash with per-field TTL is the "user → node" routing table
+- Order events are consumed in cluster mode and forwarded to the owning node (Tag = node), so pushes reach the right connection with multiple instances
+- **Store then push**: a "pending" row is written before delivery and marked delivered only after writing to the connection; replayed on reconnect
 
-## 技术栈
+### 4. Observability & cloud deployment
+- **End-to-end traceId**: the gateway issues `X-Trace-Id` → each service puts it in the MDC → Feign forwards it → it is stored in the outbox and sent as a RocketMQ message property → consumers restore it. One checkout shows the same traceId in the order request thread, the outbox relay thread and the realtime consumer thread
+- **AWS in one command**: Terraform manages the VPC, ALB, 6 ECS Fargate services, RDS MySQL, ElastiCache, S3 and CloudWatch (~100 resources). GitHub Actions deploys with OIDC short-lived credentials (no stored access keys): once CI is green it builds images and rolls them out, rolling back automatically if a service fails to start
 
-| 类别 | 选型 |
+## Tech stack
+
+| Area | Choice |
 |---|---|
-| 基础 | Java 17 · Spring Boot 3.5 · Spring Cloud 2025 · Spring Cloud Alibaba 2025（Nacos 3） |
-| 数据 | MySQL 8（Flyway）· MyBatis-Plus · Redis 7 · Elasticsearch 8 + Canal |
-| 消息 / 调度 | RocketMQ 5（事务消息、定时消息）· XXL-Job 3 |
-| 治理 | Spring Cloud Gateway · OpenFeign · Sentinel · Micrometer + Prometheus + Grafana |
-| 其他 | Flowable 7 · Netty · JJWT |
-| 测试 / 交付 | JUnit 5 · Mockito · Testcontainers · JaCoCo · GitHub Actions · k6 |
+| Core | Java 17 · Spring Boot 3.5 · Spring Cloud 2025 · Spring Cloud Alibaba 2025 (Nacos 3) |
+| Data | MySQL 8 (Flyway) · MyBatis-Plus · Redis 7 · Elasticsearch 8 + Canal |
+| Messaging / scheduling | RocketMQ 5 (transactional & scheduled messages) · XXL-Job 3 |
+| Governance | Spring Cloud Gateway · OpenFeign · Sentinel · Micrometer + Prometheus + Grafana |
+| Other | Flowable 7 · Netty · JJWT |
+| Testing / delivery | JUnit 5 · Mockito · Testcontainers · JaCoCo · GitHub Actions · k6 |
+| Cloud | AWS (ECS Fargate · RDS · ElastiCache · ALB · S3 · CloudWatch) · Terraform |
 
-## 一条命令启动
+## Quick start
 
 ```bash
-cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 的密码）
-./mvnw verify                                    # 构建 + 单测 + Testcontainers 集成测试 + 覆盖率
+cp .env.example .env && docker compose up -d    # all middleware (fill in passwords in .env)
+./mvnw verify                                    # build + unit tests + Testcontainers ITs + coverage
 ```
 
-需要 Docker 和 JDK 17（Maven Toolchains 自动选用，见 [docs/env-setup.md](docs/env-setup.md)）。各服务启动、控制台地址、故障排查见 [docs/runbook.md](docs/runbook.md)。
+Requires Docker and JDK 17 (picked automatically via Maven Toolchains, see [docs/env-setup.md](docs/env-setup.md)). Starting services, consoles and troubleshooting: [docs/runbook.md](docs/runbook.md).
 
-## 测试策略
+## Testing strategy
 
-| 层 | 命名 | 运行 | 内容 |
+| Layer | Naming | Run | Scope |
 |---|---|---|---|
-| 单元测试 | `*Test` | `./mvnw test`（不需要 Docker） | 状态机、计价、ID 生成、拦截器等纯逻辑 |
-| 集成测试 | `*IT` | `./mvnw verify` | Testcontainers 起真实 MySQL / Redis / RocketMQ / ES，镜像版本与 compose 一致 |
+| Unit | `*Test` | `./mvnw test` (no Docker) | state machine, pricing, ID generation, interceptors — pure logic |
+| Integration | `*IT` | `./mvnw verify` | real MySQL / Redis / RocketMQ / ES via Testcontainers, same image versions as compose |
 
-- **破坏性实验沉淀成集成测试**：并发超卖、重复回调、消息重复投递 / 乱序、支付与超时竞争、跨租户越权、下游熔断、对账修复等，实验结论写在测试注释里
-- **覆盖率门禁**：order、product-inventory、payment 启用 JaCoCo 70% 行覆盖率检查（单测 + 集成测试合并），CI 每次运行在 Summary 页输出各模块覆盖率
+- **Destructive experiments are kept as integration tests**: concurrent overselling, duplicate callbacks, duplicate / out-of-order messages, payment-vs-timeout races, cross-tenant access, downstream circuit breaking, reconciliation repair — findings are written in test comments
+- **Coverage gate**: order, product-inventory and payment enforce 70% line coverage with JaCoCo (unit + integration merged); every CI run prints per-module coverage on its Summary page
 
-| 模块 | 行覆盖率 |
+| Module | Line coverage |
 |---|---|
 | Common | 56.5% |
 | GateWay | 93.0% |
-| OrderService | 86.9%（70% 门禁） |
-| PaymentService | 91.7%（70% 门禁） |
-| ProductInventoryService | 91.6%（70% 门禁） |
+| OrderService | 86.9% (70% gate) |
+| PaymentService | 91.7% (70% gate) |
+| ProductInventoryService | 91.6% (70% gate) |
 | RealTimeService | 86.6% |
 | UserService | 85.7% |
 
-> 本地 `./mvnw verify` 2026-11-24 的结果；最新数字以 CI Summary 页为准。
+> From a local `./mvnw verify` on 2026-11-24; the CI Summary page has the latest numbers.
 
-## 压测
+## Load testing
 
-工具 k6，脚本与数据检查在 [`perf/`](perf/)，一条命令：`./perf/run.sh perf/k6/scenarios/<场景>.js -e VUS=50 -e DURATION=1m`（步骤见 runbook 3.8）。压完用 `perf/check/check.sh` 校验库存无负数、扣减对账、重复回调只生效一次。
+k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh perf/k6/scenarios/<scenario>.js -e VUS=50 -e DURATION=1m` (steps in runbook 3.8). After each run `perf/check/check.sh` verifies no negative stock, reservation bookkeeping, and that duplicate callbacks took effect only once.
 
-| 场景 | 压力 | 结果 | P99 | 数据检查 |
+| Scenario | Load | Result | P99 | Data check |
 |---|---|---|---|---|
-| 按商家限流 | 大商家 100 单/秒（阈值 20）+ 小商家 5 单/秒 | 大商家精确通过 20/秒（1200/6001），其余 429；小商家 301/301 成功 | 大商家 72 ms（P50 2.5 ms，多数在入口直接拒）；小商家 86 ms | ✅ 成功数 = 订单数，无半截数据 |
-| 热点 SKU（单行库存） | 阶梯到 400 单/秒 | 上限约 **240 单/秒**（行锁 + 提交刷盘串行） | 200 单/秒时 231 ms | ✅ 无超卖 |
-| 分散 10 个 SKU | 阶梯到 400 单/秒 | 300 单/秒稳定，400 单/秒时只到 385 | 300 单/秒时 204 ms | ✅ |
-| 卖光 | 库存 500，2000 次并发下单 | **正好成交 500**，1500 次"库存不足"，0 错误 | 1.57 s | ✅ 库存 0，无负数 |
-| 重复支付回调 | 20 笔/秒 × 1 分钟，同一回调并发 3 次 | 1200 笔：PAID 1200 / DUPLICATE 2400 | 回调 30 ms | ✅ 无重复支付、无重复流转 |
+| Per-merchant rate limit | big merchant 100 orders/s (limit 20) + small merchant 5/s | big merchant passed exactly 20/s (1200/6001), rest 429; small merchant 301/301 succeeded | big merchant 72 ms (P50 2.5 ms, mostly rejected at entry); small merchant 86 ms | ✅ successes = orders in DB, no partial data |
+| Hot SKU (single stock row) | stepped up to 400 orders/s | ceiling ≈ **240 orders/s** (row lock + commit fsync serialize) | 231 ms at 200/s | ✅ no overselling |
+| Spread over 10 SKUs | stepped up to 400 orders/s | stable at 300/s; only 385 at 400/s | 204 ms at 300/s | ✅ |
+| Sell-out | stock 500, 2000 concurrent orders | **exactly 500 sold**, 1500 "insufficient stock", 0 errors | 1.57 s | ✅ stock 0, never negative |
+| Duplicate payment callbacks | 20 tx/s × 1 min, same callback ×3 concurrently | 1200 tx: PAID 1200 / DUPLICATE 2400 | callback 30 ms | ✅ no double payment or double transition |
 
-调优实验：把连接池从 10 调到 30，吞吐反而下降（COMMIT 6 → 16 ms，行锁等待 ×15），已回滚。瓶颈在数据库，连接池排队只是症状。
+Tuning experiment: raising the connection pool from 10 to 30 made throughput worse (COMMIT 6 → 16 ms, row-lock wait ×15) and was reverted — the bottleneck is the database; pool queueing was only the symptom.
 
-单机本地压测（所有服务和中间件在一台笔记本上），数字只用于前后对比，详见 [docs/perf-report.md](docs/perf-report.md)。
+Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only. Details in [docs/perf-report.md](docs/perf-report.md).
 
-### 云上（AWS us-east-1，G-下）
+### On AWS (us-east-1)
 
-每个服务 1 个 Fargate task（0.5 vCPU / 1 GB）、RDS db.t4g.micro；k6 在 VPC 内发压（RTT 4 ms），经 ALB → gateway → order。详见 [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md)。
+One Fargate task per service (0.5 vCPU / 1 GB), RDS db.t4g.micro; k6 runs inside the VPC (4 ms RTT) and goes through ALB → gateway → order. Details in [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md).
 
-| 场景 | 结果 | 瓶颈 / 现象 | 数据检查 |
+| Scenario | Result | Bottleneck / observation | Data check |
 |---|---|---|---|
-| 分散 SKU 阶梯 | 1 个 order 约 **50–80 单/秒**封顶（本地 300） | order CPU 100%；RDS CPU ≤ 23%、写延迟 < 1 ms。瓶颈从本地的"数据库行锁 + 刷盘"变成云上的"0.5 vCPU 应用" | ✅ 无超卖 |
-| 热点 SKU 阶梯 | 81 单/秒，0 错误（本地 240） | 同上，云上热点行不再是瓶颈 | ✅ |
-| 扩容 order 1 → 3 | 约 110–118 单/秒，**约 1.4 倍** | 下单链路上的 product-inventory（88%）、gateway 仍是单实例；RDS 连接 58 / 60 到顶；下命令到新实例接流量约 **2 分钟**（Spring 在 0.5 vCPU 上启动 80+ 秒） | ✅ |
-| 超载 200 单/秒持续（无限流） | **拥塞崩溃**：完成数不降，但几乎全部 10 秒超时 | 请求无限排队，扩容后旧实例仍在处理已被放弃的请求 → 需要入口限流削峰 | ✅ 订单不丢（库里 ≥ k6 成功数） |
-| 压测中停 1 个 order（共 3 个） | 错误 2.67%，约 **40 秒**后恢复；ECS 约 1 分钟后补上新 task | 错误窗口 ≈ gateway 负载均衡缓存（35 s）里还留着旧实例 | ✅ 订单不丢、状态不乱；⚠️ 发现关单消息卡在本地消息表（云上没部署补偿扫描调度，P53） |
+| Spread SKUs, stepped load | one order instance tops out at **~50–80 orders/s** (local: 300) | order CPU at 100%; RDS CPU ≤ 23%, write latency < 1 ms. The bottleneck moved from "DB row lock + fsync" locally to "0.5 vCPU app" in the cloud | ✅ no overselling |
+| Hot SKU, stepped load | 81 orders/s, 0 errors (local: 240) | same as above — the hot row is no longer the bottleneck in the cloud | ✅ |
+| Scale order 1 → 3 | ~110–118 orders/s, **~1.4×** | product-inventory (88% CPU) and the gateway are still single instances; RDS connections hit 58 / 60; **~2 min** from command to new instances taking traffic (Spring needs 80+ s to start on 0.5 vCPU) | ✅ |
+| Sustained 200 orders/s overload (no rate limit) | **congestion collapse**: completions stay flat but almost every request hits the 10 s timeout | unbounded queueing; after scaling out, the old instance was still serving requests clients had already abandoned → load shedding at the entry is required | ✅ no lost orders (DB count ≥ k6 successes) |
+| Kill 1 of 3 order instances under load | 2.67% errors, recovered in **~40 s**; ECS replaced the task ~1 min later | the error window ≈ the gateway's load-balancer cache (35 s) still holding the dead instance | ✅ no lost orders, no corrupted state; ⚠️ found close events stuck in the outbox (the compensation scan has no scheduler in the cloud, P53) |
 
-## 文档
+## Docs (Chinese)
 
-| 文档 | 内容 |
+| Doc | Content |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | 架构图与核心链路时序图 |
-| [docs/data-model.md](docs/data-model.md) | 表结构、ER 图、订单状态机 |
-| [docs/decisions.md](docs/decisions.md) | 技术决策记录（选了什么 / 没选什么 / 代价） |
-| [docs/pitfalls.md](docs/pitfalls.md) | 踩坑记录（现象 → 根因 → 解决） |
-| [docs/runbook.md](docs/runbook.md) | 启动、控制台、压测、故障排查 |
-| [docs/env-setup.md](docs/env-setup.md) | 版本、端口、账号 |
-| [docs/progress.md](docs/progress.md) | 进度与遗留问题 |
+| [docs/architecture.md](docs/architecture.md) | architecture and sequence diagrams |
+| [docs/data-model.md](docs/data-model.md) | schema, ER diagram, order state machine |
+| [docs/decisions.md](docs/decisions.md) | decision records (chosen / rejected / cost) |
+| [docs/pitfalls.md](docs/pitfalls.md) | pitfalls (symptom → root cause → fix) |
+| [docs/runbook.md](docs/runbook.md) | startup, consoles, load testing, troubleshooting |
+| [docs/env-setup.md](docs/env-setup.md) | versions, ports, accounts |
+| [docs/progress.md](docs/progress.md) | progress and known issues |
+| [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md) | cloud load test, scale-out and failure drill: runbook and results |
