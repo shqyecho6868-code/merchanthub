@@ -47,14 +47,14 @@ public class OrderTimeoutScanner {
                 if (TenantContext.callAs(TenantInfo.systemOf(o.getTenantId()),
                         () -> timeoutService.closeExpired(o.getOrderNo(), o.getTenantId()))) {
                     closed++;
-                    log.warn("【超时订单扫描】定时关单消息没生效，已兜底关单 orderNo={} tenantId={}", o.getOrderNo(), o.getTenantId());
+                    log.warn("[Timeout-order scan] Scheduled close message didn't take effect, closed as fallback orderNo={} tenantId={}", o.getOrderNo(), o.getTenantId());
                 }
             } catch (RuntimeException e) {
-                log.warn("超时订单扫描：关单失败，下一轮再试 orderNo={}", o.getOrderNo(), e);
+                log.warn("Timeout-order scan: close failed, retrying next round orderNo={}", o.getOrderNo(), e);
             }
         }
         if (!expired.isEmpty()) {
-            log.info("超时订单扫描完成 候选={} 关单={}", expired.size(), closed);
+            log.info("Timeout-order scan done candidates={} closed={}", expired.size(), closed);
         }
         return closed;
     }

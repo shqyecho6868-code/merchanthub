@@ -23,7 +23,7 @@ public final class SnowflakeUtil {
         SnowflakeIdGenerator g = generator;
         if (g == null) {
             // Services without Redis have no generator; better to fail than fall back to the old hard-coded workerId
-            throw new IllegalStateException("SnowflakeIdGenerator 未初始化：当前服务需要依赖 Redis");
+            throw new IllegalStateException("SnowflakeIdGenerator is not initialized: this service requires Redis");
         }
         return g.nextId();
     }

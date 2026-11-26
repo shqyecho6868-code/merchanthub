@@ -30,7 +30,7 @@ public class PaymentController {
     public BaseResponse<PaymentVO> create(@RequestBody @Valid CreatePaymentRequest request) {
         Long buyerId = TenantContext.get().userId();
         if (buyerId == null) {
-            throw new UnauthorizedException("缺少用户身份");
+            throw new UnauthorizedException("Missing user identity");
         }
         return ResultUtils.success(paymentService.create(buyerId, request.orderNo()));
     }

@@ -75,13 +75,13 @@ public class ReservationReconciler {
         try {
             BaseResponse<Map<Long, Integer>> resp = orderClient.statuses(orderNos);
             if (resp == null || resp.getCode() != 200 || resp.getData() == null) {
-                log.warn("预占对账：查询订单返回异常，本轮跳过 resp={}", resp);
+                log.warn("Reservation recon: order query returned an error, skipping this round resp={}", resp);
                 return new Result(0, 0);
             }
             statuses = resp.getData();
         } catch (RuntimeException e) {
             // "Can't look it up" ≠ "doesn't exist": if we treated an order timeout / outage as "doesn't exist" and released, stock of orders being paid would be returned → oversell
-            log.warn("预占对账：查询订单失败，本轮跳过 候选数={}", orderNos.size(), e);
+            log.warn("Reservation recon: order query failed, skipping this round candidates={}", orderNos.size(), e);
             return new Result(0, 0);
         }
 
@@ -98,19 +98,19 @@ public class ReservationReconciler {
                 int n = TenantContext.callAs(tenant, () -> settleService.release(r.getOrderNo(), r.getTenantId(), reason));
                 if (n > 0) {
                     released++;
-                    log.warn("【预占对账】订单{}，预占仍未释放，已释放 orderNo={} tenantId={}",
-                            status == null ? "不存在" : "已关闭", r.getOrderNo(), r.getTenantId());
+                    log.warn("[Reservation recon] order {}, reservation was never released, released now orderNo={} tenantId={}",
+                            status == null ? "missing" : "closed", r.getOrderNo(), r.getTenantId());
                 }
             } else {
                 int n = TenantContext.callAs(tenant, () -> settleService.confirm(r.getOrderNo(), r.getTenantId()));
                 if (n > 0) {
                     confirmed++;
-                    log.warn("【预占对账】订单已支付（状态 {}），预占仍未确认，已确认扣减 orderNo={} tenantId={}",
+                    log.warn("[Reservation recon] order already paid (status {}), reservation was never confirmed, deduction confirmed now orderNo={} tenantId={}",
                             status, r.getOrderNo(), r.getTenantId());
                 }
             }
         }
-        log.info("预占对账完成 候选={} 释放={} 确认={}", stale.size(), released, confirmed);
+        log.info("Reservation recon done candidates={} released={} confirmed={}", stale.size(), released, confirmed);
         return new Result(released, confirmed);
     }
 }

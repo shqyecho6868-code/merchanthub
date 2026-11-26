@@ -40,7 +40,7 @@ public class ReconAlarm {
         int n = jdbc.update("INSERT IGNORE INTO recon_exception (tenant_id, type, biz_key, detail, handle_status) "
                 + "VALUES (?, ?, ?, ?, 0)", tenantId, type, bizKey, truncate(detail));
         if (n == 1) {
-            log.error("【对账告警】type={} bizKey={} tenantId={} detail={}", type, bizKey, tenantId, detail);
+            log.error("[RECON ALARM] type={} bizKey={} tenantId={} detail={}", type, bizKey, tenantId, detail);
             return true;
         }
         return false;

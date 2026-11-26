@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  商品上架审批（D1）。流程定义 = 模板，全平台一份；每次商品提交审核 = 一个流程实例（businessKey = listing:商家:商品:轮次）。
-  驳回 = 实例结束（不回到初审）：商品是在 product 服务里改的，引擎不知道什么时候改完；改完再提交起新实例（D1 笔记 2.2）。
-  结束时 listingResultListener 在"完成最后一个任务"的同一个事务里写审批单 + 本地消息表 → RocketMQ → product 回写状态。
+  Product listing approval (D1). Process definition = template, one for the whole platform; each product submission for review = one process instance (businessKey = listing:merchant:product:round).
+  Reject = instance ends (doesn't go back to first review): the product is edited in the product service and the engine can't know when editing is done; after editing, a new submission starts a new instance (D1 notes 2.2).
+  On end, listingResultListener writes the approval record + local outbox table in the same transaction as "completing the last task" -> RocketMQ -> product writes back the status.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xmlns:flowable="http://flowable.org/bpmn"
              targetNamespace="http://merchanthub.com/approval">
 
-  <process id="productListing" name="商品上架审批" isExecutable="true">
+  <process id="productListing" name="Product Listing Approval" isExecutable="true">
 
-    <startEvent id="start" name="提交上架"/>
+    <startEvent id="start" name="Submit Listing"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="merchantReview"/>
 
     <!-- Candidate group includes the merchant ID: merchant 7's products only go to group "MERCHANT_ADMIN:7", so merchant 8's admin can't even find them when querying tasks -->
-    <userTask id="merchantReview" name="商家管理员初审" flowable:candidateGroups="MERCHANT_ADMIN:${tenantId}"/>
+    <userTask id="merchantReview" name="Merchant Admin First Review" flowable:candidateGroups="MERCHANT_ADMIN:${tenantId}"/>
     <sequenceFlow id="f2" sourceRef="merchantReview" targetRef="merchantDecision"/>
 
-    <exclusiveGateway id="merchantDecision" name="初审结果"/>
+    <exclusiveGateway id="merchantDecision" name="First Review Result"/>
     <sequenceFlow id="f3" sourceRef="merchantDecision" targetRef="platformReview">
       <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
     </sequenceFlow>
@@ -26,10 +26,10 @@
       <conditionExpression xsi:type="tFormalExpression">${!approved}</conditionExpression>
     </sequenceFlow>
 
-    <userTask id="platformReview" name="平台管理员复审" flowable:candidateGroups="PLATFORM_ADMIN"/>
+    <userTask id="platformReview" name="Platform Admin Second Review" flowable:candidateGroups="PLATFORM_ADMIN"/>
     <sequenceFlow id="f5" sourceRef="platformReview" targetRef="platformDecision"/>
 
-    <exclusiveGateway id="platformDecision" name="复审结果"/>
+    <exclusiveGateway id="platformDecision" name="Second Review Result"/>
     <sequenceFlow id="f6" sourceRef="platformDecision" targetRef="approvedEnd">
       <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
     </sequenceFlow>
@@ -38,15 +38,15 @@
     </sequenceFlow>
 
     <!--
-      用 expression 调方法并把结果当参数传进去，而不是 delegateExpression + field 注入：
-      Spring Bean 是单例，field 注入会被并发的流程实例互相覆盖（Flowable 官方文档的警告）
+      Use expression to call a method and pass the result as an argument, rather than delegateExpression + field injection:
+      Spring beans are singletons, so field injection would be overwritten by concurrent process instances (a warning in the official Flowable docs)
     -->
-    <endEvent id="approvedEnd" name="已通过">
+    <endEvent id="approvedEnd" name="Approved">
       <extensionElements>
         <flowable:executionListener event="start" expression="${listingResultListener.onEnd(execution, 'APPROVED')}"/>
       </extensionElements>
     </endEvent>
-    <endEvent id="rejectedEnd" name="已驳回">
+    <endEvent id="rejectedEnd" name="Rejected">
       <extensionElements>
         <flowable:executionListener event="start" expression="${listingResultListener.onEnd(execution, 'REJECTED')}"/>
       </extensionElements>

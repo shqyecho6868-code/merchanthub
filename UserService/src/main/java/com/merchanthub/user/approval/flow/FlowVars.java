@@ -30,7 +30,7 @@ public final class FlowVars {
     public static long longVar(VariableContainer c, String name) {
         Object v = c.getVariable(name);
         if (!(v instanceof Number n)) {
-            throw new IllegalStateException("流程变量 " + name + " 缺失或类型不对: " + v);
+            throw new IllegalStateException("Process variable " + name + " is missing or has the wrong type: " + v);
         }
         return n.longValue();
     }

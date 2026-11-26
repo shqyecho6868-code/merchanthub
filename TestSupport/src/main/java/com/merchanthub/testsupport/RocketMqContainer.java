@@ -76,7 +76,7 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
                 throw new IllegalStateException(e);
             }
         }
-        throw new IllegalStateException("创建 Topic 失败: " + last);
+        throw new IllegalStateException("Failed to create Topic: " + last);
     }
 
     public String getNamesrvAddr() {

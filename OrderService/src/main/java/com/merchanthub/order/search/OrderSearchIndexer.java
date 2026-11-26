@@ -60,7 +60,7 @@ public class OrderSearchIndexer {
                         "createdAt", Property.of(p -> p.date(d -> d.format("epoch_millis"))),
                         "itemNames", Property.of(p -> p.text(t -> t)),
                         "skuSpecs", Property.of(p -> p.text(t -> t))))));
-                log.info("ES 索引 {} 已创建", INDEX);
+                log.info("ES index {} created", INDEX);
             } catch (co.elastic.clients.elasticsearch._types.ElasticsearchException e) {
                 // Multiple instances creating the index at once: someone else got there first, not an error
                 if (!"resource_already_exists_exception".equals(e.error().type())) {
@@ -78,11 +78,11 @@ public class OrderSearchIndexer {
         OrderSearchDoc doc = TenantContext.callAsSystem(() -> load(orderNo));
         if (doc == null) {
             es.delete(d -> d.index(INDEX).id(String.valueOf(orderNo)));
-            log.info("ES 同步：订单不存在，删除文档 orderNo={}", orderNo);
+            log.info("ES sync: order not found, deleting document orderNo={}", orderNo);
             return;
         }
         es.index(i -> i.index(INDEX).id(doc.orderNo()).document(doc));
-        log.debug("ES 同步完成 orderNo={} status={}", orderNo, doc.status());
+        log.debug("ES sync done orderNo={} status={}", orderNo, doc.status());
     }
 
     private OrderSearchDoc load(long orderNo) {

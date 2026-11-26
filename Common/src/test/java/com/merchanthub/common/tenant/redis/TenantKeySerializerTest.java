@@ -17,7 +17,7 @@ class TenantKeySerializerTest {
     private final TenantKeySerializer serializer = new TenantKeySerializer();
 
     @Test
-    @DisplayName("同一个业务 key，商家 7 和商家 8 落到不同的 Redis key；读回时去掉前缀")
+    @DisplayName("Same business key lands on different Redis keys for merchant 7 and merchant 8; prefix stripped on read-back")
     void prefixedPerTenant() {
         byte[] k7 = TenantContext.callAs(new TenantInfo(7L, 1L, Role.MERCHANT_ADMIN), () -> serializer.serialize("sku:101"));
         byte[] k8 = TenantContext.callAs(new TenantInfo(8L, 1L, Role.MERCHANT_ADMIN), () -> serializer.serialize("sku:101"));
@@ -27,7 +27,7 @@ class TenantKeySerializerTest {
     }
 
     @Test
-    @DisplayName("没有商家上下文（含买家）→ 报错")
+    @DisplayName("No merchant context (including buyers) → throw")
     void requiresTenant() {
         assertThatThrownBy(() -> serializer.serialize("sku:101")).isInstanceOf(TenantContextMissingException.class);
         assertThatThrownBy(() -> TenantContext.runAs(new TenantInfo(null, 50001L, Role.BUYER), () -> serializer.serialize("x")))

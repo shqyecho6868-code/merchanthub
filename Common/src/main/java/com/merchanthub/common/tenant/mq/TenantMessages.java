@@ -70,7 +70,7 @@ public final class TenantMessages {
         try (TraceContext.Scope ignored = openTrace(msg)) {
             Long tenantId = tenantIdOf(msg);
             if (tenantId == null) {
-                throw new TenantContextMissingException("消息缺少 " + TenantHeaders.MQ_TENANT_ID + " 属性 keys=" + msg.getKeys());
+                throw new TenantContextMissingException("Message is missing the " + TenantHeaders.MQ_TENANT_ID + " property keys=" + msg.getKeys());
             }
             return TenantContext.callAs(TenantInfo.systemOf(tenantId), action);
         }

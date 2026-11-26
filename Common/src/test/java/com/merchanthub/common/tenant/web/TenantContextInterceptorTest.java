@@ -32,19 +32,19 @@ class TenantContextInterceptorTest {
     }
 
     @Test
-    @DisplayName("请求头 → ThreadLocal；请求结束（含异常结束）→ 清掉")
+    @DisplayName("Headers → ThreadLocal; request completion (including with an exception) → cleared")
     void headersToContextAndCleared() {
         MockHttpServletRequest r = req("7", "2001", "MERCHANT_STAFF");
         interceptor.preHandle(r, resp, null);
         assertThat(TenantContext.get()).isEqualTo(new TenantInfo(7L, 2001L, Role.MERCHANT_STAFF));
 
         // Business code threw, but DispatcherServlet still calls afterCompletion
-        interceptor.afterCompletion(r, resp, null, new RuntimeException("业务失败"));
+        interceptor.afterCompletion(r, resp, null, new RuntimeException("business failure"));
         assertThat(TenantContext.get()).isNull();
     }
 
     @Test
-    @DisplayName("没带 X-Role（渠道回调、健康检查）：不设上下文")
+    @DisplayName("No X-Role (channel callbacks, health checks): no context set")
     void noRoleNoContext() {
         MockHttpServletRequest r = req(null, null, null);
         interceptor.preHandle(r, resp, null);
@@ -53,7 +53,7 @@ class TenantContextInterceptorTest {
     }
 
     @Test
-    @DisplayName("身份头自相矛盾：拒绝且不在线程上留下任何东西")
+    @DisplayName("Self-contradictory identity headers: rejected, leaving nothing on the thread")
     void invalidHeadersRejected() {
         assertThatThrownBy(() -> interceptor.preHandle(req(null, "2001", "MERCHANT_ADMIN"), resp, null))
                 .isInstanceOf(UnauthorizedException.class);
@@ -66,7 +66,7 @@ class TenantContextInterceptorTest {
     }
 
     @Test
-    @DisplayName("同一个线程连续处理两个请求：第二个请求看不到第一个的身份")
+    @DisplayName("Same thread handles two requests in a row: the second can't see the first's identity")
     void sameThreadTwoRequests() {
         MockHttpServletRequest a = req("7", "2001", "MERCHANT_ADMIN");
         interceptor.preHandle(a, resp, null);

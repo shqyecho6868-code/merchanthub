@@ -105,7 +105,7 @@ class PayTimeoutRaceIT extends OrderItSupport {
             }
         }
         assertThat(paid + closed).isEqualTo(orders);
-        System.out.printf("支付与超时并发 %d 单：支付赢 %d，超时赢 %d%n", orders, paid, closed);
+        System.out.printf("Payment vs timeout concurrently on %d orders: payment won %d, timeout won %d%n", orders, paid, closed);
     }
 
     /** Sequential version: timeout closes first, then payment success arrives -> order not revived, no ORDER_PAID, only a payment anomaly */

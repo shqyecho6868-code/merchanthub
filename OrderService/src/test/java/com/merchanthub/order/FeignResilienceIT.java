@@ -114,7 +114,7 @@ class FeignResilienceIT extends IntegrationTestBase {
     void readTimeout_notRetried() throws Exception {
         assertDownstreamUnavailable();
         Thread.sleep(800);   // leave time for any "possible retry"
-        assertThat(HITS.get()).as("超时后不应自动重试").isEqualTo(1);
+        assertThat(HITS.get()).as("should not retry automatically after timeout").isEqualTo(1);
     }
 
     @Test
@@ -133,8 +133,8 @@ class FeignResilienceIT extends IntegrationTestBase {
             elapsedMs = timedUnavailableCall();
         }
 
-        assertThat(HITS.get()).as("熔断后不再发请求").isEqualTo(hitsBeforeOpen);
-        assertThat(elapsedMs).as("熔断后快速失败，不用等 300ms 超时").isLessThan(100);
+        assertThat(HITS.get()).as("no more requests after breaker opens").isEqualTo(hitsBeforeOpen);
+        assertThat(elapsedMs).as("fail fast after breaker opens without waiting for the 300ms timeout").isLessThan(100);
     }
 
     private long timedUnavailableCall() {

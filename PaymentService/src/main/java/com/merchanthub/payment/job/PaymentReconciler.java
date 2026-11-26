@@ -90,7 +90,7 @@ public class PaymentReconciler {
                     payments.stream().map(p -> new PayCheckItem(p.getPayNo(), p.getOrderNo())).toList()));
         } catch (BusinessException e) {
             // "Can't look it up" ≠ "not processed": order unavailable / circuit open, so skip the whole round — never re-send or alert when uncertain
-            log.warn("支付对账：查询 order 失败，本轮跳过 候选={}", payments.size(), e);
+            log.warn("Payment recon: querying order failed, skipping this round candidates={}", payments.size(), e);
             return new int[]{0, 0, 0};
         }
         Map<Long, Payment> byPayNo = payments.stream().collect(Collectors.toMap(Payment::getPayNo, Function.identity()));
@@ -103,15 +103,15 @@ public class PaymentReconciler {
                 consistent += paymentMapper.markReconciled(p.getPayNo());
             } else if (r.orderStatus() == null) {
                 // Money collected but the order doesn't exist: re-sending won't help (order would retry until DLQ), escalate to manual handling directly
-                alerted += exhaust(p, ReconAlarm.PAY_MISMATCH, "支付成功但订单不存在");
+                alerted += exhaust(p, ReconAlarm.PAY_MISMATCH, "Payment succeeded but order does not exist");
             } else if (p.getReconRetry() >= maxResend) {
                 alerted += exhaust(p, ReconAlarm.PAY_RESEND_EXHAUSTED,
-                        "补发 " + p.getReconRetry() + " 次后 order 仍未处理，订单状态=" + r.orderStatus());
+                        "order still hasn't processed it after " + p.getReconRetry() + " re-sends, order status=" + r.orderStatus());
             } else if (resend(p, r.orderStatus())) {
                 resent++;
             }
         }
-        log.info("支付对账（成功单）完成 候选={} 一致={} 补发={} 告警={}", payments.size(), consistent, resent, alerted);
+        log.info("Payment recon (succeeded payments) done candidates={} consistent={} resent={} alerted={}", payments.size(), consistent, resent, alerted);
         return new int[]{consistent, resent, alerted};
     }
 
@@ -122,19 +122,19 @@ public class PaymentReconciler {
         try {
             SendResult sr = producer.send(codec.toMessage(event, "RECON-" + (p.getReconRetry() + 1)));
             if (sr.getSendStatus() != SendStatus.SEND_OK) {
-                log.warn("支付对账：补发未确认 payNo={} status={}", p.getPayNo(), sr.getSendStatus());
+                log.warn("Payment recon: re-send not confirmed payNo={} status={}", p.getPayNo(), sr.getSendStatus());
                 return false;
             }
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            log.warn("支付对账：补发失败，下一轮再试 payNo={}", p.getPayNo(), e);
+            log.warn("Payment recon: re-send failed, will retry next round payNo={}", p.getPayNo(), e);
             return false;
         }
         paymentMapper.incrReconRetry(p.getPayNo(), p.getReconRetry());
-        log.warn("【支付对账】支付成功事件 order 未处理（订单状态 {}{}），已补发第 {} 次 payNo={} orderNo={} tenantId={}",
-                orderStatus, orderStatus == ORDER_PENDING ? "，补发后订单将变为已支付" : "，补发后 order 将记支付异常",
+        log.warn("[Payment recon] payment-success event not processed by order (order status {}{}), re-sent attempt {} payNo={} orderNo={} tenantId={}",
+                orderStatus, orderStatus == ORDER_PENDING ? "; after re-send the order will become paid" : "; after re-send order will record a payment anomaly",
                 p.getReconRetry() + 1, p.getPayNo(), p.getOrderNo(), p.getTenantId());
         return true;
     }
@@ -156,7 +156,7 @@ public class PaymentReconciler {
             status = OrderRemote.call(OrderClient.RES_STATUSES,
                     () -> orderClient.statuses(stale.stream().map(Payment::getOrderNo).distinct().toList()));
         } catch (BusinessException e) {
-            log.warn("支付对账：查询订单状态失败，本轮不关支付单 候选={}", stale.size(), e);
+            log.warn("Payment recon: querying order status failed, not closing payments this round candidates={}", stale.size(), e);
             return 0;
         }
         int closed = 0;
@@ -168,7 +168,7 @@ public class PaymentReconciler {
             // Order closed / paid by another payment / missing: this payment must never succeed again
             if (paymentMapper.closeIfPending(p.getPayNo()) == 1) {
                 closed++;
-                log.warn("【支付对账】订单状态 {}，关闭遗留的待支付支付单 payNo={} orderNo={} tenantId={}（真实渠道还需调关单接口）",
+                log.warn("[Payment recon] order status {}, closing stale pending payment payNo={} orderNo={} tenantId={} (a real channel would also need its close-order API called)",
                         s, p.getPayNo(), p.getOrderNo(), p.getTenantId());
             }
         }

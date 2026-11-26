@@ -77,8 +77,8 @@ class OrderSearchIT extends IntegrationTestBase {
         s.setSkuId(101L);
         s.setTenantId(TENANT);
         s.setProductId(1010L);
-        s.setProductName("白色纯棉短袖T恤");
-        s.setSpecJson("{\"颜色\": \"白\", \"尺码\": \"L\"}");
+        s.setProductName("White cotton short-sleeve T-shirt");
+        s.setSpecJson("{\"color\": \"white\", \"size\": \"L\"}");
         s.setPrice(9900L);
         s.setSkuStatus(SkuSnapshot.SKU_ON_SALE);
         s.setProductStatus(SkuSnapshot.PRODUCT_LISTED);
@@ -107,12 +107,12 @@ class OrderSearchIT extends IntegrationTestBase {
         indexer.sync(orderNo);   // duplicate sync (Canal redelivery): full overwrite, same result
         refresh();
 
-        List<OrderSearchDoc> hits = searchService.search(TENANT, "纯棉", 1, 20);
+        List<OrderSearchDoc> hits = searchService.search(TENANT, "cotton", 1, 20);
         assertThat(hits).extracting(OrderSearchDoc::orderNo).contains(String.valueOf(orderNo));
         assertThat(searchService.search(TENANT, String.valueOf(orderNo), 1, 20)).hasSize(1);
         assertThat(searchService.search(TENANT, "", 1, 20)).isNotEmpty();
         // Merchant 8 searching with the same keyword can't see merchant 7's order
-        assertThat(searchService.search(8L, "纯棉", 1, 20)).isEmpty();
+        assertThat(searchService.search(8L, "cotton", 1, 20)).isEmpty();
 
         // Order status changed -> sync again, the document follows (latest value looked up from the DB)
         jdbc.update("UPDATE orders SET status = 50 WHERE order_no = ?", orderNo);

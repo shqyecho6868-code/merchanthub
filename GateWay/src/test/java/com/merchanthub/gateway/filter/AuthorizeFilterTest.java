@@ -65,7 +65,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("商家员工 token → 下游收到 X-Tenant-Id / X-User-Id / X-Role；客户端伪造的 X-Tenant-Id 被覆盖")
+    @DisplayName("Merchant staff token -> downstream gets X-Tenant-Id / X-User-Id / X-Role; client-forged X-Tenant-Id is overwritten")
     void merchantToken_injectsIdentity_overridesForgedHeader() {
         String token = login(2002L, 7L, "MERCHANT_STAFF");
         run(MockServerHttpRequest.get("/api/orders/1").header("Access-Token", token)
@@ -77,7 +77,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("买家 token：不带 X-Tenant-Id（客户端自带的也删掉）")
+    @DisplayName("Buyer token: no X-Tenant-Id (a client-supplied one is removed too)")
     void buyerToken_noTenantHeader() {
         String token = login(50001L, null, "BUYER");
         run(MockServerHttpRequest.get("/api/orders/mine/1").header("Access-Token", token).header("X-Tenant-Id", "7").build());
@@ -86,7 +86,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("白名单（渠道回调）放行，但伪造的身份头照样被删")
+    @DisplayName("Whitelisted path (channel callback) passes, but forged identity headers are still removed")
     void whitelist_stillStripsHeaders() {
         run(MockServerHttpRequest.post("/api/payments/callback/mock")
                 .header("X-Tenant-Id", "7").header("X-User-Id", "1").header("X-Role", "SYSTEM").build());
@@ -96,7 +96,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("/internal/** 一律 404，编码绕过也挡（%69 = i）")
+    @DisplayName("/internal/** always 404, encoded bypass blocked too (%69 = i)")
     void internalPathBlocked() {
         String token = login(1L, null, "PLATFORM_ADMIN");
         for (String path : new String[]{"/internal/orders/1", "/api/internal/orders/1", "/api/%69nternal/orders/1",
@@ -111,7 +111,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("没 token → 401；token 里角色是 SYSTEM / 商家没 tenantId → 401")
+    @DisplayName("No token -> 401; token with role SYSTEM / merchant without tenantId -> 401")
     void invalidIdentity_unauthorized() {
         MockServerWebExchange none = run(MockServerHttpRequest.get("/api/orders/1").build());
         assertThat(none.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -132,7 +132,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("Access-Token 已失效但 Refresh-Token 有效 → 401 + TOKEN_EXPIRED（提示刷新）")
+    @DisplayName("Access-Token expired but Refresh-Token valid -> 401 + TOKEN_EXPIRED (prompt refresh)")
     void refreshTokenValid_needRefresh() {
         String refresh = jwt.issue(6L, null, "BUYER", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.empty());
@@ -145,7 +145,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("C2：Redis 出错 → 401 系统异常，不放行；下游报错不会被改写成 401")
+    @DisplayName("C2: Redis error -> 401 system error, request not passed through; downstream errors are not rewritten to 401")
     void redisError_unauthorized_downstreamErrorNotSwallowed() {
         String token = jwt.issue(7L, null, "BUYER", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.error(new IllegalStateException("redis down")));

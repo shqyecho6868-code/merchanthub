@@ -22,12 +22,12 @@ public class ProductJobs {
     @XxlJob("reservationReconJob")
     public void reservationRecon() {
         ReservationReconciler.Result r = reservationReconciler.reconcile();
-        XxlJobHelper.handleSuccess("释放 " + r.released() + "，确认扣减 " + r.confirmed());
+        XxlJobHelper.handleSuccess("released " + r.released() + ", confirmed " + r.confirmed());
     }
 
     /** Listing approval compensation (formerly @Scheduled every minute) */
     @XxlJob("listingCompensateJob")
     public void listingCompensate() {
-        XxlJobHelper.handleSuccess("修复 " + listingCompensator.scan() + " 个商品");
+        XxlJobHelper.handleSuccess("fixed " + listingCompensator.scan() + " products");
     }
 }

@@ -35,13 +35,13 @@ public class ProductListingService {
             BaseResponse<String> resp = approvalClient.start(
                     new ListingApprovalClient.StartListing(p.getId(), p.getAuditRound(), p.getName()));
             if (resp == null || resp.getCode() != 200 || resp.getData() == null) {
-                log.warn("发起上架审批返回异常，等待补偿 productId={} round={} resp={}", p.getId(), p.getAuditRound(), resp);
+                log.warn("Starting listing approval returned an error, awaiting compensation productId={} round={} resp={}", p.getId(), p.getAuditRound(), resp);
                 return null;
             }
             stateService.bindInstance(p.getId(), p.getAuditRound(), resp.getData());
             return resp.getData();
         } catch (RuntimeException e) {
-            log.warn("发起上架审批失败，等待补偿 productId={} round={}", p.getId(), p.getAuditRound(), e);
+            log.warn("Starting listing approval failed, awaiting compensation productId={} round={}", p.getId(), p.getAuditRound(), e);
             return null;
         }
     }

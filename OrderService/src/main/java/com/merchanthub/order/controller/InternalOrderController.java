@@ -42,7 +42,7 @@ public class InternalOrderController {
     public BaseResponse<OrderBriefVO> get(@PathVariable long orderNo) {
         Orders o = ordersMapper.selectOne(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, orderNo));
         if (o == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "订单不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Order not found");
         }
         return ResultUtils.success(new OrderBriefVO(o.getOrderNo(), o.getTenantId(), o.getBuyerId(), o.getStatus(), o.getPayAmount()));
     }
@@ -94,7 +94,7 @@ public class InternalOrderController {
 
     private static void checkBatch(int size) {
         if (size > MAX_BATCH) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "一次最多查询 " + MAX_BATCH + " 条");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "At most " + MAX_BATCH + " items per query");
         }
     }
 }

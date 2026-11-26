@@ -50,7 +50,7 @@ public class ListingResultConsumerConfig {
                     try {
                         e = objectMapper.readValue(m.getBody(), ListingResultEvent.class);
                     } catch (IOException ex) {
-                        log.error("无法解析的审批结果消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), ex);
+                        log.error("Unparsable approval result message, discarding msgId={} keys={}", m.getMsgId(), m.getKeys(), ex);
                         continue;
                     }
                     try {
@@ -60,7 +60,7 @@ public class ListingResultConsumerConfig {
                                 ListingStateService.SOURCE_MQ));
                     } catch (RuntimeException ex) {
                         // Database unavailable etc.: the transaction is rolled back, redeliver later; after 16 failed retries it goes to the DLQ and the compensation scan backstops it
-                        log.warn("处理审批结果失败，稍后重投 eventId={} productId={} reconsumeTimes={}",
+                        log.warn("Failed to process approval result, will redeliver eventId={} productId={} reconsumeTimes={}",
                                 e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
                         // E3: the last retry also failed → alert + record recon_exception
                         DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),

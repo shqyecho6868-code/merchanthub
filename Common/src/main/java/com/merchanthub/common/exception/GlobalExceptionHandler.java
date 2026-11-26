@@ -41,7 +41,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     public BaseResponse<?> businessExceptionHandler(BusinessException e) {
-        log.warn("业务失败 code={} message={}", e.getCode(), e.getMessage());
+        log.warn("Business failure code={} message={}", e.getCode(), e.getMessage());
         return ResultUtils.error(e.getCode(), e.getMessage());
     }
 
@@ -51,7 +51,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<BaseResponse<?>> tooManyRequestsHandler(TooManyRequestsException e) {
-        log.warn("请求被限流: {}", e.getMessage());
+        log.warn("Request rate limited: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .header(HttpHeaders.RETRY_AFTER, "1")
                 .body(ResultUtils.error(e.getCode(), e.getMessage()));
@@ -65,14 +65,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ForbiddenException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public BaseResponse<?> forbiddenHandler(ForbiddenException e) {
-        log.warn("越权访问被拒绝: {}", e.getMessage());
+        log.warn("Unauthorized access rejected: {}", e.getMessage());
         return ResultUtils.error(e.getCode(), e.getMessage());
     }
 
     @ExceptionHandler(UnauthorizedException.class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public BaseResponse<?> unauthorizedHandler(UnauthorizedException e) {
-        log.warn("身份校验失败: {}", e.getMessage());
+        log.warn("Authentication failed: {}", e.getMessage());
         return ResultUtils.error(e.getCode(), e.getMessage());
     }
 
@@ -83,22 +83,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public BaseResponse<?> notReadableHandler(HttpMessageNotReadableException e) {
-        log.warn("请求体无法解析: {}", e.getMessage());
-        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "请求体格式错误");
+        log.warn("Unreadable request body: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "Malformed request body");
     }
 
     /** Missing required header / wrong path variable type (e.g. letters in an order number) → 400, also a client error */
     @ExceptionHandler({MissingRequestHeaderException.class, MethodArgumentTypeMismatchException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public BaseResponse<?> badRequestHandler(Exception e) {
-        log.warn("请求参数错误: {}", e.getMessage());
-        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "请求参数错误");
+        log.warn("Invalid request parameters: {}", e.getMessage());
+        return ResultUtils.error(ErrorCode.PARAMS_ERROR, "Invalid request parameters");
     }
 
     @ExceptionHandler(RuntimeException.class)
     public BaseResponse<?> runtimeExceptionHandler(RuntimeException e) {
         log.error("RuntimeException", e);
-        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "系统错误");
+        return ResultUtils.error(ErrorCode.SYSTEM_ERROR, "System error");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -116,13 +116,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public BaseResponse<?> handleConstraintViolation(ConstraintViolationException e) {
-        String message = e.getConstraintViolations().stream().map(ConstraintViolation::getMessage).findFirst().orElse("请求参数校验失败");
+        String message = e.getConstraintViolations().stream().map(ConstraintViolation::getMessage).findFirst().orElse("Request parameter validation failed");
         return ResultUtils.error(ErrorCode.PARAMS_ERROR, message);
     }
 
     @ExceptionHandler(value = MissingServletRequestParameterException.class)
     public BaseResponse<?> handlerMissingServletRequestParameterException(Exception e) {
-        log.error("缺少必填参数:{}", e.toString());
-        return ResultUtils.error(ErrorCode.INVALID_PARAMETER_ERROR, "缺少必填参数");
+        log.error("Missing required parameter: {}", e.toString());
+        return ResultUtils.error(ErrorCode.INVALID_PARAMETER_ERROR, "Missing required parameter");
     }
 }

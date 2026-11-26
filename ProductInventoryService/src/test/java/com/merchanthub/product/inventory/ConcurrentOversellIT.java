@@ -79,7 +79,7 @@ class ConcurrentOversellIT extends ProductItSupport {
         long records = jdbc.queryForObject("SELECT COUNT(*) FROM inventory_reservation", Long.class);
 
         // Printed for humans: watch this line during the 🧑 hands-on run
-        System.out.printf("%n===== 并发下单结果：成功 %d 单，库存不足 %d 单，其他异常 %d 个；available=%s，reserved=%s，预占记录 %d 条 =====%n%n",
+        System.out.printf("%n===== Concurrent order results: %d succeeded, %d insufficient stock, %d other errors; available=%s, reserved=%s, %d reservation records =====%n%n",
                 success.get(), insufficient.get(), otherErrors.size(), row.get("available"), row.get("reserved"), records);
 
         assertThat(otherErrors).isEmpty();

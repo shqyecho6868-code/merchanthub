@@ -36,11 +36,11 @@ public class RoleCheckInterceptor implements HandlerInterceptor {
         }
         TenantInfo info = TenantContext.get();
         if (info == null) {
-            throw new UnauthorizedException("未登录");
+            throw new UnauthorizedException("Not logged in");
         }
         Role[] allowed = rule.value();
         if (Arrays.stream(allowed).noneMatch(r -> r == info.role())) {
-            throw new ForbiddenException("角色 " + info.role() + " 无权访问该接口");
+            throw new ForbiddenException("Role " + info.role() + " is not allowed to access this endpoint");
         }
         return true;
     }

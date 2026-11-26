@@ -51,8 +51,8 @@ public class TenantSqlHandler implements TenantLineHandler {
         }
         TenantInfo info = TenantContext.get();
         if (info == null) {
-            throw new TenantContextMissingException("访问业务表 " + tableName + " 时没有租户上下文："
-                    + "Web 请求检查网关是否注入了 X-Role；MQ 消费 / 定时任务 / 线程池检查是否设置了 TenantContext");
+            throw new TenantContextMissingException("No tenant context when accessing business table " + tableName + ": "
+                    + "for web requests check that the gateway injected X-Role; for MQ consumers / scheduled jobs / thread pools check that TenantContext is set");
         }
         return info.tenantId() == null;
     }

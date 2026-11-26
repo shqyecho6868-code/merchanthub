@@ -56,7 +56,7 @@ public class PaymentTxListener implements TransactionListener {
         try {
             event = codec.fromMessage(msg);
         } catch (IllegalArgumentException e) {
-            log.error("支付事务回查：消息体无法解析，回滚 msgId={}", msg.getMsgId(), e);
+            log.error("Payment tx check-back: message body unparsable, rolling back msgId={}", msg.getMsgId(), e);
             return LocalTransactionState.ROLLBACK_MESSAGE;
         }
         Payment p;
@@ -64,7 +64,7 @@ public class PaymentTxListener implements TransactionListener {
             // Check-back runs on a RocketMQ thread with no tenant context: query by the merchant in the event
             p = TenantContext.callAs(TenantInfo.systemOf(event.tenantId()), () -> paymentMapper.selectByPayNo(event.payNo()));
         } catch (RuntimeException e) {
-            log.warn("支付事务回查：查库失败，稍后重查 payNo={}", event.payNo(), e);
+            log.warn("Payment tx check-back: DB lookup failed, will check again later payNo={}", event.payNo(), e);
             return LocalTransactionState.UNKNOW;
         }
         LocalTransactionState state;
@@ -78,7 +78,7 @@ public class PaymentTxListener implements TransactionListener {
         } else {
             state = LocalTransactionState.ROLLBACK_MESSAGE;
         }
-        log.info("支付事务回查 payNo={} orderNo={} tenantId={} → {}", event.payNo(), event.orderNo(), event.tenantId(), state);
+        log.info("Payment tx check-back payNo={} orderNo={} tenantId={} → {}", event.payNo(), event.orderNo(), event.tenantId(), state);
         return state;
     }
 }

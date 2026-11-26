@@ -56,7 +56,7 @@ class RemoteResultsTest {
     }
 
     @Test
-    @DisplayName("业务失败（库存不足）说明下游健康：再多也不熔断，错误码原样透传")
+    @DisplayName("A business failure (insufficient stock) means the downstream is healthy: never trips the breaker, error code passed through as-is")
     @SuppressWarnings("unchecked")
     void businessFailures_doNotOpenCircuit() {
         for (int i = 0; i < 10; i++) {
@@ -67,7 +67,7 @@ class RemoteResultsTest {
     }
 
     @Test
-    @DisplayName("连续 5xx → 熔断，之后不再调用下游，直接 DOWNSTREAM_UNAVAILABLE")
+    @DisplayName("Consecutive 5xx -> breaker opens; downstream no longer called, DOWNSTREAM_UNAVAILABLE directly")
     void serverErrors_openCircuit() {
         Request req = Request.create(Request.HttpMethod.POST, "/x", Map.of(), null, StandardCharsets.UTF_8, null);
         for (int i = 0; i < 3; i++) {
@@ -76,11 +76,11 @@ class RemoteResultsTest {
             })).isEqualTo(ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         }
         assertThat(code(() -> ResultUtils.success(null))).isEqualTo(ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
-        assertThat(calls.get()).as("第 4 次被熔断挡住，没有真正调用").isEqualTo(3);
+        assertThat(calls.get()).as("the 4th call is blocked by the breaker, no real call made").isEqualTo(3);
     }
 
     @Test
-    @DisplayName("4xx 是我们自己的请求有问题，不计入熔断")
+    @DisplayName("4xx means our own request is wrong; not counted toward the breaker")
     void clientErrors_doNotOpenCircuit() {
         Request req = Request.create(Request.HttpMethod.POST, "/x", Map.of(), null, StandardCharsets.UTF_8, null);
         for (int i = 0; i < 5; i++) {

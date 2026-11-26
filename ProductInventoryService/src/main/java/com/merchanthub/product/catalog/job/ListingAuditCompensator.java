@@ -51,7 +51,7 @@ public class ListingAuditCompensator {
             }
         }
         if (!stale.isEmpty()) {
-            log.info("上架审批补偿完成 候选={} 修复={}", stale.size(), fixed);
+            log.info("Listing approval compensation done candidates={} fixed={}", stale.size(), fixed);
         }
         return fixed;
     }
@@ -62,12 +62,12 @@ public class ListingAuditCompensator {
         try {
             BaseResponse<ListingResult> resp = approvalClient.result(p.getId(), round);
             if (resp == null || resp.getCode() != 200 || resp.getData() == null) {
-                log.warn("上架审批补偿：反查返回异常，跳过 productId={} resp={}", p.getId(), resp);
+                log.warn("Listing approval compensation: query returned an error, skipping productId={} resp={}", p.getId(), resp);
                 return false;
             }
             r = resp.getData();
         } catch (RuntimeException e) {
-            log.warn("上架审批补偿：反查失败，跳过 productId={} round={}", p.getId(), round, e);
+            log.warn("Listing approval compensation: query failed, skipping productId={} round={}", p.getId(), round, e);
             return false;
         }
         switch (r.state()) {
@@ -75,7 +75,7 @@ public class ListingAuditCompensator {
                 boolean applied = stateService.applyResult(p.getId(), round, ListingResult.APPROVED.equals(r.state()),
                         r.rejectReason(), r.processInstanceId(), ListingStateService.SOURCE_COMPENSATE);
                 if (applied) {
-                    log.warn("【上架审批补偿】结果消息未到，已按反查回写 productId={} round={} state={}", p.getId(), round, r.state());
+                    log.warn("[Listing approval compensation] result message never arrived, written back from query productId={} round={} state={}", p.getId(), round, r.state());
                 }
                 return applied;
             }
@@ -85,11 +85,11 @@ public class ListingAuditCompensator {
                             new ListingApprovalClient.StartListing(p.getId(), round, p.getName()));
                     if (started != null && started.getCode() == 200 && started.getData() != null) {
                         stateService.bindInstance(p.getId(), round, started.getData());
-                        log.warn("【上架审批补偿】审批未发起，已重新发起 productId={} round={} pid={}", p.getId(), round, started.getData());
+                        log.warn("[Listing approval compensation] approval was never started, restarted productId={} round={} pid={}", p.getId(), round, started.getData());
                         return true;
                     }
                 } catch (RuntimeException e) {
-                    log.warn("上架审批补偿：重新发起失败，下一轮再试 productId={} round={}", p.getId(), round, e);
+                    log.warn("Listing approval compensation: restart failed, will retry next round productId={} round={}", p.getId(), round, e);
                 }
                 return false;
             }

@@ -190,7 +190,7 @@ class RealtimePushIT {
         await().atMost(Duration.ofSeconds(10)).until(() ->
                 count("SELECT COUNT(*) FROM offline_message WHERE msg_id = ? AND status = 1", "evt-" + eventId + "-m") == 1);
         assertThat(count("SELECT COUNT(*) FROM merchant_order_notice WHERE order_no = ?", orderNo)).isEqualTo(1);
-        assertThat(merchant.frames.poll(3, TimeUnit.SECONDS)).as("重复事件不再推").isNull();
+        assertThat(merchant.frames.poll(3, TimeUnit.SECONDS)).as("duplicate event is not pushed again").isNull();
 
         // Heartbeat: reply pong and renew the route
         merchant.ws.sendText("ping", true).join();

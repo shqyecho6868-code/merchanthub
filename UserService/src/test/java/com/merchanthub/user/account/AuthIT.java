@@ -44,7 +44,7 @@ class AuthIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("买家注册 → 登录：token 用配置的密钥签名、身份字段正确、写进 Redis；库里存的是 BCrypt 不是明文")
+    @DisplayName("Buyer register -> login: token signed with the configured secret, identity fields correct, written to Redis; DB stores BCrypt, not plaintext")
     void registerAndLogin() throws Exception {
         mvc.perform(post("/user/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"buyer_01\",\"password\":\"password123\"}"))
@@ -63,10 +63,10 @@ class AuthIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("商家管理员登录：token 带 tenantId；商家停用后不能登录")
+    @DisplayName("Merchant admin login: token carries tenantId; can't log in after the merchant is suspended")
     void merchantLogin_tenantClaim_andDisabledTenant() throws Exception {
-        insertTenant(7, "商家7", 1);
-        insertTenant(8, "商家8", 0);
+        insertTenant(7, "Merchant7", 1);
+        insertTenant(8, "Merchant8", 0);
         insertAccount(7L, "m7admin", "password123", "MERCHANT_ADMIN");
         insertAccount(8L, "m8admin", "password123", "MERCHANT_ADMIN");
 
@@ -78,7 +78,7 @@ class AuthIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("密码错 / 用户不存在返回同一个错误码；重复注册 70001")
+    @DisplayName("Wrong password / unknown user return the same error code; duplicate registration 70001")
     void wrongPassword_unknownUser_duplicate() throws Exception {
         insertAccount(null, "buyer_02", "password123", "BUYER");
         assertThat(login("buyer_02", "wrong-password").at("/code").asInt()).isEqualTo(70005);
@@ -90,7 +90,7 @@ class AuthIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("Refresh-Token 换新 token；旧的 refresh 被替换后失效（401）")
+    @DisplayName("Refresh-Token exchanges for a new token; the old refresh token is invalid once replaced (401)")
     void refresh() throws Exception {
         insertAccount(null, "buyer_03", "password123", "BUYER");
         String refresh = login("buyer_03", "password123").at("/data/refreshToken").asText();

@@ -69,7 +69,7 @@ public class NettyServer {
                     }
                 });
         serverChannel = b.bind(props.getNettyPort()).sync().channel();
-        log.info("WebSocket 服务已启动 ws://0.0.0.0:{}{} node={}", port(), WS_PATH, nodeId);
+        log.info("WebSocket server started ws://0.0.0.0:{}{} node={}", port(), WS_PATH, nodeId);
     }
 
     /** Actual listening port (random when configured as 0) */

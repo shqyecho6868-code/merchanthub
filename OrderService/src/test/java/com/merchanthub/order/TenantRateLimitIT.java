@@ -82,7 +82,7 @@ class TenantRateLimitIT extends OrderItSupport {
         pool.shutdown();
 
         // Tenant 7: most are rate-limited (not 500), and rejected requests wrote no orders
-        assertThat(limited).as("租户 7 被限流的请求数").isGreaterThan(30);
+        assertThat(limited).as("number of tenant 7 requests rate-limited").isGreaterThan(30);
         assertThat(passed + limited).isEqualTo(60);
         assertThat(ordersOf(BIG)).isEqualTo(passed);
         // Tenant 8: 100% pass rate

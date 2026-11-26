@@ -45,14 +45,14 @@ public class ListingResultListener {
             int rows = approvalMapper.finish(pid, approved ? ListingApproval.APPROVED : ListingApproval.REJECTED, reason);
             if (rows != 1) {
                 // Result already recorded (listener executed twice): don't send a second message
-                log.warn("上架审批单已有结果，跳过 pid={} productId={} round={}", pid, productId, round);
+                log.warn("Listing approval already has a result, skipping pid={} productId={} round={}", pid, productId, round);
                 return;
             }
             long eventId = idGenerator.nextId();
             ListingResultEvent event = new ListingResultEvent(eventId, tenantId, productId, round, result, reason, pid);
             outboxWriter.append(tenantId, eventId, "listing:" + tenantId + ":" + productId + ":" + round,
                     ListingResultEvent.TOPIC, ListingResultEvent.TAG, toJson(event));
-            log.info("上架审批结束 result={} productId={} round={} tenantId={} pid={}", result, productId, round, tenantId, pid);
+            log.info("Listing approval ended result={} productId={} round={} tenantId={} pid={}", result, productId, round, tenantId, pid);
         });
     }
 

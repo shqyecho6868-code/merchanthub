@@ -73,7 +73,7 @@ public class CanalOrderSync {
                 connector.connect();
                 connector.subscribe("mh_order\\.(orders|order_item)");
                 connector.rollback();   // start from the last acked position
-                log.info("Canal 已连接 {}:{} destination={}", host, port, destination);
+                log.info("Canal connected {}:{} destination={}", host, port, destination);
                 while (running) {
                     Message batch = connector.getWithoutAck(batchSize);
                     long batchId = batch.getId();
@@ -88,7 +88,7 @@ public class CanalOrderSync {
                         connector.ack(batchId);
                     } catch (Exception e) {
                         // Don't ack; roll back to the start of this batch so the whole batch is redone next time (sync is idempotent)
-                        log.warn("ES 同步失败，回滚批次 {} 稍后重试", batchId, e);
+                        log.warn("ES sync failed, rolling back batch {} to retry later", batchId, e);
                         connector.rollback(batchId);
                         Thread.sleep(3000);
                     }
@@ -97,7 +97,7 @@ public class CanalOrderSync {
                 Thread.currentThread().interrupt();
                 return;
             } catch (RuntimeException e) {
-                log.warn("Canal 连接异常，5 秒后重连 {}:{}", host, port, e);
+                log.warn("Canal connection error, reconnecting in 5s {}:{}", host, port, e);
                 sleepQuietly(5000);
             } finally {
                 try {

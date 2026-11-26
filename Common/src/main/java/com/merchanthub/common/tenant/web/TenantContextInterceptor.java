@@ -47,16 +47,16 @@ public class TenantContextInterceptor implements HandlerInterceptor {
         }
         Role role = Role.parse(roleHeader);
         if (role == null) {
-            throw new UnauthorizedException("非法的角色: " + roleHeader);
+            throw new UnauthorizedException("Invalid role: " + roleHeader);
         }
         Long tenantId = parseLong(request.getHeader(TenantHeaders.TENANT_ID), TenantHeaders.TENANT_ID);
         Long userId = parseLong(request.getHeader(TenantHeaders.USER_ID), TenantHeaders.USER_ID);
         if (role.isMerchant() && tenantId == null) {
-            throw new UnauthorizedException("商家角色缺少 " + TenantHeaders.TENANT_ID);
+            throw new UnauthorizedException("Merchant role is missing " + TenantHeaders.TENANT_ID);
         }
         if ((role == Role.BUYER || role == Role.PLATFORM_ADMIN) && tenantId != null) {
             // Buyers / platform admins belong to no merchant: carrying a tenantId means the identity is self-contradictory, so don't guess which one applies
-            throw new UnauthorizedException(role + " 不应携带 " + TenantHeaders.TENANT_ID);
+            throw new UnauthorizedException(role + " must not carry " + TenantHeaders.TENANT_ID);
         }
         return new TenantInfo(tenantId, userId, role);
     }
@@ -68,7 +68,7 @@ public class TenantContextInterceptor implements HandlerInterceptor {
         try {
             return Long.parseLong(value.trim());
         } catch (NumberFormatException e) {
-            throw new UnauthorizedException("非法的 " + name + ": " + value);
+            throw new UnauthorizedException("Invalid " + name + ": " + value);
         }
     }
 }

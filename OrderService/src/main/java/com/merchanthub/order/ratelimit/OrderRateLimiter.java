@@ -31,7 +31,7 @@ public class OrderRateLimiter {
             // Arguments from the 4th onward are hot parameters: counted separately per tenantId value
             entry = SphU.entry(RESOURCE, EntryType.IN, 1, tenantId);
         } catch (BlockException e) {
-            log.warn("【限流】商家下单 QPS 超过阈值，拒绝 tenantId={}", tenantId);
+            log.warn("[rate limit] Merchant order QPS exceeded threshold, rejecting tenantId={}", tenantId);
             throw new TooManyRequestsException(ErrorCode.TOO_MANY_REQUESTS.getMessage());
         }
         try {

@@ -59,12 +59,12 @@ public class OrderTxListener implements TransactionListener {
         LocalTx tx = (LocalTx) arg;
         if (!tx.run()) {
             // Local transaction rolled back -> delete the half message; consumers never see it
-            log.warn("本地事务失败，回滚半消息 keys={}", msg.getKeys(), tx.failure());
+            log.warn("Local transaction failed, rolling back half message keys={}", msg.getKeys(), tx.failure());
             return LocalTransactionState.ROLLBACK_MESSAGE;
         }
         // ---- At this point: the order is committed to the DB, but the broker doesn't know yet ----
         if (pauseAfterLocalCommitMs > 0) {
-            log.warn("【kill 实验】本地事务已提交 keys={}，{} ms 后才提交消息，现在 kill 进程", msg.getKeys(), pauseAfterLocalCommitMs);
+            log.warn("[kill experiment] Local transaction committed keys={}, committing message in {} ms, kill the process now", msg.getKeys(), pauseAfterLocalCommitMs);
             try {
                 Thread.sleep(pauseAfterLocalCommitMs);
             } catch (InterruptedException e) {
@@ -72,7 +72,7 @@ public class OrderTxListener implements TransactionListener {
             }
         }
         if (reportUnknown) {
-            log.warn("【测试】本地事务已提交但返回 UNKNOW，等待 Broker 回查 keys={}", msg.getKeys());
+            log.warn("[test] Local transaction committed but returning UNKNOW, waiting for broker check-back keys={}", msg.getKeys());
             return LocalTransactionState.UNKNOW;
         }
         return LocalTransactionState.COMMIT_MESSAGE;
@@ -86,7 +86,7 @@ public class OrderTxListener implements TransactionListener {
             event = codec.fromMessage(msg);
         } catch (IllegalArgumentException e) {
             // Corrupt message body: can neither decide nor consume; roll back and discard, leave a log for manual review
-            log.error("事务回查：消息体无法解析，回滚 msgId={} keys={}", msg.getMsgId(), msg.getKeys(), e);
+            log.error("Tx check-back: message body unparseable, rolling back msgId={} keys={}", msg.getMsgId(), msg.getKeys(), e);
             return LocalTransactionState.ROLLBACK_MESSAGE;
         }
         boolean exists;
@@ -99,19 +99,19 @@ public class OrderTxListener implements TransactionListener {
         } catch (RuntimeException e) {
             // DB query failure != order doesn't exist. Returning ROLLBACK here could delete the message of an order that may already exist;
             // return UNKNOW so the broker asks again later
-            log.warn("事务回查：查库失败，稍后重查 orderNo={} tenantId={} checkTimes={}",
+            log.warn("Tx check-back: DB query failed, rechecking later orderNo={} tenantId={} checkTimes={}",
                     event.orderNo(), event.tenantId(), checkTimes, e);
             return LocalTransactionState.UNKNOW;
         }
         long ageMs = clock.millis() - msg.getBornTimestamp();
         if (!exists && ageMs < rollbackMinAgeSeconds * 1000) {
             // The local transaction may not be done yet: rolling back now would mean "order created but message lost" if it commits later
-            log.info("事务回查 orderNo={} tenantId={} checkTimes={} 订单暂不存在、消息仅 {} ms，稍后重查 → UNKNOW",
+            log.info("Tx check-back orderNo={} tenantId={} checkTimes={} order not found yet and message only {} ms old, recheck later -> UNKNOW",
                     event.orderNo(), event.tenantId(), checkTimes, ageMs);
             return LocalTransactionState.UNKNOW;
         }
         LocalTransactionState state = exists ? LocalTransactionState.COMMIT_MESSAGE : LocalTransactionState.ROLLBACK_MESSAGE;
-        log.info("事务回查 orderNo={} tenantId={} eventId={} checkTimes={} 订单存在={} → {}",
+        log.info("Tx check-back orderNo={} tenantId={} eventId={} checkTimes={} orderExists={} -> {}",
                 event.orderNo(), event.tenantId(), event.eventId(), checkTimes, exists, state);
         return state;
     }

@@ -56,7 +56,7 @@ public class AuthService {
             // Don't check-then-insert: when two requests register the same name concurrently, both "checks" find nothing; the unique index is the final arbiter
             throw new BusinessException(ErrorCode.USER_ALREADY_EXISTS);
         }
-        log.info("买家注册 userId={} username={}", a.getId(), username);
+        log.info("Buyer registered userId={} username={}", a.getId(), username);
         return a.getId();
     }
 
@@ -70,7 +70,7 @@ public class AuthService {
         if (!passwordEncoder.matches(password, a.getPasswordHash()) || !isUsable(a)) {
             throw new BusinessException(ErrorCode.LOGIN_ERROR);
         }
-        log.info("登录成功 userId={} role={} tenantId={}", a.getId(), a.getRole(), a.getTenantId());
+        log.info("Login succeeded userId={} role={} tenantId={}", a.getId(), a.getRole(), a.getTenantId());
         return issue(a);
     }
 
@@ -78,15 +78,15 @@ public class AuthService {
     public TokenVO refresh(String refreshToken) {
         Claims claims = jwt.parse(refreshToken);
         if (claims == null || claims.getSubject() == null) {
-            throw new UnauthorizedException("Refresh-Token 无效或已过期");
+            throw new UnauthorizedException("Refresh-Token is invalid or expired");
         }
         String stored = redis.opsForValue().get(CommonConstant.REFRESH_TOKEN_PREFIX + claims.getSubject());
         if (!refreshToken.equals(stored)) {
-            throw new UnauthorizedException("Refresh-Token 已失效");
+            throw new UnauthorizedException("Refresh-Token has been invalidated");
         }
         Account a = accountMapper.selectById(Long.parseLong(claims.getSubject()));
         if (a == null || !isUsable(a)) {
-            throw new UnauthorizedException("账号不可用");
+            throw new UnauthorizedException("Account unavailable");
         }
         return issue(a);
     }

@@ -88,7 +88,7 @@ public class OrderCreateService {
         // 6. Persist order + "order created" event (succeed or fail together; see OrderPlacer's two implementations).
         // Known gap: if this fails, the inventory reserved in step 5 isn't released automatically -> B3 compensates via reservation records (B1 notes section 2)
         if (pauseBeforePersistMs > 0) {
-            log.warn("【实验】库存已预占，暂停 {} ms 后才落库 orderNo={} tenantId={} payAmount={}",
+            log.warn("[experiment] Inventory reserved, pausing {} ms before persisting orderNo={} tenantId={} payAmount={}",
                     pauseBeforePersistMs, orderNo, tenantId, pricing.payAmount());
             try {
                 Thread.sleep(pauseBeforePersistMs);
@@ -101,10 +101,10 @@ public class OrderCreateService {
         try {
             orderPlacer.place(new NewOrder(orderNo, tenantId, buyerId, pricing, now, expireAt));
         } catch (RuntimeException e) {
-            log.error("订单落库失败，库存已预占待补偿 orderNo={} tenantId={}", orderNo, tenantId, e);
+            log.error("Failed to persist order, inventory reserved and pending compensation orderNo={} tenantId={}", orderNo, tenantId, e);
             throw e;
         }
-        log.info("下单成功 orderNo={} tenantId={} buyerId={} payAmount={}", orderNo, tenantId, buyerId, pricing.payAmount());
+        log.info("Order placed orderNo={} tenantId={} buyerId={} payAmount={}", orderNo, tenantId, buyerId, pricing.payAmount());
         return new CreateOrderVO(String.valueOf(orderNo), OrderStatus.PENDING_PAYMENT.getCode(),
                 pricing.payAmount(), expireAt);
     }

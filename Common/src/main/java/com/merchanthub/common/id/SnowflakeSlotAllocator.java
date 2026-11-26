@@ -54,7 +54,7 @@ public class SnowflakeSlotAllocator {
                 return slot;
             }
         }
-        throw new IllegalStateException("雪花槽位已全部被占用（" + MAX_SLOTS + " 个）");
+        throw new IllegalStateException("All Snowflake slots are taken (" + MAX_SLOTS + " in total)");
     }
 
     /** @return true = renewed; false = this slot is no longer ours (lease lost) */

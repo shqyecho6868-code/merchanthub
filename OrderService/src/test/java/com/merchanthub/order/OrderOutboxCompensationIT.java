@@ -100,7 +100,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         AtomicInteger calls = new AtomicInteger();
         doAnswer(inv -> {
             if (OrderEventTopics.TOPIC.equals(inv.<Message>getArgument(0).getTopic()) && calls.incrementAndGet() <= failTimes) {
-                throw new MQClientException(-1, "模拟 MQ 不可用");
+                throw new MQClientException(-1, "simulated MQ unavailable");
             }
             return inv.callRealMethod();
         }).when(producer).send(any(Message.class));
@@ -125,7 +125,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         await().atMost(Duration.ofSeconds(5)).until(() -> ((Number) outbox(orderNo).get("status")).intValue() == 1);
         Map<String, Object> row = outbox(orderNo);
         assertThat(row.get("retry_count")).isEqualTo(2);
-        assertThat((String) row.get("last_error")).contains("模拟 MQ 不可用");
+        assertThat((String) row.get("last_error")).contains("simulated MQ unavailable");
         assertThat(row.get("sent_at")).isNotNull();
     }
 

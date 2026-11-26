@@ -30,17 +30,17 @@ class GlobalExceptionHandlerTest {
     private ConstraintViolation<Object> violation;
 
     @Test
-    @DisplayName("业务异常：错误码和提示原样返回给调用方")
+    @DisplayName("Business exception: error code and message are returned to the caller as-is")
     void businessException_keepsCodeAndMessage() {
         BaseResponse<?> resp = handler.businessExceptionHandler(
-                new BusinessException(ErrorCode.PARAMS_ERROR, "SKU 不存在"));
+                new BusinessException(ErrorCode.PARAMS_ERROR, "SKU not found"));
 
         assertThat(resp.getCode()).isEqualTo(ErrorCode.PARAMS_ERROR.getCode());
-        assertThat(resp.getMessage()).isEqualTo("SKU 不存在");
+        assertThat(resp.getMessage()).isEqualTo("SKU not found");
     }
 
     @Test
-    @DisplayName("未知运行时异常：只返回通用提示，不把内部异常信息暴露给前端")
+    @DisplayName("Unknown runtime exception: return only a generic message, never expose internal details to the client")
     void runtimeException_hidesInternalDetail() {
         BaseResponse<?> resp = handler.runtimeExceptionHandler(
                 new IllegalStateException("Connection refused: mysql:3306"));
@@ -50,22 +50,22 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("参数校验异常：取校验器给出的提示（ConstraintViolation 用 Mockito 替身）")
+    @DisplayName("Validation exception: use the validator's message (ConstraintViolation is a Mockito double)")
     void constraintViolation_usesViolationMessage() {
         // ConstraintViolation is an interface whose real instances come from a Validator; in a unit test a mock sets the return value directly
-        when(violation.getMessage()).thenReturn("数量必须大于 0");
+        when(violation.getMessage()).thenReturn("Quantity must be greater than 0");
 
         BaseResponse<?> resp = handler.handleConstraintViolation(
                 new ConstraintViolationException(Set.of(violation)));
 
         assertThat(resp.getCode()).isEqualTo(ErrorCode.PARAMS_ERROR.getCode());
-        assertThat(resp.getMessage()).isEqualTo("数量必须大于 0");
+        assertThat(resp.getMessage()).isEqualTo("Quantity must be greater than 0");
     }
 
     @Test
-    @DisplayName("C2 被限流：HTTP 429 + Retry-After + 错误码 42900，而不是兜底的 500")
+    @DisplayName("C2 rate limited: HTTP 429 + Retry-After + error code 42900, not the catch-all 500")
     void tooManyRequests_429() {
-        var resp = handler.tooManyRequestsHandler(new TooManyRequestsException("商家 7 下单过于频繁"));
+        var resp = handler.tooManyRequestsHandler(new TooManyRequestsException("Merchant 7 is placing orders too frequently"));
 
         assertThat(resp.getStatusCode().value()).isEqualTo(429);
         assertThat(resp.getHeaders().getFirst("Retry-After")).isEqualTo("1");

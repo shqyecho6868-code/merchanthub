@@ -34,27 +34,27 @@ public final class UserStateConstant {
     /**
      * Description for normal state
      */
-    public static final String DESC_NORMAL = "正常";
+    public static final String DESC_NORMAL = "Normal";
 
     /**
      * Description for banned state
      */
-    public static final String DESC_BANNED = "封禁";
+    public static final String DESC_BANNED = "Banned";
 
     /**
      * Description for cancelled state
      */
-    public static final String DESC_CANCELLED = "注销";
+    public static final String DESC_CANCELLED = "Cancelled";
 
     /**
      * Description for a nonexistent user
      */
-    public static final String DESC_NOT_EXIST = "用户不存在";
+    public static final String DESC_NOT_EXIST = "User does not exist";
 
     /**
      * Description for an unknown state
      */
-    public static final String DESC_UNKNOWN = "未知";
+    public static final String DESC_UNKNOWN = "Unknown";
 
     /**
      * Get the state description for a state code

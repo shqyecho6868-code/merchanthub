@@ -81,7 +81,7 @@ public class HandshakeAuthHandler extends ChannelInboundHandlerAdapter {
         String userId = claims.getSubject();
         String stored = redis.opsForValue().get(CommonConstant.ACCESS_TOKEN_PREFIX + userId);
         if (!token.equals(stored)) {
-            log.info("WebSocket 握手拒绝：token 已失效（重新登录 / 登出）userId={}", userId);
+            log.info("WebSocket handshake rejected: token invalidated (re-login / logout) userId={}", userId);
             return null;
         }
         Role role = Role.parse(claims.get(JwtCodec.CLAIM_ROLE, String.class));

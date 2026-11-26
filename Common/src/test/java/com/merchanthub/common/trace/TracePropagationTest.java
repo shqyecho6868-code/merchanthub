@@ -34,7 +34,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("Feign：MDC 里的 traceId 写成 X-Trace-Id；模板里原有的值被覆盖")
+    @DisplayName("Feign: the MDC traceId is written as X-Trace-Id; an existing template value is overwritten")
     void feignCopiesTraceId() {
         RequestTemplate t = new RequestTemplate();
         t.header(TraceContext.HEADER, "stale-trace-0000");
@@ -45,7 +45,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("Feign：线程上没有 traceId 就不带（下游自己生成）")
+    @DisplayName("Feign: no traceId on the thread → header omitted (downstream generates its own)")
     void feignWithoutTrace() {
         RequestTemplate t = new RequestTemplate();
         feign.apply(t);
@@ -53,7 +53,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("MQ 发送：stamp 顺带把当前 traceId 写进消息属性；没有 traceId 就不写；已显式设置的不覆盖")
+    @DisplayName("MQ send: stamp also writes the current traceId into a message property; nothing if there is no traceId; an explicitly set one isn't overwritten")
     void stampCarriesTraceId() {
         Message withTrace = new Message("T", "tag", new byte[0]);
         try (TraceContext.Scope ignored = TraceContext.open(TRACE)) {
@@ -74,7 +74,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("MQ 消费：consumeAs 期间 MDC 是消息的 traceId，消费完消费线程上的 MDC 被清掉（线程复用不串链路）")
+    @DisplayName("MQ consume: during consumeAs the MDC holds the message's traceId; afterwards the consumer thread's MDC is cleared (no trace leak on thread reuse)")
     void consumeRestoresAndClears() throws Exception {
         MessageExt m = new MessageExt();
         m.putUserProperty(TraceContext.MQ_PROPERTY, TRACE);
@@ -84,7 +84,7 @@ class TracePropagationTest {
         try {
             String seenInside = consumerThread.submit(() -> TenantMessages.consumeAs(m, TraceContext::current)).get();
             assertThat(seenInside).isEqualTo(TRACE);
-            assertThat(consumerThread.submit(TraceContext::current).get()).as("消费完线程是干净的").isNull();
+            assertThat(consumerThread.submit(TraceContext::current).get()).as("The thread is clean after consuming").isNull();
 
             // Old messages / external producers without a traceId: a new one is generated for the duration of consumption, so this message's logs still link up
             MessageExt old = new MessageExt();
@@ -98,7 +98,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("MQ 消费：消息缺 tenantId 被拒时 traceId 也被清掉")
+    @DisplayName("MQ consume: traceId is also cleared when a message without tenantId is rejected")
     void consumeRejectedStillClears() {
         Message m = new Message("T", "tag", new byte[0]);
         m.putUserProperty(TraceContext.MQ_PROPERTY, TRACE);
@@ -108,7 +108,7 @@ class TracePropagationTest {
     }
 
     @Test
-    @DisplayName("openTrace：不走 consumeAs 的消费者（realtime）用它恢复 / 还原 traceId")
+    @DisplayName("openTrace: consumers that don't use consumeAs (realtime) restore / reset the traceId with it")
     void openTraceForPlainConsumers() {
         Message m = new Message("T", "tag", new byte[0]);
         m.putUserProperty(TraceContext.MQ_PROPERTY, TRACE);

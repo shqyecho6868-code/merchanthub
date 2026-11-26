@@ -15,12 +15,12 @@ public enum UserSessionStatusEnum {
     /**
      * Status: normal
      */
-    NORMAL(0, "正常"),
+    NORMAL(0, "Normal"),
 
     /**
      * Status: deleted
      */
-    DELETED(1, "已删除");
+    DELETED(1, "Deleted");
 
     private final int code;
     private final String description;

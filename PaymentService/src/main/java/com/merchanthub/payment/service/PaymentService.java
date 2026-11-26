@@ -51,7 +51,7 @@ public class PaymentService {
         OrderBrief order = queryOrder(orderNo);
         // Report "not found" even for someone else's order: don't reveal that the order number is valid (prevents enumeration of other users' orders)
         if (order == null || !Objects.equals(order.getBuyerId(), buyerId)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "订单不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Order not found");
         }
         if (order.getStatus() != OrderBrief.PENDING_PAYMENT) {
             throw new BusinessException(ErrorCode.ORDER_NOT_PAYABLE);
@@ -65,7 +65,7 @@ public class PaymentService {
         p.setChannel("MOCK");
         p.setStatus(PaymentStatus.PENDING.getCode());
         paymentMapper.insert(p);
-        log.info("支付单已创建 payNo={} orderNo={} tenantId={} amount={}", p.getPayNo(), orderNo, p.getTenantId(), p.getAmount());
+        log.info("Payment created payNo={} orderNo={} tenantId={} amount={}", p.getPayNo(), orderNo, p.getTenantId(), p.getAmount());
         return new PaymentVO(p.getPayNo(), orderNo, p.getAmount(), p.getStatus());
     }
 
@@ -93,16 +93,16 @@ public class PaymentService {
     private CallbackOutcome doHandle(Payment p, MockCallbackRequest req) {
         // The amount must match the payment: prevents "pay 1 cent, callback succeeds, and the order gets marked paid for the full amount"
         if (!Objects.equals(p.getAmount(), req.amount())) {
-            log.error("回调金额不符，拒绝 payNo={} orderNo={} 支付单金额={} 回调金额={}", p.getPayNo(), p.getOrderNo(), p.getAmount(), req.amount());
+            log.error("Callback amount mismatch, rejected payNo={} orderNo={} paymentAmount={} callbackAmount={}", p.getPayNo(), p.getOrderNo(), p.getAmount(), req.amount());
             throw new BusinessException(ErrorCode.PAY_AMOUNT_MISMATCH);
         }
         if (p.getStatus() == PaymentStatus.SUCCESS.getCode()) {
             if (req.channelTradeNo().equals(p.getChannelTradeNo())) {
-                log.info("【幂等·第一层 快速路径】重复回调：支付单已是成功，直接返回成功，不再发事件 payNo={} orderNo={} channelTradeNo={}",
+                log.info("[Idempotency L1 fast path] duplicate callback: payment already succeeded, returning success without sending another event payNo={} orderNo={} channelTradeNo={}",
                         p.getPayNo(), p.getOrderNo(), req.channelTradeNo());
             } else {
                 // Two different channel transaction numbers on the same payment: a channel-side anomaly or a forged notification — leave it to reconciliation / manual review
-                log.error("支付单已成功，但回调带了不同的渠道流水号，需对账 payNo={} 已记录={} 本次={}",
+                log.error("Payment already succeeded but the callback carries a different channel transaction number, needs reconciliation payNo={} recorded={} current={}",
                         p.getPayNo(), p.getChannelTradeNo(), req.channelTradeNo());
             }
             return CallbackOutcome.DUPLICATE;
@@ -111,7 +111,7 @@ public class PaymentService {
             // Money arrives after the payment is closed / failed (e.g. recon just closed a stale payment while the buyer paid on the old page): money collected but no goods shipped, pending refund (refunds out of scope).
             // E3: record in the anomaly table + alert, escalate to manual handling
             reconAlarm.raise(p.getTenantId(), ReconAlarm.PAID_AFTER_CLOSED, "payNo:" + p.getPayNo(),
-                    "支付单状态 " + p.getStatus() + " 时收到支付成功回调，待退款 orderNo=" + p.getOrderNo()
+                    "Payment-success callback received while payment status is " + p.getStatus() + ", pending refund orderNo=" + p.getOrderNo()
                             + " amount=" + p.getAmount() + " channelTradeNo=" + req.channelTradeNo());
             return CallbackOutcome.IGNORED;
         }
@@ -127,22 +127,22 @@ public class PaymentService {
             // If the half message can't be sent (MQ unavailable) it throws here: the payment stays pending, the callback returns failure, and the channel retries later — never "money collected but event lost"
             producer.sendMessageInTransaction(codec.toMessage(event, attempt), tx);
         } catch (MQClientException e) {
-            log.warn("支付成功事件发送失败，支付单保持待支付，等渠道重试 payNo={}", p.getPayNo(), e);
+            log.warn("Failed to send payment-success event, payment stays pending until the channel retries payNo={}", p.getPayNo(), e);
             throw new BusinessException(ErrorCode.SYSTEM_BUSY);
         }
         if (tx.failure() instanceof DuplicateKeyException) {
-            log.error("渠道流水号已被其他支付单使用，拒绝 payNo={} channelTradeNo={}", p.getPayNo(), req.channelTradeNo());
+            log.error("Channel transaction number already used by another payment, rejected payNo={} channelTradeNo={}", p.getPayNo(), req.channelTradeNo());
             throw new BusinessException(ErrorCode.CHANNEL_TRADE_NO_CONFLICT);
         }
         if (tx.failure() != null) {
             throw tx.failure();
         }
         if (!tx.won()) {
-            log.info("【幂等·第二层 CAS】并发重复回调：UPDATE ... WHERE status = 0 影响 0 行，半消息已回滚 payNo={} orderNo={} channelTradeNo={}",
+            log.info("[Idempotency L2 CAS] concurrent duplicate callback: UPDATE ... WHERE status = 0 affected 0 rows, half message rolled back payNo={} orderNo={} channelTradeNo={}",
                     p.getPayNo(), p.getOrderNo(), req.channelTradeNo());
             return CallbackOutcome.DUPLICATE;
         }
-        log.info("【支付成功】CAS 待支付→成功，支付成功事件已提交 payNo={} orderNo={} channelTradeNo={} amount={}",
+        log.info("[Payment succeeded] CAS pending→succeeded, payment-success event committed payNo={} orderNo={} channelTradeNo={} amount={}",
                 p.getPayNo(), p.getOrderNo(), req.channelTradeNo(), p.getAmount());
         return CallbackOutcome.PAID;
     }

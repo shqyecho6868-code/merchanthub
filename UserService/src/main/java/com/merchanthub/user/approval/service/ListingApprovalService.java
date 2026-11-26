@@ -43,7 +43,7 @@ public class ListingApprovalService {
         long tenantId = TenantContext.requireTenantId();
         ListingApproval existing = find(tenantId, productId, round);
         if (existing != null) {
-            log.info("上架审批已发起过，直接返回 productId={} round={} pid={}", productId, round, existing.getProcessInstanceId());
+            log.info("Listing approval already started, returning it productId={} round={} pid={}", productId, round, existing.getProcessInstanceId());
             return existing.getProcessInstanceId();
         }
         Map<String, Object> vars = new HashMap<>();
@@ -64,7 +64,7 @@ public class ListingApprovalService {
         row.setProcessInstanceId(pi.getId());
         row.setStatus(ListingApproval.RUNNING);
         approvalMapper.insert(row);
-        log.info("发起上架审批 tenantId={} productId={} round={} pid={}", tenantId, productId, round, pi.getId());
+        log.info("Listing approval started tenantId={} productId={} round={} pid={}", tenantId, productId, round, pi.getId());
         return pi.getId();
     }
 

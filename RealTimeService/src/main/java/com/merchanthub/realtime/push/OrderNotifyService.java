@@ -39,7 +39,7 @@ public class OrderNotifyService {
             jdbc.update("INSERT INTO consumed_event (tenant_id, consumer_group, event_id) VALUES (?, ?, ?)",
                     tenantId, PushTopics.ORDER_CONSUMER_GROUP, eventId);
         } catch (DuplicateKeyException dup) {
-            log.info("重复的订单事件，跳过 tag={} eventId={} orderNo={}", tag, eventId, orderNo);
+            log.info("Duplicate order event, skipping tag={} eventId={} orderNo={}", tag, eventId, orderNo);
             return List.of();
         }
         long now = System.currentTimeMillis();
@@ -59,7 +59,7 @@ public class OrderNotifyService {
                 JsonNode buyer = e.path("buyerId");
                 if (buyer.isMissingNode() || buyer.isNull()) {
                     // Old events sent before E1 have no buyerId: we don't know whom to push to, so skip (order queries are the source of truth for status)
-                    log.info("订单事件没有 buyerId，不推送 tag={} orderNo={}", tag, orderNo);
+                    log.info("Order event has no buyerId, not pushing tag={} orderNo={}", tag, orderNo);
                     return List.of();
                 }
                 data.put("status", PushTopics.TAG_ORDER_PAID.equals(tag) ? 20 : 50);

@@ -39,8 +39,8 @@ public class OrderQueryService {
 
     private static OrderDetailVO toVO(long orderNo, Orders o) {
         if (o == null) {
-            log.info("订单查询未命中（不存在或不属于当前身份）orderNo={}", orderNo);
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "订单不存在");
+            log.info("Order query miss (not found or not owned by current identity) orderNo={}", orderNo);
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Order not found");
         }
         return new OrderDetailVO(String.valueOf(o.getOrderNo()), o.getTenantId(), o.getBuyerId(), o.getStatus(),
                 o.getPayAmount(), o.getCreatedAt());

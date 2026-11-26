@@ -68,7 +68,7 @@ public abstract class UserItSupport extends IntegrationTestBase {
      */
     protected void cleanBusinessTables() {
         runtimeService.createProcessInstanceQuery().list()
-                .forEach(pi -> runtimeService.deleteProcessInstance(pi.getId(), "测试清理"));
+                .forEach(pi -> runtimeService.deleteProcessInstance(pi.getId(), "test cleanup"));
         for (String t : new String[]{"account", "tenant", "merchant_application", "listing_approval", "approval_outbox"}) {
             jdbc.execute("TRUNCATE TABLE " + t);
         }

@@ -55,7 +55,7 @@ public class OnboardingDelegate {
             accountMapper.insert(admin);
         } catch (DuplicateKeyException e) {
             // Checked at submit time, but during review someone else may have registered it / another application got approved first; the unique index is the final arbiter
-            throw new BusinessException(ErrorCode.USERNAME_TAKEN, "登录名 " + app.getAdminUsername() + " 已被占用，请驳回让申请人修改");
+            throw new BusinessException(ErrorCode.USERNAME_TAKEN, "Username " + app.getAdminUsername() + " is already taken; reject so the applicant can change it");
         }
 
         // CAS: 10 in review -> 30 approved. When two admins click "approve" at once, Flowable's optimistic lock stops one first; this is the second line of defense
@@ -63,7 +63,7 @@ public class OnboardingDelegate {
             throw new BusinessException(ErrorCode.APPLICATION_STATE_INVALID);
         }
         execution.setVariable(FlowVars.TENANT_ID, tenant.getId());
-        log.info("入驻通过：创建租户 tenantId={} 商家管理员 userId={} applicationId={}", tenant.getId(), admin.getId(), appId);
+        log.info("Onboarding approved: created tenant tenantId={} merchant admin userId={} applicationId={}", tenant.getId(), admin.getId(), appId);
     }
 
     public void reject(DelegateExecution execution) {
@@ -72,6 +72,6 @@ public class OnboardingDelegate {
         if (applicationMapper.markRejected(appId, reason) != 1) {
             throw new BusinessException(ErrorCode.APPLICATION_STATE_INVALID);
         }
-        log.info("入驻驳回 applicationId={} reason={}", appId, reason);
+        log.info("Onboarding rejected applicationId={} reason={}", appId, reason);
     }
 }

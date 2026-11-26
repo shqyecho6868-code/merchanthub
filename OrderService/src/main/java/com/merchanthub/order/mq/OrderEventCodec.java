@@ -36,7 +36,7 @@ public class OrderEventCodec {
         try {
             return objectMapper.readValue(json, OrderCreatedEvent.class);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("无法解析 OrderCreatedEvent: " + json, e);
+            throw new IllegalArgumentException("Cannot parse OrderCreatedEvent: " + json, e);
         }
     }
 

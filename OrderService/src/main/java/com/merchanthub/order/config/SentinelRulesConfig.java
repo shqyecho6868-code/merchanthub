@@ -45,7 +45,7 @@ public class SentinelRulesConfig {
         ParamFlowRuleManager.loadRules(List.of(perTenantOrderRule(props.getRateLimit())));
         DegradeRuleManager.loadRules(degradeRules(props.getDegrade(),
                 ProductInventoryClient.RES_QUERY_SKUS, ProductInventoryClient.RES_RESERVE));
-        log.info("Sentinel 规则已加载：下单每商家 {} QPS，例外 {}；Feign 熔断 慢调用>{}ms 占比≥{} / 异常占比≥{}",
+        log.info("Sentinel rules loaded: order placement {} QPS per merchant, overrides {}; Feign breaker slow call>{}ms ratio>={} / error ratio>={}",
                 props.getRateLimit().getPerTenantQps(), props.getRateLimit().getTenantOverrides(),
                 props.getDegrade().getSlowRtMs(), props.getDegrade().getSlowRatio(), props.getDegrade().getErrorRatio());
     }

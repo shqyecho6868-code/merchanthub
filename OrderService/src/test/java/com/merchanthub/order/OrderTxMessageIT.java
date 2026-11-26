@@ -65,7 +65,7 @@ class OrderTxMessageIT extends OrderItSupport {
      */
     @Test
     void localTxFailed_noOrder_andMessageNeverVisible() {
-        doThrow(new DataAccessResourceFailureException("模拟数据库故障")).when(persistService).saveNewOrder(any());
+        doThrow(new DataAccessResourceFailureException("simulated DB failure")).when(persistService).saveNewOrder(any());
 
         assertThatThrownBy(() -> orderCreateService.createOrder(BUYER, req(null, 101, 1)))
                 .isInstanceOf(DataAccessResourceFailureException.class);

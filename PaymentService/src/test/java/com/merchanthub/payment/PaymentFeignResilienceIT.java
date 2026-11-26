@@ -59,7 +59,7 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
                 }
             }
             byte[] body = (slow ? "{\"code\":200,\"message\":\"ok\",\"data\":null}"
-                    : "{\"code\":40400,\"message\":\"订单不存在\",\"data\":null}").getBytes(StandardCharsets.UTF_8);
+                    : "{\"code\":40400,\"message\":\"Order not found\",\"data\":null}").getBytes(StandardCharsets.UTF_8);
             ex.getResponseHeaders().add("Content-Type", "application/json");
             try {
                 ex.sendResponseHeaders(200, body.length);
@@ -108,7 +108,7 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
     void consecutiveTimeouts_openCircuit_thenFailFast() throws Exception {
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         Thread.sleep(800);
-        assertThat(HITS.get()).as("超时后不自动重试").isEqualTo(1);
+        assertThat(HITS.get()).as("no automatic retry after a timeout").isEqualTo(1);
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         int hits = HITS.get();
@@ -121,8 +121,8 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
             hits = HITS.get();
             elapsedMs = timedCall();
         }
-        assertThat(elapsedMs).as("熔断后快速失败").isLessThan(100);
-        assertThat(HITS.get()).as("熔断后不再发请求").isEqualTo(hits);
+        assertThat(elapsedMs).as("fails fast once the circuit is open").isLessThan(100);
+        assertThat(HITS.get()).as("no more requests sent once the circuit is open").isEqualTo(hits);
     }
 
     private long timedCall() {
@@ -136,6 +136,6 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
         for (int i = 0; i < 5; i++) {
             assertCode(2, 40400);
         }
-        assertThat(HITS.get()).as("业务失败不触发熔断，每次都真的发了请求").isEqualTo(5);
+        assertThat(HITS.get()).as("business failures don't trip the breaker; every call really sent a request").isEqualTo(5);
     }
 }

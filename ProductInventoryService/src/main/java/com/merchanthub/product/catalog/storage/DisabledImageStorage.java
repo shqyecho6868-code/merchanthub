@@ -12,7 +12,7 @@ import java.time.Duration;
 public class DisabledImageStorage implements ImageStorage {
 
     private static BusinessException disabled() {
-        return new BusinessException(ErrorCode.OPERATION_ERROR, "对象存储未开启（merchanthub.storage.s3.enabled=false）");
+        return new BusinessException(ErrorCode.OPERATION_ERROR, "Object storage is not enabled (merchanthub.storage.s3.enabled=false)");
     }
 
     @Override

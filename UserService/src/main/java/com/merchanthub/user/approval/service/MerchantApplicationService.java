@@ -70,7 +70,7 @@ public class MerchantApplicationService {
                         FlowVars.SHOP_NAME, req.shopName()));
         app.setProcessInstanceId(pi.getId());
         applicationMapper.updateById(app);
-        log.info("入驻申请提交 applicationId={} applicant={} pid={}", app.getId(), applicant, pi.getId());
+        log.info("Onboarding application submitted applicationId={} applicant={} pid={}", app.getId(), applicant, pi.getId());
         return toVO(applicationMapper.selectById(app.getId()));
     }
 
@@ -87,7 +87,7 @@ public class MerchantApplicationService {
         }
         // The shop name may have changed, so sync it to the process variables: the platform admin's task list shows the new name
         complete(task, Map.of(FlowVars.RESUBMIT, true, FlowVars.SHOP_NAME, req.shopName()));
-        log.info("入驻申请重提 applicationId={} applicant={}", id, applicant);
+        log.info("Onboarding application resubmitted applicationId={} applicant={}", id, applicant);
         return toVO(applicationMapper.selectById(id));
     }
 
@@ -100,7 +100,7 @@ public class MerchantApplicationService {
             throw new BusinessException(ErrorCode.APPLICATION_STATE_INVALID);
         }
         complete(task, Map.of(FlowVars.RESUBMIT, false));
-        log.info("入驻申请撤回 applicationId={} applicant={}", id, applicant);
+        log.info("Onboarding application withdrawn applicationId={} applicant={}", id, applicant);
         return toVO(applicationMapper.selectById(id));
     }
 
@@ -109,7 +109,7 @@ public class MerchantApplicationService {
         TenantInfo me = TenantContext.get();
         MerchantApplication app = applicationMapper.selectById(id);
         if (app == null || (me.role() != Role.PLATFORM_ADMIN && !app.getApplicantUserId().equals(me.userId()))) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "申请不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Application not found");
         }
         return toVO(app);
     }
@@ -124,7 +124,7 @@ public class MerchantApplicationService {
     private MerchantApplication mine(long id, long applicant) {
         MerchantApplication app = applicationMapper.selectById(id);
         if (app == null || !app.getApplicantUserId().equals(applicant)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "申请不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Application not found");
         }
         return app;
     }

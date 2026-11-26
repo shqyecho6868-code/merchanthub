@@ -52,7 +52,7 @@ public class PaymentSentinelConfig {
                     .setStatIntervalMs(cfg.getStatIntervalMs()).setTimeWindow(cfg.getOpenSeconds()));
         }
         DegradeRuleManager.loadRules(rules);
-        log.info("Sentinel 熔断规则已加载：payment → order，慢调用>{}ms 占比≥{} / 异常占比≥{}，熔断 {} 秒",
+        log.info("Sentinel circuit-breaker rules loaded: payment → order, slow call >{}ms ratio ≥{} / exception ratio ≥{}, open for {} s",
                 cfg.getSlowRtMs(), cfg.getSlowRatio(), cfg.getErrorRatio(), cfg.getOpenSeconds());
     }
 }

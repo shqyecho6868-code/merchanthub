@@ -44,21 +44,21 @@ public final class JwtCodec {
 
     static byte[] decodeStrict(String secret) {
         if (secret == null || secret.isBlank()) {
-            throw new IllegalArgumentException("未配置 merchanthub.jwt.secret（本地放在 .env 的 JWT_SECRET）");
+            throw new IllegalArgumentException("merchanthub.jwt.secret is not configured (locally it lives in JWT_SECRET in .env)");
         }
         String s = secret.trim();
         if (s.length() % 4 != 0) {
-            throw new IllegalArgumentException("merchanthub.jwt.secret 必须是补齐的标准 Base64（长度是 4 的倍数，末尾用 = 补齐），"
-                    + "当前长度 " + s.length() + "。生成：openssl rand -base64 32");
+            throw new IllegalArgumentException("merchanthub.jwt.secret must be padded standard Base64 (length a multiple of 4, padded with =), "
+                    + "current length " + s.length() + ". Generate one with: openssl rand -base64 32");
         }
         byte[] bytes;
         try {
             bytes = Base64.getDecoder().decode(s);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("merchanthub.jwt.secret 不是合法的标准 Base64", e);
+            throw new IllegalArgumentException("merchanthub.jwt.secret is not valid standard Base64", e);
         }
         if (bytes.length < MIN_KEY_BYTES) {
-            throw new IllegalArgumentException("merchanthub.jwt.secret 解码后只有 " + bytes.length + " 字节，HS256 至少 32 字节");
+            throw new IllegalArgumentException("merchanthub.jwt.secret decodes to only " + bytes.length + " bytes; HS256 needs at least 32 bytes");
         }
         return bytes;
     }
@@ -91,10 +91,10 @@ public final class JwtCodec {
         try {
             return Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token).getBody();
         } catch (ExpiredJwtException e) {
-            log.debug("JWT 已过期：{}", e.getMessage());
+            log.debug("JWT expired: {}", e.getMessage());
             return null;
         } catch (JwtException | IllegalArgumentException e) {
-            log.warn("JWT 签名无效或格式错误：{}", e.getMessage());
+            log.warn("JWT has an invalid signature or is malformed: {}", e.getMessage());
             return null;
         }
     }

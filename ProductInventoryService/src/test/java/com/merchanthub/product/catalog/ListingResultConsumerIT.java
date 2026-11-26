@@ -54,7 +54,7 @@ class ListingResultConsumerIT extends ProductItSupport {
     }
 
     private long inReview(long tenant) {
-        jdbc.update("INSERT INTO product (tenant_id, name, status, audit_round, audit_submitted_at) VALUES (?, '旗舰手机', 1, 1, NOW(3))", tenant);
+        jdbc.update("INSERT INTO product (tenant_id, name, status, audit_round, audit_submitted_at) VALUES (?, 'Flagship Phone', 1, 1, NOW(3))", tenant);
         return jdbc.queryForObject("SELECT LAST_INSERT_ID()", Long.class);
     }
 
@@ -72,7 +72,7 @@ class ListingResultConsumerIT extends ProductItSupport {
     }
 
     @Test
-    @DisplayName("重复投递 3 次：状态只改一次（1 → 2），流水 1 条，来源 MQ")
+    @DisplayName("Delivered 3 times: status changes only once (1 → 2), 1 history row, source MQ")
     void duplicated_appliedOnce() throws Exception {
         long id = inReview(7);
         send(7, id, "APPROVED", 3);
@@ -85,7 +85,7 @@ class ListingResultConsumerIT extends ProductItSupport {
     }
 
     @Test
-    @DisplayName("消息属性里是商家 8：CAS 带 tenant_id = 8，改不了商家 7 的商品")
+    @DisplayName("Message properties say merchant 8: the CAS carries tenant_id = 8 and can't modify merchant 7's product")
     void otherTenantMessage_cannotChange() throws Exception {
         long id = inReview(7);
         long marker = inReview(7);

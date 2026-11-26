@@ -95,7 +95,7 @@ class ListingApprovalIT extends UserItSupport {
     /** product calls the internal endpoint via Feign as "merchant 7's staff 2002" (TenantFeignInterceptor forwards the identity headers) */
     private String start(long tenant, long productId, int round) throws Exception {
         return call(as(post("/internal/approvals/product-listings").contentType(MediaType.APPLICATION_JSON)
-                .content(om.writeValueAsString(Map.of("productId", productId, "round", round, "productName", "旗舰手机"))),
+                .content(om.writeValueAsString(Map.of("productId", productId, "round", round, "productName", "Flagship Phone"))),
                 tenant, 2002, "MERCHANT_STAFF")).at("/data").asText();
     }
 
@@ -121,7 +121,7 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("完整通过：初审 → 复审 → 审批单 APPROVED、outbox 一条 APPROVED 消息并真的投递到 MQ（带 tenantId 属性）；运行时任务清空、历史 2 条")
+    @DisplayName("Full approval: first review -> second review -> record APPROVED, one APPROVED outbox message actually delivered to MQ (with tenantId property); runtime tasks cleared, 2 history tasks")
     void fullApproval_publishesResult() throws Exception {
         String pid = start(M7, 1001, 1);
         assertThat(result(M7, 1001, 1).at("/state").asText()).isEqualTo("RUNNING");
@@ -162,23 +162,23 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("初审驳回：实例直接结束（不进复审），审批单 REJECTED + 原因，outbox 一条 REJECTED")
+    @DisplayName("First review rejected: instance ends immediately (no second review), record REJECTED + reason, one REJECTED outbox message")
     void merchantReject_endsImmediately() throws Exception {
         String pid = start(M7, 1002, 1);
         String t1 = taskOf(m7Admin(get("/approvals/tasks")), pid);
         call(m7Admin(post("/approvals/tasks/" + t1 + "/reject").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"comment\":\"主图不清晰\"}")));
+                .content("{\"comment\":\"Main image unclear\"}")));
 
         assertThat(runtimeTasks(pid)).isZero();
         JsonNode r = result(M7, 1002, 1);
         assertThat(r.at("/state").asText()).isEqualTo("REJECTED");
-        assertThat(r.at("/rejectReason").asText()).isEqualTo("主图不清晰");
+        assertThat(r.at("/rejectReason").asText()).isEqualTo("Main image unclear");
         String payload = jdbc.queryForObject("SELECT payload FROM approval_outbox", String.class);
         assertThat(om.readTree(payload).at("/result").asText()).isEqualTo("REJECTED");
     }
 
     @Test
-    @DisplayName("发起幂等：同一 (商家, 商品, 轮次) 重复发起返回同一个实例；新一轮是新实例")
+    @DisplayName("Idempotent start: repeated starts for the same (merchant, product, round) return the same instance; a new round is a new instance")
     void start_isIdempotentPerRound() throws Exception {
         String pid = start(M7, 1003, 1);
         assertThat(start(M7, 1003, 1)).isEqualTo(pid);
@@ -189,7 +189,7 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("租户隔离：商家 8 管理员看不到、办不了商家 7 的待办（63001）；商家 8 查商家 7 的审批单 = NOT_FOUND")
+    @DisplayName("Tenant isolation: merchant 8 admin can't see or handle merchant 7's tasks (63001); merchant 8 querying merchant 7's record = NOT_FOUND")
     void otherTenantCannotSeeOrHandle() throws Exception {
         String pid = start(M7, 1004, 1);
         String t1 = taskOf(m7Admin(get("/approvals/tasks")), pid);
@@ -207,7 +207,7 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("两个平台管理员同时点通过：只有一个成功，另一个失败（63002 或 63001）；审批单只记一次、只有一条待发消息")
+    @DisplayName("Two platform admins click approve at once: only one succeeds, the other fails (63002 or 63001); the record is written once with only one pending message")
     void concurrentApprove_onlyOneWins() throws Exception {
         String pid = start(M7, 1005, 1);
         call(m7Admin(post("/approvals/tasks/" + taskOf(m7Admin(get("/approvals/tasks")), pid) + "/approve")));
@@ -245,7 +245,7 @@ class ListingApprovalIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("补偿扫描：快路径没发出去的记录（模拟进程在提交后、发送前挂掉）由 scan() 补发")
+    @DisplayName("Compensation scan: a record the fast path never sent (simulating a crash after commit, before send) is resent by scan()")
     void scanRepublishesPending() throws Exception {
         String pid = start(M7, 1006, 1);
         call(m7Admin(post("/approvals/tasks/" + taskOf(m7Admin(get("/approvals/tasks")), pid) + "/approve")));

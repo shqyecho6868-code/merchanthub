@@ -16,6 +16,6 @@ public class UserJobs {
     /** Compensating delivery for the approval-result local outbox table (formerly @Scheduled every 5 seconds) */
     @XxlJob("approvalOutboxRelayJob")
     public void approvalOutboxRelay() {
-        XxlJobHelper.handleSuccess("到期待发送 " + relay.scan() + " 条");
+        XxlJobHelper.handleSuccess("Due for sending: " + relay.scan());
     }
 }

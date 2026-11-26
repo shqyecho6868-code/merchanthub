@@ -34,7 +34,7 @@ public class PaymentEventCodec {
         try {
             return objectMapper.readValue(new String(msg.getBody(), StandardCharsets.UTF_8), PaySuccessEvent.class);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("无法解析 PaySuccessEvent", e);
+            throw new IllegalArgumentException("Cannot parse PaySuccessEvent", e);
         }
     }
 }

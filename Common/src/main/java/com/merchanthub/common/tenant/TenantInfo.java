@@ -11,10 +11,10 @@ public record TenantInfo(Long tenantId, Long userId, Role role) {
 
     public TenantInfo {
         if (role == null) {
-            throw new IllegalArgumentException("role 不能为空");
+            throw new IllegalArgumentException("role must not be null");
         }
         if (role.isMerchant() && tenantId == null) {
-            throw new IllegalArgumentException("商家角色必须带 tenantId: " + role);
+            throw new IllegalArgumentException("Merchant roles must carry a tenantId: " + role);
         }
     }
 

@@ -23,11 +23,11 @@ class TraceIdFilterTest {
 
     @AfterEach
     void noLeak() {
-        assertThat(MDC.get(TraceContext.MDC_KEY)).as("请求结束后 MDC 必须是干净的（Tomcat 线程复用）").isNull();
+        assertThat(MDC.get(TraceContext.MDC_KEY)).as("MDC must be clean after the request (Tomcat reuses threads)").isNull();
     }
 
     @Test
-    @DisplayName("带了合法的 X-Trace-Id（网关写的）→ 原样沿用，写进 MDC 和响应头")
+    @DisplayName("Valid X-Trace-Id (written by the gateway) → reused as-is, written into the MDC and response header")
     void reusesIncomingHeader() throws Exception {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/api/orders/1");
         req.addHeader(TraceContext.HEADER, "abcdef0123456789abcdef0123456789");
@@ -40,7 +40,7 @@ class TraceIdFilterTest {
     }
 
     @Test
-    @DisplayName("没带 / 带了非法值（换行注入、太短）→ 生成新的 32 位十六进制")
+    @DisplayName("Missing / invalid value (newline injection, too short) → generate a new 32-char hex ID")
     void generatesWhenMissingOrInvalid() throws Exception {
         for (String bad : new String[]{null, "short", "abc\nFAKE LOG LINE 0000"}) {
             MockHttpServletRequest req = new MockHttpServletRequest("GET", "/x");
@@ -56,7 +56,7 @@ class TraceIdFilterTest {
     }
 
     @Test
-    @DisplayName("业务抛异常 → MDC 照样被清掉（finally）")
+    @DisplayName("Business code throws → MDC still cleared (finally)")
     void clearsMdcOnException() {
         MockHttpServletRequest req = new MockHttpServletRequest("GET", "/x");
         req.addHeader(TraceContext.HEADER, "trace-0001-boom");
@@ -69,7 +69,7 @@ class TraceIdFilterTest {
     }
 
     @Test
-    @DisplayName("Scope 关闭时还原成外层的 traceId，而不是直接删掉")
+    @DisplayName("Closing a Scope restores the outer traceId instead of just removing it")
     void scopeRestoresPrevious() {
         try (TraceContext.Scope outer = TraceContext.open("outer-trace-1")) {
             try (TraceContext.Scope inner = TraceContext.open("inner-trace-1")) {

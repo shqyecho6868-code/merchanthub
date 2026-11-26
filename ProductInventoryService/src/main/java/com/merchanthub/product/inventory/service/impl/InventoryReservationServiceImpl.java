@@ -40,7 +40,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
 
         // If the same skuId appears twice, the second row insert hits the first row's unique key and is misjudged as a "duplicate request"
         long distinctSkus = items.stream().map(ReserveRequest.Item::getSkuId).distinct().count();
-        ThrowUtils.throwIf(distinctSkus != items.size(), ErrorCode.PARAMS_ERROR, "同一订单内 skuId 不能重复");
+        ThrowUtils.throwIf(distinctSkus != items.size(), ErrorCode.PARAMS_ERROR, "skuId must not repeat within one order");
 
         // All transactions take row locks in ascending skuId order, to avoid circular waits that cause deadlocks
         List<ReserveRequest.Item> sorted = items.stream()
@@ -51,7 +51,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
         List<InventoryReservation> existing = reservationMapper.selectByOrderNo(request.getOrderNo());
         if (!existing.isEmpty()) {
             checkSameAsExisting(request, existing);
-            log.info("重复预占请求，幂等返回成功 orderNo={}", request.getOrderNo());
+            log.info("Duplicate reservation request, returning success idempotently orderNo={}", request.getOrderNo());
             return;
         }
 
@@ -61,7 +61,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
             // Concurrent duplicate request: both passed the fast path; the later insert hit the unique key and its transaction was rolled back entirely (including deducted stock).
             // We're outside the transaction here, so the re-query sees the record the other request committed
             checkSameAsExisting(request, reservationMapper.selectByOrderNo(request.getOrderNo()));
-            log.info("并发重复预占请求，幂等返回成功 orderNo={}", request.getOrderNo());
+            log.info("Concurrent duplicate reservation request, returning success idempotently orderNo={}", request.getOrderNo());
         }
     }
 
@@ -84,7 +84,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
             // otherwise this round's reservation record and the earlier SKUs' deductions would all be committed → partial reservation, with records and stock out of sync.
             // (B1 code review exercise: this was deliberately written as rows < 0, which never holds; see interview-qa)
             if (rows == 0) {
-                throw new BusinessException(ErrorCode.INVENTORY_INSUFFICIENT, "库存不足 skuId=" + item.getSkuId());
+                throw new BusinessException(ErrorCode.INVENTORY_INSUFFICIENT, "Insufficient stock skuId=" + item.getSkuId());
             }
         }
     }
@@ -100,7 +100,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
         Map<Long, Integer> reserved = existing.stream()
                 .collect(Collectors.toMap(InventoryReservation::getSkuId, InventoryReservation::getQuantity));
         if (!sameTenant || !wanted.equals(reserved)) {
-            log.warn("同一订单号的预占内容不一致 orderNo={} wanted={} reserved={}", request.getOrderNo(), wanted, reserved);
+            log.warn("Reservation content mismatch for the same order number orderNo={} wanted={} reserved={}", request.getOrderNo(), wanted, reserved);
             throw new BusinessException(ErrorCode.RESERVATION_CONFLICT);
         }
     }

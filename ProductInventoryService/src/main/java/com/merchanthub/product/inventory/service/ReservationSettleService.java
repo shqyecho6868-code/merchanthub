@@ -30,12 +30,12 @@ public class ReservationSettleService {
 
     /** @return number of records actually confirmed this call (0 = duplicate message or already released, nothing changed) */
     public int confirm(long orderNo, long tenantId) {
-        return settle(orderNo, tenantId, ReservationStatus.CONFIRMED, "确认扣减");
+        return settle(orderNo, tenantId, ReservationStatus.CONFIRMED, "confirm deduction");
     }
 
     /** @return number of records actually released this call (0 = duplicate message or already confirmed, nothing changed) */
     public int release(long orderNo, long tenantId, String reason) {
-        return settle(orderNo, tenantId, ReservationStatus.RELEASED, "释放(" + reason + ")");
+        return settle(orderNo, tenantId, ReservationStatus.RELEASED, "release(" + reason + ")");
     }
 
     private int settle(long orderNo, long tenantId, ReservationStatus target, String action) {
@@ -47,12 +47,12 @@ public class ReservationSettleService {
             for (InventoryReservation r : rows) {
                 if (!Objects.equals(r.getTenantId(), tenantId)) {
                     // The merchant in the event doesn't match the reservation record: retrying won't fix it, so skip and alert — never modify stock across tenants
-                    log.error("预占记录商家不符，跳过 {} orderNo={} 事件tenantId={} 记录tenantId={}",
+                    log.error("Reservation record merchant mismatch, skipping {} orderNo={} eventTenantId={} recordTenantId={}",
                             action, orderNo, tenantId, r.getTenantId());
                     continue;
                 }
                 if (reservationMapper.casStatus(r.getId(), ReservationStatus.RESERVED.getCode(), target.getCode()) != 1) {
-                    log.info("【库存幂等】预占记录已不是 RESERVED（当前 {}），{} 跳过 orderNo={} skuId={} tenantId={}",
+                    log.info("[Inventory idempotency] reservation record is no longer RESERVED (currently {}), {} skipped orderNo={} skuId={} tenantId={}",
                             r.getStatus(), action, orderNo, r.getSkuId(), tenantId);
                     continue;
                 }
@@ -61,7 +61,7 @@ public class ReservationSettleService {
                         : inventoryMapper.release(tenantId, r.getSkuId(), r.getQuantity());
                 if (updated != 1) {
                     // Not enough reserved to subtract: inventory data is already inconsistent. Throw so the whole transaction (including the record CAS above) rolls back; the message is redelivered later and alerted
-                    throw new IllegalStateException("库存 reserved 不足以" + action + " orderNo=" + orderNo
+                    throw new IllegalStateException("Inventory reserved insufficient to " + action + " orderNo=" + orderNo
                             + " skuId=" + r.getSkuId() + " qty=" + r.getQuantity());
                 }
                 changed++;
@@ -70,7 +70,7 @@ public class ReservationSettleService {
         });
         int changed = n == null ? 0 : n;
         if (changed > 0) {
-            log.info("库存{}完成 orderNo={} tenantId={} 记录数={}", action, orderNo, tenantId, changed);
+            log.info("Inventory {} done orderNo={} tenantId={} records={}", action, orderNo, tenantId, changed);
         }
         return changed;
     }

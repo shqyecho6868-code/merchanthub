@@ -95,8 +95,8 @@ abstract class OrderItSupport extends IntegrationTestBase {
             jdbc.execute("TRUNCATE TABLE " + t);
         }
         catalog.clear();
-        catalog.put(101L, sku(101, TENANT, 9900, "{\"颜色\": \"白\", \"尺码\": \"L\"}"));
-        catalog.put(102L, sku(102, TENANT, 1999, "{\"颜色\": \"黑\"}"));
+        catalog.put(101L, sku(101, TENANT, 9900, "{\"color\": \"white\", \"size\": \"L\"}"));
+        catalog.put(102L, sku(102, TENANT, 1999, "{\"color\": \"black\"}"));
         when(client.querySkus(any())).thenAnswer(inv -> {
             List<Long> ids = inv.<SkuQueryRequest>getArgument(0).getSkuIds();
             return ResultUtils.success(ids.stream().filter(catalog::containsKey).map(catalog::get).toList());
@@ -114,7 +114,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
         s.setSkuId(id);
         s.setTenantId(tenant);
         s.setProductId(id * 10);
-        s.setProductName("商品" + id);
+        s.setProductName("Product " + id);
         s.setSpecJson(spec);
         s.setPrice(price);
         s.setSkuStatus(SkuSnapshot.SKU_ON_SALE);

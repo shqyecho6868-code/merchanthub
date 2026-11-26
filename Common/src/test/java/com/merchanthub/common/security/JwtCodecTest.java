@@ -16,7 +16,7 @@ class JwtCodecTest {
     private static final String SECRET = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
 
     @Test
-    @DisplayName("签发后能解析出 userId / role / tenantId")
+    @DisplayName("Issued token parses back to userId / role / tenantId")
     void issueAndParse() {
         JwtCodec codec = new JwtCodec(SECRET);
         Claims c = codec.parse(codec.issue(2001L, 7L, "MERCHANT_ADMIN", Duration.ofMinutes(5)));
@@ -26,14 +26,14 @@ class JwtCodecTest {
     }
 
     @Test
-    @DisplayName("买家 token 不带 tenantId")
+    @DisplayName("Buyer token carries no tenantId")
     void buyerHasNoTenant() {
         JwtCodec codec = new JwtCodec(SECRET);
         assertThat(codec.parse(codec.issue(1L, null, "BUYER", Duration.ofMinutes(5))).get(JwtCodec.CLAIM_TENANT_ID)).isNull();
     }
 
     @Test
-    @DisplayName("别的密钥签的 / 被篡改的 / 过期的 / 空的 → null")
+    @DisplayName("Signed with another key / tampered / expired / empty → null")
     void rejectsBadTokens() {
         JwtCodec codec = new JwtCodec(SECRET);
         JwtCodec other = new JwtCodec(Base64.getEncoder().encodeToString("ffffffffffffffffffffffffffffffff".getBytes()));
@@ -52,18 +52,18 @@ class JwtCodecTest {
     }
 
     @Test
-    @DisplayName("旧的硬编码密钥（62 字符、没补 =）启动即失败 —— P26 的根因")
+    @DisplayName("Old hard-coded secret (62 chars, no = padding) fails at startup -- root cause of P26")
     void rejectsUnpaddedLegacyKey() {
         String legacy = "shanyangcodebackendInfiniteChatshanyangcodebackendInfiniteChat";
-        assertThatThrownBy(() -> new JwtCodec(legacy)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("4 的倍数");
+        assertThatThrownBy(() -> new JwtCodec(legacy)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("multiple of 4");
     }
 
     @Test
-    @DisplayName("未配置 / 非法字符 / 太短 → 启动失败，不用一个弱密钥凑合")
+    @DisplayName("Missing / illegal characters / too short → fail at startup rather than settle for a weak secret")
     void rejectsMissingOrWeakKey() {
-        assertThatThrownBy(() -> new JwtCodec(null)).hasMessageContaining("未配置");
-        assertThatThrownBy(() -> new JwtCodec("  ")).hasMessageContaining("未配置");
+        assertThatThrownBy(() -> new JwtCodec(null)).hasMessageContaining("not configured");
+        assertThatThrownBy(() -> new JwtCodec("  ")).hasMessageContaining("not configured");
         assertThatThrownBy(() -> new JwtCodec("!!!!")).hasMessageContaining("Base64");
-        assertThatThrownBy(() -> new JwtCodec(Base64.getEncoder().encodeToString(new byte[16]))).hasMessageContaining("32 字节");
+        assertThatThrownBy(() -> new JwtCodec(Base64.getEncoder().encodeToString(new byte[16]))).hasMessageContaining("32 bytes");
     }
 }

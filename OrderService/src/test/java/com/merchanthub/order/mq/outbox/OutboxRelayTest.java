@@ -140,8 +140,8 @@ class OutboxRelayTest {
         verify(producer, org.mockito.Mockito.times(2)).send(msg.capture());
         assertThat(msg.getAllValues()).extracting(m -> m.getUserProperty(TraceContext.MQ_PROPERTY))
                 .containsExactly("trace-of-order-a", "trace-of-order-b");
-        assertThat(mdcWhileSending).as("发送时的日志也带着这行的 traceId").containsExactly("trace-of-order-a", "trace-of-order-b");
-        assertThat(MDC.get(TraceContext.MDC_KEY)).as("扫描线程用完是干净的").isNull();
+        assertThat(mdcWhileSending).as("logs during sending also carry the row's traceId").containsExactly("trace-of-order-a", "trace-of-order-b");
+        assertThat(MDC.get(TraceContext.MDC_KEY)).as("the scan thread is clean afterwards").isNull();
     }
 
     @Test

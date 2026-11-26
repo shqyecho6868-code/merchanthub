@@ -37,7 +37,7 @@ public class XxlJobAutoConfiguration {
         }
         executor.setLogPath(props.getLogPath() + "/" + name);
         executor.setLogRetentionDays(props.getLogRetentionDays());
-        log.info("XXL-Job 执行器 appname={} port={} admin={}", name, props.getPort(), props.getAdminAddresses());
+        log.info("XXL-Job executor appname={} port={} admin={}", name, props.getPort(), props.getAdminAddresses());
         return executor;
     }
 }

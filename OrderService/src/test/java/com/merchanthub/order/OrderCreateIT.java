@@ -55,7 +55,7 @@ class OrderCreateIT extends OrderItSupport {
                 "SELECT * FROM order_item WHERE order_no = ? ORDER BY sku_id", orderNo);
         assertThat(items).hasSize(2);
         assertThat(items.get(0).get("unit_price")).isEqualTo(9900L);
-        assertThat(items.get(0).get("sku_spec")).isIn("白 / L", "L / 白"); // MySQL JSON 会重排 key 顺序
+        assertThat(items.get(0).get("sku_spec")).isIn("white / L", "L / white"); // MySQL JSON reorders keys
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM trade_snapshot WHERE order_no = ?", Long.class, orderNo))
                 .isEqualTo(2L);
         assertThat(jdbc.queryForObject(

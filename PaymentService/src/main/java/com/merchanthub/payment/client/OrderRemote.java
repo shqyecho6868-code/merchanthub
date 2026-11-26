@@ -35,7 +35,7 @@ public final class OrderRemote {
         try {
             entry = SphU.entry(resource, EntryType.OUT);
         } catch (BlockException e) {
-            log.warn("【熔断】{} 熔断中，快速失败", resource);
+            log.warn("[Circuit breaker] {} is open, failing fast", resource);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
         BaseResponse<T> resp;
@@ -46,7 +46,7 @@ public final class OrderRemote {
             if (e.status() < 0 || e.status() >= 500) {
                 Tracer.traceEntry(e, entry);
             }
-            log.warn("调用 order 失败: {} status={}", resource, e.status(), e);
+            log.warn("Calling order failed: {} status={}", resource, e.status(), e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         } finally {
             entry.exit();

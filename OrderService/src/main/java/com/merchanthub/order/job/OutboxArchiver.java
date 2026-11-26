@@ -51,7 +51,7 @@ public class OutboxArchiver {
                 total += moved == null ? 0 : moved;
             }
             if (total > 0) {
-                log.info("本地消息表归档完成 {} 条（sent_at < {}）", total, before);
+                log.info("Outbox archiving done, {} records (sent_at < {})", total, before);
             }
             return total;
         });

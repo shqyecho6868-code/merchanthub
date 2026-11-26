@@ -42,7 +42,7 @@ public class ProductImageService {
     public ImageUploadVO createUploadUrl(long productId, String contentType) {
         String ext = ALLOWED_TYPES.get(contentType);
         if (ext == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "只支持 jpeg / png / webp 图片");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Only jpeg / png / webp images are supported");
         }
         Product p = requireProduct(productId);
         String key = keyPrefix(p) + UUID.randomUUID() + "." + ext;
@@ -53,26 +53,26 @@ public class ProductImageService {
     public String confirm(long productId, String objectKey) {
         Product p = requireProduct(productId);
         if (!objectKey.startsWith(keyPrefix(p)) || objectKey.contains("..")) {
-            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "图片不属于该商品");
+            throw new BusinessException(ErrorCode.FORBIDDEN_ERROR, "Image does not belong to this product");
         }
         if (!imageStorage.exists(objectKey)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片还没有上传成功");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "Image has not been uploaded yet");
         }
         String url = imageStorage.publicUrl(objectKey);
         // The update also goes through the tenant plugin which appends tenant_id — belt and braces
         int rows = productMapper.update(null, new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, productId).set(Product::getMainImage, url));
         if (rows != 1) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Product not found");
         }
-        log.info("商品主图更新 productId={} key={}", productId, objectKey);
+        log.info("Product main image updated productId={} key={}", productId, objectKey);
         return url;
     }
 
     private Product requireProduct(long productId) {
         Product p = productMapper.selectById(productId);
         if (p == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Product not found");
         }
         return p;
     }

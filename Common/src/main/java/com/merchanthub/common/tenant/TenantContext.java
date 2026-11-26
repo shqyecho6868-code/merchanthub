@@ -36,7 +36,7 @@ public final class TenantContext {
     public static long requireTenantId() {
         Long id = tenantId();
         if (id == null) {
-            throw new TenantContextMissingException("当前线程没有商家上下文");
+            throw new TenantContextMissingException("No merchant context on the current thread");
         }
         return id;
     }

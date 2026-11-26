@@ -68,9 +68,9 @@ class MerchantOnboardingIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("入驻通过：建租户、开 MERCHANT_ADMIN 账号（能用申请时的密码登录）、申请变 30；实例结束 → 运行时任务清空，历史还在")
+    @DisplayName("Onboarding approved: tenant created, MERCHANT_ADMIN account opened (can log in with the password from the application), application becomes 30; instance ends -> runtime tasks cleared, history kept")
     void approve_createsTenantAndAdmin() throws Exception {
-        JsonNode app = submit(APPLICANT, "九号小铺", "shop9_admin").at("/data");
+        JsonNode app = submit(APPLICANT, "Shop Nine", "shop9_admin").at("/data");
         long appId = app.at("/id").asLong();
         String pid = app.at("/processInstanceId").asText();
         assertThat(app.at("/status").asInt()).isEqualTo(10);
@@ -78,13 +78,13 @@ class MerchantOnboardingIT extends UserItSupport {
 
         String taskId = platformTaskOf(pid);
         assertThat(taskId).isNotNull();
-        assertThat(call(platformAdmin(json(post("/approvals/tasks/" + taskId + "/approve"), Map.of("comment", "资质齐全"))))
+        assertThat(call(platformAdmin(json(post("/approvals/tasks/" + taskId + "/approve"), Map.of("comment", "Qualifications complete"))))
                 .at("/code").asInt()).isEqualTo(200);
 
         JsonNode done = call(platformAdmin(get("/merchant-applications/" + appId))).at("/data");
         assertThat(done.at("/status").asInt()).isEqualTo(30);
         long tenantId = done.at("/tenantId").asLong();
-        assertThat(jdbc.queryForObject("SELECT name FROM tenant WHERE id = ?", String.class, tenantId)).isEqualTo("九号小铺");
+        assertThat(jdbc.queryForObject("SELECT name FROM tenant WHERE id = ?", String.class, tenantId)).isEqualTo("Shop Nine");
 
         JsonNode token = login("shop9_admin").at("/data");
         assertThat(token.at("/role").asText()).isEqualTo("MERCHANT_ADMIN");
@@ -96,9 +96,9 @@ class MerchantOnboardingIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("驳回 → 申请人修改重提 → 通过：始终是同一个流程实例，历史里有 审核、修改、审核 三条任务；建出来的是修改后的店名")
+    @DisplayName("Reject -> applicant revises and resubmits -> approve: always the same process instance, history has three tasks (review, revise, review); the tenant gets the revised shop name")
     void reject_resubmit_approve_sameInstance() throws Exception {
-        JsonNode app = submit(APPLICANT, "九号小铺", "shop9_admin").at("/data");
+        JsonNode app = submit(APPLICANT, "Shop Nine", "shop9_admin").at("/data");
         long appId = app.at("/id").asLong();
         String pid = app.at("/processInstanceId").asText();
 
@@ -106,11 +106,11 @@ class MerchantOnboardingIT extends UserItSupport {
         // Rejecting requires a reason
         assertThat(call(platformAdmin(json(post("/approvals/tasks/" + review1 + "/reject"), Map.of()))).at("/code").asInt())
                 .isEqualTo(40000);
-        call(platformAdmin(json(post("/approvals/tasks/" + review1 + "/reject"), Map.of("comment", "营业执照不清晰"))));
+        call(platformAdmin(json(post("/approvals/tasks/" + review1 + "/reject"), Map.of("comment", "Business license unclear"))));
 
         JsonNode rejected = call(as(get("/merchant-applications/" + appId), null, APPLICANT, "BUYER")).at("/data");
         assertThat(rejected.at("/status").asInt()).isEqualTo(20);
-        assertThat(rejected.at("/rejectReason").asText()).isEqualTo("营业执照不清晰");
+        assertThat(rejected.at("/rejectReason").asText()).isEqualTo("Business license unclear");
         // Now it's the applicant's turn: not in the platform admin's queue, but "revise and resubmit" is in the applicant's own queue
         assertThat(platformTaskOf(pid)).isNull();
         JsonNode mine = call(as(get("/approvals/tasks"), null, APPLICANT, "BUYER")).at("/data");
@@ -118,10 +118,10 @@ class MerchantOnboardingIT extends UserItSupport {
         assertThat(mine.get(0).at("/taskKey").asText()).isEqualTo("applicantRevise");
 
         // Other buyers can't modify this application (treated as nonexistent)
-        assertThat(call(as(json(put("/merchant-applications/" + appId), form("抢走", "thief_admin")), null, 9002, "BUYER"))
+        assertThat(call(as(json(put("/merchant-applications/" + appId), form("Hijacked", "thief_admin")), null, 9002, "BUYER"))
                 .at("/code").asInt()).isEqualTo(40400);
 
-        JsonNode resubmitted = call(as(json(put("/merchant-applications/" + appId), form("九号优选", "shop9_admin")),
+        JsonNode resubmitted = call(as(json(put("/merchant-applications/" + appId), form("Nine Select", "shop9_admin")),
                 null, APPLICANT, "BUYER")).at("/data");
         assertThat(resubmitted.at("/status").asInt()).isEqualTo(10);
         assertThat(resubmitted.at("/submitCount").asInt()).isEqualTo(2);
@@ -134,21 +134,21 @@ class MerchantOnboardingIT extends UserItSupport {
         JsonNode done = call(platformAdmin(get("/merchant-applications/" + appId))).at("/data");
         assertThat(done.at("/status").asInt()).isEqualTo(30);
         assertThat(jdbc.queryForObject("SELECT name FROM tenant WHERE id = ?", String.class, done.at("/tenantId").asLong()))
-                .isEqualTo("九号优选");
+                .isEqualTo("Nine Select");
         assertThat(runtimeTasks(pid)).isZero();
         assertThat(historicTasks(pid)).isEqualTo(3);
     }
 
     @Test
-    @DisplayName("驳回后申请人撤回：申请 40、实例结束，不会永远挂在运行时表里；撤回后可以重新申请")
+    @DisplayName("Applicant withdraws after rejection: application 40, instance ends and doesn't linger in the runtime tables; can apply again after withdrawing")
     void reject_withdraw_endsInstance() throws Exception {
-        JsonNode app = submit(APPLICANT, "九号小铺", "shop9_admin").at("/data");
+        JsonNode app = submit(APPLICANT, "Shop Nine", "shop9_admin").at("/data");
         long appId = app.at("/id").asLong();
         String pid = app.at("/processInstanceId").asText();
-        call(platformAdmin(json(post("/approvals/tasks/" + platformTaskOf(pid) + "/reject"), Map.of("comment", "类目不符"))));
+        call(platformAdmin(json(post("/approvals/tasks/" + platformTaskOf(pid) + "/reject"), Map.of("comment", "Category mismatch"))));
 
         // While one is in progress (in review / rejected), a second can't be opened
-        assertThat(submit(APPLICANT, "第二家", "shop9_b").at("/code").asInt()).isEqualTo(63005);
+        assertThat(submit(APPLICANT, "Second Shop", "shop9_b").at("/code").asInt()).isEqualTo(63005);
 
         assertThat(call(as(post("/merchant-applications/" + appId + "/withdraw"), null, APPLICANT, "BUYER"))
                 .at("/data/status").asInt()).isEqualTo(40);
@@ -157,14 +157,14 @@ class MerchantOnboardingIT extends UserItSupport {
         // A withdrawn application can't be resubmitted
         assertThat(call(as(json(put("/merchant-applications/" + appId), form("x", "shop9_x")), null, APPLICANT, "BUYER"))
                 .at("/code").asInt()).isEqualTo(63003);
-        assertThat(submit(APPLICANT, "第二家", "shop9_b").at("/code").asInt()).isEqualTo(200);
+        assertThat(submit(APPLICANT, "Second Shop", "shop9_b").at("/code").asInt()).isEqualTo(200);
     }
 
     @Test
-    @DisplayName("两张申请抢同一个登录名：先通过的拿到；后一张通过时 63004，整个事务回滚 —— 没建出租户，任务还在待办里")
+    @DisplayName("Two applications race for the same username: the first approved gets it; approving the second gives 63004 and the whole transaction rolls back -- no tenant created, task still pending")
     void usernameTakenAtApproval_rollsBackEverything() throws Exception {
-        String pidA = submit(9001, "A 店", "same_admin").at("/data/processInstanceId").asText();
-        String pidB = submit(9002, "B 店", "same_admin").at("/data/processInstanceId").asText();
+        String pidA = submit(9001, "Shop A", "same_admin").at("/data/processInstanceId").asText();
+        String pidB = submit(9002, "Shop B", "same_admin").at("/data/processInstanceId").asText();
 
         call(platformAdmin(post("/approvals/tasks/" + platformTaskOf(pidA) + "/approve")));
         String taskB = platformTaskOf(pidB);
@@ -177,9 +177,9 @@ class MerchantOnboardingIT extends UserItSupport {
     }
 
     @Test
-    @DisplayName("权限：商家管理员看不到入驻待办、办理返回 63001；买家不能审批（403）；员工没有待办接口（403）")
+    @DisplayName("Permissions: merchant admin can't see onboarding tasks and handling returns 63001; buyers can't approve (403); staff have no task endpoints (403)")
     void onlyPlatformAdminReviewsOnboarding() throws Exception {
-        String pid = submit(APPLICANT, "九号小铺", "shop9_admin").at("/data/processInstanceId").asText();
+        String pid = submit(APPLICANT, "Shop Nine", "shop9_admin").at("/data/processInstanceId").asText();
         String taskId = platformTaskOf(pid);
 
         assertThat(call(as(get("/approvals/tasks"), 7L, 2001, "MERCHANT_ADMIN")).at("/data")).isEmpty();

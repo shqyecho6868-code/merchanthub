@@ -26,7 +26,7 @@ class TenantFeignAndMqTest {
     }
 
     @Test
-    @DisplayName("Feign：当前身份写成请求头；客户端模板里原有的同名头被覆盖")
+    @DisplayName("Feign: current identity written as headers; same-named headers already on the client template are overwritten")
     void feignCopiesContext() {
         RequestTemplate t = new RequestTemplate();
         t.header("X-Tenant-Id", "999");
@@ -37,7 +37,7 @@ class TenantFeignAndMqTest {
     }
 
     @Test
-    @DisplayName("Feign：买家没有 tenantId 就不带这个头；没有上下文什么都不带")
+    @DisplayName("Feign: buyer without tenantId omits that header; no context sends nothing")
     void feignBuyerAndNone() {
         RequestTemplate buyer = new RequestTemplate();
         TenantContext.runAs(new TenantInfo(null, 50001L, Role.BUYER), () -> feign.apply(buyer));
@@ -50,7 +50,7 @@ class TenantFeignAndMqTest {
     }
 
     @Test
-    @DisplayName("MQ：发送时带上 tenantId，消费时恢复成该商家，消费完还原（消费线程复用也不串）")
+    @DisplayName("MQ: tenantId attached on send, restored as that merchant on consume, and reset afterwards (no leak even on a reused consumer thread)")
     void mqStampAndConsume() throws Exception {
         MessageExt m = new MessageExt();
         TenantMessages.stamp(m, 8L);
@@ -59,14 +59,14 @@ class TenantFeignAndMqTest {
         try {
             Long seenInside = consumerThread.submit(() -> TenantMessages.consumeAs(m, TenantContext::tenantId)).get();
             assertThat(seenInside).isEqualTo(8L);
-            assertThat(consumerThread.submit(TenantContext::get).get()).as("消费完线程是干净的").isNull();
+            assertThat(consumerThread.submit(TenantContext::get).get()).as("The thread is clean after consuming").isNull();
         } finally {
             consumerThread.shutdownNow();
         }
     }
 
     @Test
-    @DisplayName("MQ：消息没带 tenantId → 拒绝处理（不知道是哪个商家的，不能跨租户处理）")
+    @DisplayName("MQ: message without tenantId → rejected (unknown merchant, must not process across tenants)")
     void mqWithoutTenantRejected() {
         Message m = new Message("T", "tag", new byte[0]);
         assertThatThrownBy(() -> TenantMessages.consumeAs(m, () -> { }))

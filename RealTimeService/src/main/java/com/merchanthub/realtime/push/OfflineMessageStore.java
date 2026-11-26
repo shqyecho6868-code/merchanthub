@@ -61,7 +61,7 @@ public class OfflineMessageStore {
             });
         }
         if (!rows.isEmpty()) {
-            log.info("【离线补发】{} 上线，补发 {} 条", receiverKey, rows.size());
+            log.info("[offline redelivery] {} online, redelivering {} messages", receiverKey, rows.size());
         }
         return rows.size();
     }

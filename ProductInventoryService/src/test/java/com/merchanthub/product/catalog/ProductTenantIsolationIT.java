@@ -44,8 +44,8 @@ class ProductTenantIsolationIT extends ProductItSupport {
     void seed() {
         jdbc.execute("TRUNCATE TABLE product");
         jdbc.execute("TRUNCATE TABLE sku");
-        p7 = insertProduct(7, "商家7的T恤");
-        p8 = insertProduct(8, "商家8的卫衣");
+        p7 = insertProduct(7, "Merchant 7 T-shirt");
+        p8 = insertProduct(8, "Merchant 8 hoodie");
         s7 = insertSku(7, p7, "S7", 9900);
         s8 = insertSku(8, p8, "S8", 19900);
     }
@@ -76,7 +76,7 @@ class ProductTenantIsolationIT extends ProductItSupport {
     void merchant7_seesOwnProduct_notMerchant8s() throws Exception {
         mvc.perform(as(get("/products/" + p7), 7L, 2001, "MERCHANT_STAFF"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.name").value("商家7的T恤"))
+                .andExpect(jsonPath("$.data.name").value("Merchant 7 T-shirt"))
                 .andExpect(jsonPath("$.data.skus[0].skuId").value(s7));
         // Query with merchant 8's product ID: the SQL gets tenant_id = 7 appended, so nothing is found
         mvc.perform(as(get("/products/" + p8), 7L, 2001, "MERCHANT_STAFF"))

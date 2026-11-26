@@ -15,11 +15,11 @@ class TenantContextTest {
 
     @AfterEach
     void noLeak() {
-        assertThat(TenantContext.get()).as("每个用例结束后线程上都不应残留上下文").isNull();
+        assertThat(TenantContext.get()).as("No context may remain on the thread after each test").isNull();
     }
 
     @Test
-    @DisplayName("open 之后能读到；close 之后彻底清掉，MDC 里的 tenantId 也清掉")
+    @DisplayName("Readable after open; fully cleared after close, including tenantId in the MDC")
     void openAndClose() {
         try (var ignored = TenantContext.open(new TenantInfo(7L, 2001L, Role.MERCHANT_STAFF))) {
             assertThat(TenantContext.tenantId()).isEqualTo(7L);
@@ -31,7 +31,7 @@ class TenantContextTest {
     }
 
     @Test
-    @DisplayName("嵌套：系统任务里按商家 8 处理一条记录，处理完回到系统身份，而不是变成'什么都没有'")
+    @DisplayName("Nested: a system job processes one record as merchant 8, then returns to the system identity rather than 'nothing'")
     void nestedRestoresPrevious() {
         TenantContext.runAsSystem(() -> {
             assertThat(TenantContext.get().role()).isEqualTo(Role.SYSTEM);
@@ -41,7 +41,7 @@ class TenantContextTest {
     }
 
     @Test
-    @DisplayName("业务代码抛异常也会还原（try-with-resources）")
+    @DisplayName("Restored even when business code throws (try-with-resources)")
     void restoredOnException() {
         assertThatThrownBy(() -> TenantContext.runAs(TenantInfo.systemOf(7L), () -> {
             throw new IllegalStateException("boom");
@@ -54,14 +54,14 @@ class TenantContextTest {
      * both on <b>the same thread</b>. If the first task doesn't clean up, the second one thinks it is merchant 7.
      */
     @Test
-    @DisplayName("线程池复用：不清理 → 下一个任务串到上一个商家；清理 → 干净")
+    @DisplayName("Thread pool reuse: no cleanup → next task leaks into the previous merchant; cleanup → clean")
     void threadPoolReuse() throws Exception {
         // Counter-example: the task opens but never closes (simulating forgotten cleanup)
         ExecutorService leaky = Executors.newSingleThreadExecutor();
         try {
             leaky.submit(() -> TenantContext.open(new TenantInfo(7L, 2001L, Role.MERCHANT_ADMIN))).get();
             Long seenByNextTask = leaky.submit(TenantContext::tenantId).get();
-            assertThat(seenByNextTask).as("同一个线程上的下一个任务（本来没身份）读到了商家 7 —— 串租户").isEqualTo(7L);
+            assertThat(seenByNextTask).as("The next task on the same thread (which has no identity) sees merchant 7 -- cross-tenant leak").isEqualTo(7L);
         } finally {
             leaky.shutdownNow();   // destroying the thread drops the leaked ThreadLocal too; in production threads are reused long-term and don't go away on their own
         }
@@ -70,14 +70,14 @@ class TenantContextTest {
         ExecutorService clean = Executors.newSingleThreadExecutor();
         try {
             clean.submit(() -> TenantContext.runAs(new TenantInfo(7L, 2001L, Role.MERCHANT_ADMIN), () -> { })).get();
-            assertThat(clean.submit(TenantContext::tenantId).get()).as("下一个任务看到的是干净的线程").isNull();
+            assertThat(clean.submit(TenantContext::tenantId).get()).as("The next task sees a clean thread").isNull();
         } finally {
             clean.shutdownNow();
         }
     }
 
     @Test
-    @DisplayName("requireTenantId：没有商家上下文就报错，不猜")
+    @DisplayName("requireTenantId: no merchant context → throw, don't guess")
     void requireTenantId() {
         assertThatThrownBy(TenantContext::requireTenantId).isInstanceOf(TenantContextMissingException.class);
         TenantContext.runAs(new TenantInfo(null, 50001L, Role.BUYER), () ->
@@ -85,7 +85,7 @@ class TenantContextTest {
     }
 
     @Test
-    @DisplayName("商家角色必须带 tenantId")
+    @DisplayName("Merchant roles must carry a tenantId")
     void merchantRequiresTenant() {
         assertThatThrownBy(() -> new TenantInfo(null, 1L, Role.MERCHANT_ADMIN)).isInstanceOf(IllegalArgumentException.class);
     }

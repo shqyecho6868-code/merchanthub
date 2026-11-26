@@ -41,7 +41,7 @@ public final class RemoteResults {
             entry = SphU.entry(resource, EntryType.OUT);
         } catch (BlockException e) {
             // Breaker open: don't even send the request, degrade immediately
-            log.warn("【熔断】{} 熔断中，快速失败", resource);
+            log.warn("[circuit breaker] {} is open, failing fast", resource);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
         BaseResponse<T> resp;
@@ -50,14 +50,14 @@ public final class RemoteResults {
         } catch (RetryableException e) {
             // Timeout or connection failure: we don't know whether the other side executed it (see "known gap" in B1 notes section 2)
             Tracer.traceEntry(e, entry);
-            log.warn("远程调用超时或连接失败: {}", resource, e);
+            log.warn("Remote call timed out or failed to connect: {}", resource, e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         } catch (FeignException e) {
             // Only 5xx / no status code counts as a "downstream failure" for breaker stats; 4xx means our own request is wrong, and breaking the downstream won't help
             if (e.status() < 0 || e.status() >= 500) {
                 Tracer.traceEntry(e, entry);
             }
-            log.warn("远程调用异常: {} status={}", resource, e.status(), e);
+            log.warn("Remote call error: {} status={}", resource, e.status(), e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         } finally {
             // On exit Sentinel records this call's latency; the slow-call-ratio breaker relies on it

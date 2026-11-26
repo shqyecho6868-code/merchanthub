@@ -51,7 +51,7 @@ public class OrderReconciler {
                 default -> ReconAlarm.PAY_MISMATCH;
             };
             alarm.raise(a.getTenantId(), type, "payNo:" + a.getPayNo(),
-                    "待退款 orderNo=" + a.getOrderNo() + " amount=" + a.getAmount() + " 记录时订单状态=" + a.getOrderStatus()
+                    "Pending refund orderNo=" + a.getOrderNo() + " amount=" + a.getAmount() + " orderStatusWhenRecorded=" + a.getOrderStatus()
                             + " remark=" + a.getRemark());
             if (anomalyMapper.markRefundPending(a.getId()) == 1) {
                 marked++;

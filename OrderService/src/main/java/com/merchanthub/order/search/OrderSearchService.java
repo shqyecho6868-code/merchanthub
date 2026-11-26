@@ -48,8 +48,8 @@ public class OrderSearchService {
             return resp.hits().hits().stream().map(Hit::source).filter(Objects::nonNull).toList();
         } catch (IOException | co.elastic.clients.elasticsearch._types.ElasticsearchException e) {
             // ES is a query replica; if it's down transactions are unaffected, only search degrades with an error
-            log.warn("订单搜索失败 tenantId={} keyword={}", tenantId, kw, e);
-            throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE, "订单搜索暂不可用");
+            log.warn("Order search failed tenantId={} keyword={}", tenantId, kw, e);
+            throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE, "Order search is temporarily unavailable");
         }
     }
 }

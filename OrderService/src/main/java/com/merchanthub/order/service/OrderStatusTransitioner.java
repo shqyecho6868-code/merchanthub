@@ -40,7 +40,7 @@ public class OrderStatusTransitioner {
         int rows = ordersMapper.casStatus(orderNo, tenantId, from, to, LocalDateTime.now(clock), event.name());
         if (rows != 1) {
             // CAS failed = order unchanged, so no log entry: the log must map one-to-one to transitions that actually happened, otherwise reconciliation sees "log says paid, order is closed"
-            log.warn("订单状态 CAS 失败：订单当前不是 {}，{} 未生效 orderNo={} tenantId={}",
+            log.warn("Order status CAS failed: order is not currently {}, {} not applied orderNo={} tenantId={}",
                     event.getFrom(), event, orderNo, tenantId);
             return false;
         }
@@ -57,7 +57,7 @@ public class OrderStatusTransitioner {
         row.setRemark(remark);
         statusLogMapper.insert(row);
 
-        log.info("订单状态流转 {} → {} event={} orderNo={} tenantId={} remark={}",
+        log.info("Order status transition {} -> {} event={} orderNo={} tenantId={} remark={}",
                 event.getFrom(), event.getTo(), event, orderNo, tenantId, remark);
         return true;
     }

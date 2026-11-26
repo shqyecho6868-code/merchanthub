@@ -42,14 +42,14 @@ public class PayTimeoutConsumerConfig {
                     try {
                         msg = objectMapper.readValue(m.getBody(), PayTimeoutMessage.class);
                     } catch (IOException e) {
-                        log.error("无法解析的超时关单消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        log.error("Unparseable timeout-close message, discarding msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
                         continue;
                     }
                     try {
                         // C1: restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
                         TenantMessages.consumeAs(m, () -> service.handle(msg));
                     } catch (RuntimeException e) {
-                        log.warn("处理超时关单消息失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                        log.warn("Failed to process timeout-close message, will be redelivered eventId={} orderNo={} reconsumeTimes={}",
                                 msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);
                         // E3: alert before retries are exhausted and it goes to the DLQ; the timeout-order scan (orderTimeoutScanJob) also closes it as a fallback
                         DeadLetters.onFailure(alarm.getIfAvailable(), PayTimeoutService.CONSUMER_GROUP, m,

@@ -51,7 +51,7 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
-    @DisplayName("槽位拆成 workerId=低 5 位、dataCenterId=高 5 位，并写进 ID 里")
+    @DisplayName("Slot splits into workerId = low 5 bits, dataCenterId = high 5 bits, both encoded in the ID")
     void slotIsEncodedIntoId() {
         long id = start(37).nextId(); // 37 = 1*32 + 5 → dataCenterId=1, workerId=5
         // Snowflake ID layout: ... | dataCenterId(5) | workerId(5) | sequence(12)
@@ -60,7 +60,7 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
-    @DisplayName("同一实例连续发号不重复")
+    @DisplayName("Consecutive IDs from one instance never repeat")
     void idsAreUnique() {
         start(0);
         Set<Long> ids = new HashSet<>();
@@ -71,16 +71,16 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
-    @DisplayName("续期时发现号被别人拿走 → 立即停止发号")
+    @DisplayName("Renewal finds the slot taken by someone else → stop issuing immediately")
     void leaseLost_stopsIssuing() {
         start(0);
         when(allocator.renew(anyInt(), anyString())).thenReturn(false);
         generator.renewOnce();
-        assertThatThrownBy(generator::nextId).hasMessageContaining("租约已丢失");
+        assertThatThrownBy(generator::nextId).hasMessageContaining("lease lost");
     }
 
     @Test
-    @DisplayName("Redis 暂时不可用：租约到期前照常发号，超过租约时长才停")
+    @DisplayName("Redis temporarily unavailable: keep issuing until the lease runs out, stop only after the full lease duration")
     void redisDown_keepsIssuingUntilDeadline() {
         start(0);
         when(allocator.renew(anyInt(), anyString())).thenThrow(new RuntimeException("redis down"));
@@ -90,11 +90,11 @@ class SnowflakeIdGeneratorTest {
         assertThat(generator.nextId()).isPositive();
 
         advanceSeconds(60); // 90 seconds since claiming = lease duration
-        assertThatThrownBy(generator::nextId).hasMessageContaining("租约已过期");
+        assertThatThrownBy(generator::nextId).hasMessageContaining("lease expired");
     }
 
     @Test
-    @DisplayName("续期成功会把截止时间往后推")
+    @DisplayName("A successful renewal pushes the deadline back")
     void renewSuccess_extendsDeadline() {
         start(0);
         when(allocator.renew(anyInt(), anyString())).thenReturn(true);
@@ -105,7 +105,7 @@ class SnowflakeIdGeneratorTest {
     }
 
     @Test
-    @DisplayName("正常下线时归还槽位")
+    @DisplayName("Release the slot on graceful shutdown")
     void destroy_releasesSlot() {
         start(3);
         generator.destroy();

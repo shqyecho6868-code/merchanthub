@@ -65,7 +65,7 @@ class OrderReconIT extends OrderItSupport {
         Map<String, Object> closed = jdbc.queryForMap(
                 "SELECT payload FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", String.valueOf(expired));
         assertThat((String) closed.get("payload")).contains("\"buyerId\": " + BUYER).contains("PAY_TIMEOUT");
-        assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ? AND remark LIKE '%扫描兜底%'", expired))
+        assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ? AND remark LIKE '%scan fallback%'", expired))
                 .isEqualTo(1);
 
         jobs.timeoutScan();   // another round: the order is no longer pending, nothing happens

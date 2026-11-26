@@ -38,16 +38,16 @@ class TenantRedisIT {
         TenantInfo a = new TenantInfo(7L, 1L, Role.MERCHANT_ADMIN);
         TenantInfo b = new TenantInfo(8L, 2L, Role.MERCHANT_ADMIN);
 
-        TenantContext.runAs(a, () -> redis.ops().opsForValue().set(key, "商家7的数据"));
-        TenantContext.runAs(b, () -> redis.ops().opsForValue().set(key, "商家8的数据"));
+        TenantContext.runAs(a, () -> redis.ops().opsForValue().set(key, "merchant 7 data"));
+        TenantContext.runAs(b, () -> redis.ops().opsForValue().set(key, "merchant 8 data"));
 
-        assertThat(TenantContext.callAs(a, () -> redis.ops().opsForValue().get(key))).isEqualTo("商家7的数据");
-        assertThat(TenantContext.callAs(b, () -> redis.ops().opsForValue().get(key))).isEqualTo("商家8的数据");
+        assertThat(TenantContext.callAs(a, () -> redis.ops().opsForValue().get(key))).isEqualTo("merchant 7 data");
+        assertThat(TenantContext.callAs(b, () -> redis.ops().opsForValue().get(key))).isEqualTo("merchant 8 data");
 
         // The real underlying key carries the prefix
         StringRedisTemplate raw = new StringRedisTemplate(factory);
         raw.afterPropertiesSet();
-        assertThat(raw.opsForValue().get("t:7:" + key)).isEqualTo("商家7的数据");
+        assertThat(raw.opsForValue().get("t:7:" + key)).isEqualTo("merchant 7 data");
         assertThat(raw.opsForValue().get(key)).isNull();
     }
 }

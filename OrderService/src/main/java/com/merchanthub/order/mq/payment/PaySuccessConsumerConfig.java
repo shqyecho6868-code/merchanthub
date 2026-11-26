@@ -45,14 +45,14 @@ public class PaySuccessConsumerConfig {
                     try {
                         event = objectMapper.readValue(m.getBody(), PaySuccessEvent.class);
                     } catch (IOException e) {
-                        log.error("无法解析的支付成功事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        log.error("Unparseable payment-success event, discarding msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
                         continue;
                     }
                     try {
                         // C1: restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
                         TenantMessages.consumeAs(m, () -> service.handle(event));
                     } catch (OrderNotVisibleException e) {
-                        log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                        log.warn("Order not visible yet, will be redelivered eventId={} orderNo={} reconsumeTimes={}",
                                 event.eventId(), event.orderNo(), m.getReconsumeTimes());
                         // Order never appears (16 retries, about 4h46m): alert before it goes to the DLQ and hand it to reconciliation
                         DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
@@ -60,7 +60,7 @@ public class PaySuccessConsumerConfig {
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                     } catch (RuntimeException e) {
                         // DB unavailable etc.: the whole transaction (including the dedup record) has rolled back; let RocketMQ redeliver later
-                        log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                        log.warn("Failed to process payment-success event, will be redelivered eventId={} orderNo={} reconsumeTimes={}",
                                 event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
                         DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
                                 consumer.getMaxReconsumeTimes(), event.tenantId(), e);

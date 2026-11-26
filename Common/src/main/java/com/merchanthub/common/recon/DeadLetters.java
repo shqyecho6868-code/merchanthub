@@ -40,12 +40,12 @@ public final class DeadLetters {
         String bizKey = group + ":" + m.getMsgId();
         String detail = "topic=" + m.getTopic() + " tag=" + m.getTags() + " keys=" + m.getKeys()
                 + " reconsumeTimes=" + m.getReconsumeTimes() + " error=" + (cause == null ? "" : cause.toString());
-        log.error("【死信】消息重试耗尽，将进入 %DLQ%{} group={} msgId={} {}", group, group, m.getMsgId(), detail);
+        log.error("[DEAD LETTER] Message retries exhausted, moving to %DLQ%{} group={} msgId={} {}", group, group, m.getMsgId(), detail);
         if (alarm != null) {
             try {
                 alarm.raise(tenantId == null ? 0L : tenantId, ReconAlarm.DEAD_LETTER, bizKey, detail);
             } catch (RuntimeException e) {
-                log.error("死信告警写库失败，只保留日志 bizKey={}", bizKey, e);
+                log.error("Failed to persist dead-letter alarm, keeping log only bizKey={}", bizKey, e);
             }
         }
         return true;

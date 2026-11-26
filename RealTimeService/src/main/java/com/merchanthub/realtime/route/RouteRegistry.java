@@ -50,7 +50,7 @@ public class RouteRegistry {
     /** Connection established: record "this receiver is on this node", with a TTL */
     public void register(String receiverKey) {
         upsert(receiverKey);
-        log.info("路由注册 {} → {}（TTL {}s）", receiverKey, nodeId, ttlSeconds);
+        log.info("Route registered {} -> {} (TTL {}s)", receiverKey, nodeId, ttlSeconds);
     }
 
     /** Heartbeat renewal: same operation as registration (value refreshed to now, TTL restarted) */
@@ -61,7 +61,7 @@ public class RouteRegistry {
     /** The receiver's last connection on this node closed: delete only our own field */
     public void unregister(String receiverKey) {
         redis.opsForHash().delete(PREFIX + receiverKey, nodeId.value());
-        log.info("路由注销 {} ✕ {}", receiverKey, nodeId);
+        log.info("Route unregistered {} x {}", receiverKey, nodeId);
     }
 
     /** Nodes the receiver is currently connected to; empty = offline */

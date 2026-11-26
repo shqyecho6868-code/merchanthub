@@ -54,7 +54,7 @@ public class SnowflakeIdGenerator implements InitializingBean, DisposableBean {
         this.leaseDeadlineNanos = requestedAt + TimeUnit.SECONDS.toNanos(props.getLeaseSeconds());
         // Split the slot into dataCenterId (high 5 bits) + workerId (low 5 bits)
         this.snowflake = new Snowflake(slot % 32, slot / 32);
-        log.info("雪花槽位领取成功 slot={} workerId={} dataCenterId={} instanceId={}",
+        log.info("Snowflake slot claimed slot={} workerId={} dataCenterId={} instanceId={}",
                 slot, slot % 32, slot / 32, instanceId);
 
         renewer = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -77,20 +77,20 @@ public class SnowflakeIdGenerator implements InitializingBean, DisposableBean {
                 leaseDeadlineNanos = requestedAt + TimeUnit.SECONDS.toNanos(props.getLeaseSeconds());
             } else {
                 leaseLost = true;
-                log.error("雪花槽位租约丢失 slot={} instanceId={}，停止发号，需要重启实例重新领号", slot, instanceId);
+                log.error("Snowflake slot lease lost slot={} instanceId={}; ID issuing stopped, restart the instance to claim a new slot", slot, instanceId);
             }
         } catch (Exception e) {
             // Redis temporarily unavailable: don't give up yet, we're still safe until the local deadline; retry next round
-            log.warn("雪花槽位续期失败 slot={}，下一轮重试", slot, e);
+            log.warn("Snowflake slot renewal failed slot={}, retrying next round", slot, e);
         }
     }
 
     public long nextId() {
         if (leaseLost) {
-            throw new IllegalStateException("雪花槽位租约已丢失，拒绝发号 slot=" + slot);
+            throw new IllegalStateException("Snowflake slot lease lost, refusing to issue IDs slot=" + slot);
         }
         if (nanoClock.getAsLong() - leaseDeadlineNanos >= 0) {
-            throw new IllegalStateException("雪花槽位租约已过期（长时间未续上），拒绝发号 slot=" + slot);
+            throw new IllegalStateException("Snowflake slot lease expired (not renewed for too long), refusing to issue IDs slot=" + slot);
         }
         // On clock rollback hutool throws IllegalStateException and no ID is issued (known limitation, see B1 notes)
         return snowflake.nextId();
@@ -110,7 +110,7 @@ public class SnowflakeIdGenerator implements InitializingBean, DisposableBean {
             try {
                 allocator.release(slot, instanceId);
             } catch (Exception e) {
-                log.warn("雪花槽位归还失败 slot={}，等待租约自然过期", slot, e);
+                log.warn("Snowflake slot release failed slot={}, waiting for the lease to expire", slot, e);
             }
         }
     }

@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  商家入驻审批（D1）。驳回后不结束，在同一个实例里等申请人修改：申请单就在 user-tenant 自己的表里，
-  "提交 → 驳回 → 重提 → 通过"整段历史都挂在一个实例上。申请人也可以撤回（不加撤回出口，被驳回后不理会的实例会永远挂在运行时表里）。
-  通过 / 驳回的业务动作（建租户、开账号、改申请状态）在 ServiceTask 里做，和完成审批任务是同一个数据库事务。
+  Merchant onboarding approval (D1). A rejection doesn't end the process; the same instance waits for the applicant to revise: the application lives in user-tenant's own table,
+  so the whole "submit -> reject -> resubmit -> approve" history hangs off one instance. The applicant can also withdraw (without a withdraw exit, instances ignored after rejection would sit in the runtime tables forever).
+  The business actions on approve / reject (create tenant, open account, update application status) happen in ServiceTasks, in the same DB transaction as completing the approval task.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xmlns:flowable="http://flowable.org/bpmn"
              targetNamespace="http://merchanthub.com/approval">
 
-  <process id="merchantOnboarding" name="商家入驻审批" isExecutable="true">
+  <process id="merchantOnboarding" name="Merchant Onboarding Approval" isExecutable="true">
 
-    <startEvent id="start" name="提交申请"/>
+    <startEvent id="start" name="Submit Application"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="platformReview"/>
 
-    <userTask id="platformReview" name="平台管理员审核入驻" flowable:candidateGroups="PLATFORM_ADMIN"/>
+    <userTask id="platformReview" name="Platform Admin Reviews Onboarding" flowable:candidateGroups="PLATFORM_ADMIN"/>
     <sequenceFlow id="f2" sourceRef="platformReview" targetRef="reviewDecision"/>
 
-    <exclusiveGateway id="reviewDecision" name="审核结果"/>
+    <exclusiveGateway id="reviewDecision" name="Review Result"/>
     <sequenceFlow id="f3" sourceRef="reviewDecision" targetRef="openMerchant">
       <conditionExpression xsi:type="tFormalExpression">${approved}</conditionExpression>
     </sequenceFlow>
@@ -25,24 +25,24 @@
       <conditionExpression xsi:type="tFormalExpression">${!approved}</conditionExpression>
     </sequenceFlow>
 
-    <serviceTask id="openMerchant" name="创建租户并开通商家管理员" flowable:expression="${onboardingDelegate.approve(execution)}"/>
+    <serviceTask id="openMerchant" name="Create Tenant and Open Merchant Admin" flowable:expression="${onboardingDelegate.approve(execution)}"/>
     <sequenceFlow id="f5" sourceRef="openMerchant" targetRef="approvedEnd"/>
-    <endEvent id="approvedEnd" name="已开店"/>
+    <endEvent id="approvedEnd" name="Shop Opened"/>
 
-    <serviceTask id="markRejected" name="标记驳回" flowable:expression="${onboardingDelegate.reject(execution)}"/>
+    <serviceTask id="markRejected" name="Mark Rejected" flowable:expression="${onboardingDelegate.reject(execution)}"/>
     <sequenceFlow id="f6" sourceRef="markRejected" targetRef="applicantRevise"/>
 
     <!-- The assignee is the applicant themself (not a candidate group): other buyers can neither see nor modify this application -->
-    <userTask id="applicantRevise" name="申请人修改后重提" flowable:assignee="${applicantUserId}"/>
+    <userTask id="applicantRevise" name="Applicant Revises and Resubmits" flowable:assignee="${applicantUserId}"/>
     <sequenceFlow id="f7" sourceRef="applicantRevise" targetRef="reviseDecision"/>
 
-    <exclusiveGateway id="reviseDecision" name="重提还是撤回"/>
+    <exclusiveGateway id="reviseDecision" name="Resubmit or Withdraw"/>
     <sequenceFlow id="f8" sourceRef="reviseDecision" targetRef="platformReview">
       <conditionExpression xsi:type="tFormalExpression">${resubmit}</conditionExpression>
     </sequenceFlow>
     <sequenceFlow id="f9" sourceRef="reviseDecision" targetRef="withdrawnEnd">
       <conditionExpression xsi:type="tFormalExpression">${!resubmit}</conditionExpression>
     </sequenceFlow>
-    <endEvent id="withdrawnEnd" name="已撤回"/>
+    <endEvent id="withdrawnEnd" name="Withdrawn"/>
   </process>
 </definitions>

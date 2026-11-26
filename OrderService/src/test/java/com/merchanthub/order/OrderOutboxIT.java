@@ -55,7 +55,7 @@ class OrderOutboxIT extends OrderItSupport {
         Map<String, Object> row = jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", String.valueOf(orderNo));
         assertThat(row.get("tenant_id")).isEqualTo(TENANT);
         assertThat(row.get("topic")).isEqualTo(OrderEventTopics.TOPIC);
-        assertThat(row.get("trace_id")).as("traceId 随 outbox 行落库（发送在另一个线程，MDC 跟不过去）").isEqualTo(traceId);
+        assertThat(row.get("trace_id")).as("traceId is persisted with the outbox row (sending happens on another thread that MDC can't follow)").isEqualTo(traceId);
 
         await().atMost(Duration.ofSeconds(60)).until(() -> !observer.received(orderNo).isEmpty());
         MessageExt m = observer.received(orderNo).get(0);
@@ -69,7 +69,7 @@ class OrderOutboxIT extends OrderItSupport {
     /** Writing the order fails -> the whole local transaction rolls back: neither the order nor the message record exists, so no message can be sent */
     @Test
     void orderWriteFails_noOrder_noOutboxRow() {
-        doThrow(new DataAccessResourceFailureException("模拟数据库故障")).when(persistService).saveNewOrder(any());
+        doThrow(new DataAccessResourceFailureException("simulated DB failure")).when(persistService).saveNewOrder(any());
 
         assertThatThrownBy(() -> orderCreateService.createOrder(BUYER, req(null, 101, 1)))
                 .isInstanceOf(DataAccessResourceFailureException.class);

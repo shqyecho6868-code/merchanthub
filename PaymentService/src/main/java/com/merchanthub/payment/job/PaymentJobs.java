@@ -16,7 +16,7 @@ public class PaymentJobs {
     @XxlJob("paymentReconJob")
     public void recon() {
         PaymentReconciler.Result r = reconciler.reconcile();
-        XxlJobHelper.handleSuccess("一致 " + r.consistent() + "，补发 " + r.resent() + "，告警 " + r.alerted()
-                + "，关闭遗留支付单 " + r.closedPayments());
+        XxlJobHelper.handleSuccess("consistent " + r.consistent() + ", re-sent " + r.resent() + ", alerted " + r.alerted()
+                + ", stale payments closed " + r.closedPayments());
     }
 }

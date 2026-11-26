@@ -27,7 +27,7 @@ class TenantSqlHandlerTest {
     }
 
     @Test
-    @DisplayName("商家 7 查订单：WHERE 后面自动追加 tenant_id = 7")
+    @DisplayName("Merchant 7 queries orders: tenant_id = 7 is appended after WHERE")
     void merchantSelect() {
         String sql = TenantContext.callAs(new TenantInfo(7L, 2001L, Role.MERCHANT_ADMIN),
                 () -> rewrite("SELECT * FROM orders WHERE order_no = ?"));
@@ -35,7 +35,7 @@ class TenantSqlHandlerTest {
     }
 
     @Test
-    @DisplayName("UPDATE / JOIN 也会带上：改不到、连不到别的商家的行")
+    @DisplayName("UPDATE / JOIN get it too: other merchants' rows can't be updated or joined")
     void updateAndJoin() {
         TenantContext.runAs(TenantInfo.systemOf(8L), () -> {
             assertThat(rewrite("UPDATE sku SET price = ? WHERE id = ?"))
@@ -46,7 +46,7 @@ class TenantSqlHandlerTest {
     }
 
     @Test
-    @DisplayName("买家 / 平台管理员 / 系统任务：不拼 tenant_id（买家按 buyer_id 在代码里过滤）")
+    @DisplayName("Buyer / platform admin / system job: no tenant_id (buyers are filtered by buyer_id in code)")
     void bypassRoles() {
         String original = "SELECT * FROM orders WHERE order_no = ?";
         for (TenantInfo info : new TenantInfo[]{new TenantInfo(null, 50001L, Role.BUYER),
@@ -56,14 +56,14 @@ class TenantSqlHandlerTest {
     }
 
     @Test
-    @DisplayName("fail-closed：线程上没有任何上下文就访问业务表 → 直接报错，不裸查全表")
+    @DisplayName("fail-closed: accessing a business table with no context on the thread → throw, never query the whole table")
     void noContextFails() {
         assertThatThrownBy(() -> rewrite("SELECT * FROM orders WHERE order_no = 1"))
                 .isInstanceOf(TenantContextMissingException.class);
     }
 
     @Test
-    @DisplayName("登记为非租户表的不拼")
+    @DisplayName("Tables registered as non-tenant get no condition")
     void ignoredTable() {
         String sql = "SELECT * FROM flyway_schema_history";
         assertThat(rewrite(sql)).isEqualTo(sql);

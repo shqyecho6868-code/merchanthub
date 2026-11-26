@@ -54,7 +54,7 @@ public class OrderPaidService {
         try {
             consumedEventMapper.insert(mark);
         } catch (DuplicateKeyException e) {
-            log.info("【幂等·第三层 消费去重】重复的支付成功事件，跳过 eventId={} payNo={} orderNo={} tenantId={}",
+            log.info("[Idempotency L3: consumer dedup] Duplicate payment-success event, skipping eventId={} payNo={} orderNo={} tenantId={}",
                     event.eventId(), event.payNo(), event.orderNo(), event.tenantId());
             return false;
         }
@@ -63,16 +63,16 @@ public class OrderPaidService {
         if (order == null) {
             // Callback before the order: the order may commit any moment. Throw -> transaction rolls back (dedup record undone too) -> RocketMQ redelivers (10s, 30s, 1m...).
             // If the order never appears: after 16 retries (about 4h46m total) it goes to the DLQ %DLQ%order-pay-success for E3 reconciliation
-            log.warn("【回调早于订单】支付成功事件到达时订单尚不存在，回滚去重记录、稍后重投 payNo={} orderNo={} tenantId={}",
+            log.warn("[Callback before order] Order doesn't exist yet when payment-success event arrived, rolling back dedup record, will be redelivered payNo={} orderNo={} tenantId={}",
                     event.payNo(), event.orderNo(), event.tenantId());
             throw new OrderNotVisibleException(event.orderNo());
         }
         if (!Objects.equals(order.getTenantId(), event.tenantId()) || !Objects.equals(order.getPayAmount(), event.amount())) {
             // Merchant or amount mismatch: retrying won't fix it; record it for reconciliation and ack the message
-            log.error("支付成功事件与订单不匹配，需对账 payNo={} orderNo={} 事件tenantId={} 事件金额={} 订单={}",
+            log.error("Payment-success event doesn't match the order, needs reconciliation payNo={} orderNo={} eventTenantId={} eventAmount={} order={}",
                     event.payNo(), event.orderNo(), event.tenantId(), event.amount(), order);
-            recordAnomaly(event, PayAnomaly.MISMATCH, order.getStatus(), "订单tenantId=" + order.getTenantId()
-                    + " 订单金额=" + order.getPayAmount());
+            recordAnomaly(event, PayAnomaly.MISMATCH, order.getStatus(), "orderTenantId=" + order.getTenantId()
+                    + " orderAmount=" + order.getPayAmount());
             return false;
         }
 
@@ -84,7 +84,7 @@ public class OrderPaidService {
             // Must be a current read: a plain SELECT sees this transaction's starting snapshot (still pending), see OrdersMapper#selectStatusForUpdate
             int status = ordersMapper.selectStatusForUpdate(event.orderNo());
             String type = status == OrderStatus.CLOSED.getCode() ? PayAnomaly.PAID_AFTER_CLOSED : PayAnomaly.DUPLICATE_PAYMENT;
-            log.error("【幂等·第四层 订单 CAS】订单当前状态 {} 不是待支付，支付成功未生效，记支付异常 {} 待对账 payNo={} orderNo={} tenantId={}",
+            log.error("[Idempotency L4: order CAS] Order status {} is not pending payment, payment success not applied, recorded payment anomaly {} for reconciliation payNo={} orderNo={} tenantId={}",
                     status, type, event.payNo(), event.orderNo(), event.tenantId());
             recordAnomaly(event, type, status, "channelTradeNo=" + event.channelTradeNo());
             return false;

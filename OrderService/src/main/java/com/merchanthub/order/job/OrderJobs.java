@@ -26,25 +26,25 @@ public class OrderJobs {
     /** Outbox compensation delivery (formerly @Scheduled every 5s) */
     @XxlJob("orderOutboxRelayJob")
     public void outboxRelay() {
-        XxlJobHelper.handleSuccess("到期待发送 " + outboxRelay.scan() + " 条");
+        XxlJobHelper.handleSuccess("Due for send: " + outboxRelay.scan());
     }
 
     /** Archive sent messages (suggested daily in the early morning) */
     @XxlJob("orderOutboxArchiveJob")
     public void outboxArchive() {
-        XxlJobHelper.handleSuccess("归档 " + outboxArchiver.archive() + " 条");
+        XxlJobHelper.handleSuccess("Archived: " + outboxArchiver.archive());
     }
 
     /** Fallback close of timed-out orders (suggested every minute) */
     @XxlJob("orderTimeoutScanJob")
     public void timeoutScan() {
-        XxlJobHelper.handleSuccess("兜底关单 " + timeoutScanner.scan() + " 单");
+        XxlJobHelper.handleSuccess("Fallback-closed orders: " + timeoutScanner.scan());
     }
 
     /** order-side reconciliation: mark pay_anomaly as pending refund + outbox failure alerts (suggested every 5 minutes) */
     @XxlJob("orderReconJob")
     public void recon() {
         OrderReconciler.Result r = reconciler.reconcile();
-        XxlJobHelper.handleSuccess("支付异常标记待退款 " + r.anomaliesMarked() + " 条，outbox 失败告警 " + r.outboxFailedAlerted() + " 条");
+        XxlJobHelper.handleSuccess("Payment anomalies marked pending refund: " + r.anomaliesMarked() + ", outbox failure alerts: " + r.outboxFailedAlerted());
     }
 }

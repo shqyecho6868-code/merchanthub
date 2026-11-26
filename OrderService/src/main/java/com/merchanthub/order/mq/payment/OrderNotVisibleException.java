@@ -8,6 +8,6 @@ package com.merchanthub.order.mq.payment;
 public class OrderNotVisibleException extends RuntimeException {
 
     public OrderNotVisibleException(long orderNo) {
-        super("订单尚不可见 orderNo=" + orderNo);
+        super("Order not visible yet orderNo=" + orderNo);
     }
 }

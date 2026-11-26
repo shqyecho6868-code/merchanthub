@@ -41,7 +41,7 @@ public class PushFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
             return;
         }
         if (evt instanceof IdleStateEvent) {
-            log.info("读空闲超时，断开 receiverKey={}", ctx.channel().attr(ChannelRegistry.RECEIVER).get());
+            log.info("Read idle timeout, disconnecting receiverKey={}", ctx.channel().attr(ChannelRegistry.RECEIVER).get());
             ctx.close();
             return;
         }
@@ -68,7 +68,7 @@ public class PushFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
                 routes.unregister(lastOnThisNode);
             } catch (RuntimeException e) {
                 // Redis unavailable: no big deal, the route disappears on its own when the TTL expires
-                log.warn("注销路由失败，等 TTL 过期 receiverKey={}", lastOnThisNode, e);
+                log.warn("Failed to unregister route, waiting for TTL expiry receiverKey={}", lastOnThisNode, e);
             }
         }
         super.channelInactive(ctx);
@@ -76,7 +76,7 @@ public class PushFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.warn("连接异常，关闭 receiverKey={}", ctx.channel().attr(ChannelRegistry.RECEIVER).get(), cause);
+        log.warn("Connection error, closing receiverKey={}", ctx.channel().attr(ChannelRegistry.RECEIVER).get(), cause);
         ctx.close();
     }
 }

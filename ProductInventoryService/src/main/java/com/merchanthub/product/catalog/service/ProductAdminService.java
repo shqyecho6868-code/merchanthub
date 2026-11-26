@@ -30,7 +30,7 @@ public class ProductAdminService {
     public ProductDetailVO get(long productId) {
         Product p = productMapper.selectById(productId);
         if (p == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Product not found");
         }
         List<ProductDetailVO.SkuItem> skus = skuMapper.selectList(new LambdaQueryWrapper<Sku>()
                         .eq(Sku::getProductId, productId).orderByAsc(Sku::getId))
@@ -45,8 +45,8 @@ public class ProductAdminService {
     public void updatePrice(long skuId, long price) {
         int rows = skuMapper.update(null, new LambdaUpdateWrapper<Sku>().eq(Sku::getId, skuId).set(Sku::getPrice, price));
         if (rows != 1) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Product not found");
         }
-        log.info("SKU 改价 skuId={} price={}", skuId, price);
+        log.info("SKU price changed skuId={} price={}", skuId, price);
     }
 }

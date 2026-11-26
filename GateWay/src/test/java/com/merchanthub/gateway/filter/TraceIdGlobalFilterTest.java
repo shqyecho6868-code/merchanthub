@@ -29,7 +29,7 @@ class TraceIdGlobalFilterTest {
     }
 
     @Test
-    @DisplayName("带了合法的 X-Trace-Id → 下游和响应头都沿用它")
+    @DisplayName("Valid X-Trace-Id provided -> both downstream and response header reuse it")
     void reusesValidIncoming() {
         MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/1")
                 .header("X-Trace-Id", "upstream-trace-0001").build());
@@ -39,7 +39,7 @@ class TraceIdGlobalFilterTest {
     }
 
     @Test
-    @DisplayName("没带 → 生成 32 位十六进制，下游请求头和响应头一致")
+    @DisplayName("None provided -> generate 32 hex chars; downstream request header and response header match")
     void generatesWhenMissing() {
         MockServerWebExchange ex = run(MockServerHttpRequest.get("/api/orders/1").build());
 
@@ -49,7 +49,7 @@ class TraceIdGlobalFilterTest {
     }
 
     @Test
-    @DisplayName("非法值（超长 / 带特殊字符）→ 覆盖成新生成的，下游只看到一个值")
+    @DisplayName("Invalid value (too long / special chars) -> overwritten with a new one; downstream sees exactly one value")
     void replacesInvalid() {
         run(MockServerHttpRequest.get("/api/orders/1").header("X-Trace-Id", "bad id;drop").build());
 

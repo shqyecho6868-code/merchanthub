@@ -17,22 +17,22 @@ public enum FriendStatusEnum {
      * Friend status: not friends
      * Special value used to cache "no friend record found"
      */
-    NON_FRIEND(-1, "非好友"),
+    NON_FRIEND(-1, "Not friends"),
 
     /**
      * Friend status: normal friendship
      */
-    NORMAL(0, "好友"),
+    NORMAL(0, "Friends"),
 
     /**
      * Friend status: blocked
      */
-    BLOCKED(1, "拉黑"),
+    BLOCKED(1, "Blocked"),
 
     /**
      * Friend status: deleted
      */
-    DELETED(2, "删除");
+    DELETED(2, "Deleted");
 
     private final int code;
     private final String description;

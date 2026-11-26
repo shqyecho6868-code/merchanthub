@@ -54,7 +54,7 @@ public class OrderSettleConsumerConfig {
                     try {
                         event = objectMapper.readValue(m.getBody(), OrderSettledEvent.class);
                     } catch (IOException e) {
-                        log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        log.error("Unparsable order event, discarding msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
                         continue;
                     }
                     try {
@@ -68,7 +68,7 @@ public class OrderSettleConsumerConfig {
                         });
                     } catch (RuntimeException e) {
                         // Database unavailable / reserved insufficient (data inconsistent): the whole transaction is rolled back, let RocketMQ redeliver later
-                        log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",
+                        log.warn("Failed to process order event, will redeliver tag={} eventId={} orderNo={} reconsumeTimes={}",
                                 m.getTags(), event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
                         // E3: alert before retries are exhausted and it goes to the DLQ; reservation recon (reservationReconJob) backstops it based on the order's real status
                         DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),

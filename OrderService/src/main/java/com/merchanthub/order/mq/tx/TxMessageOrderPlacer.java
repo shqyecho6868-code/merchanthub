@@ -59,19 +59,19 @@ public class TxMessageOrderPlacer implements OrderPlacer {
         } catch (MQClientException e) {
             // The half message didn't even go out (MQ unavailable): the local transaction never ran, no order created.
             // This is the cost of the transactional-message approach: no orders while MQ is down (inventory already reserved -> dangling reservation, compensated in B3)
-            log.error("半消息发送失败，下单失败 orderNo={} tenantId={}", order.orderNo(), order.tenantId(), e);
+            log.error("Failed to send half message, order placement failed orderNo={} tenantId={}", order.orderNo(), order.tenantId(), e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
         if (tx.failure() != null) {
             throw tx.failure();   // Local transaction failed: rethrow as-is to keep the real cause
         }
         if (!tx.executed()) {
-            log.error("半消息未写入成功 status={} orderNo={} tenantId={}",
+            log.error("Half message not stored successfully status={} orderNo={} tenantId={}",
                     result.getSendStatus(), order.orderNo(), order.tenantId());
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
         // By now the order is definitely committed. COMMIT is a one-way notification; even if it's lost, the broker check-back fills it in, so no further check needed
-        log.info("订单已落库，事务消息已提交 orderNo={} tenantId={} eventId={} msgId={} state={}",
+        log.info("Order persisted, transactional message committed orderNo={} tenantId={} eventId={} msgId={} state={}",
                 order.orderNo(), order.tenantId(), event.eventId(), result.getMsgId(), result.getLocalTransactionState());
     }
 }

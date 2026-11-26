@@ -33,7 +33,7 @@ public class PushDispatcher {
         store.save(msg);   // store first: if any later step fails (forward failure, target node crash), the message is still there for redelivery on coming online
         Set<String> nodes = routes.nodesOf(msg.receiverKey());
         if (nodes.isEmpty()) {
-            log.info("【离线】接收方不在线，消息留待上线补发 receiverKey={} msgId={}", msg.receiverKey(), msg.msgId());
+            log.info("[offline] Receiver offline, message kept for redelivery on coming online receiverKey={} msgId={}", msg.receiverKey(), msg.msgId());
             return;
         }
         for (String node : nodes) {
@@ -50,13 +50,13 @@ public class PushDispatcher {
             Message m = new Message(PushTopics.PUSH_TOPIC, node, store.toJson(msg).getBytes(StandardCharsets.UTF_8));
             m.setKeys(msg.msgId());
             producer.send(TenantMessages.stamp(m, msg.tenantId()));
-            log.info("【转发】{} → 节点 {} receiverKey={} msgId={}", self, node, msg.receiverKey(), msg.msgId());
+            log.info("[forward] {} -> node {} receiverKey={} msgId={}", self, node, msg.receiverKey(), msg.msgId());
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
             // No retry on forward failure: the message is already "pending" and will be redelivered when the receiver comes online
-            log.warn("转发到节点 {} 失败，留待上线补发 receiverKey={} msgId={}", node, msg.receiverKey(), msg.msgId(), e);
+            log.warn("Failed to forward to node {}, kept for redelivery on coming online receiverKey={} msgId={}", node, msg.receiverKey(), msg.msgId(), e);
         }
     }
 }

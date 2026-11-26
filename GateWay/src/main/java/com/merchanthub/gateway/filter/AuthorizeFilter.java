@@ -70,7 +70,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
 
         // 1. Internal endpoints are not exposed. Checked on "decoded path segments", so encoded bypasses like /api/%69nternal/... are caught too
         if (isInternalPath(request)) {
-            log.warn("拒绝外部访问内部接口 path={}", path);
+            log.warn("Rejected external access to internal endpoint path={}", path);
             return buildErrorResponse(exchange, HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND_ERROR, ErrorCode.NOT_FOUND_ERROR.getMessage());
         }
 
@@ -90,7 +90,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         // defer: jwt.parse is synchronous; if it throws, the exception must become an error inside the Mono so the onErrorResume below can catch it
         return Mono.defer(() -> authenticate(accessToken, refreshToken))
                 .onErrorResume(e -> {
-                    log.error("鉴权时 Redis / JWT 系统异常", e);
+                    log.error("System error from Redis / JWT during authentication", e);
                     return Mono.just(AuthResult.of(AuthOutcome.SYSTEM_ERROR));
                 })
                 .flatMap(result -> switch (result.outcome()) {
@@ -108,7 +108,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                     case BAD_IDENTITY -> buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.TOKEN_INVALID, ErrorCode.TOKEN_INVALID.getMessage());
                     case NEED_REFRESH -> buildErrorResponse(exchange, ErrorCode.TOKEN_EXPIRED);
                     case NOT_LOGIN -> buildErrorResponse(exchange, ErrorCode.NOT_LOGIN_ERROR);
-                    case SYSTEM_ERROR -> buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.SYSTEM_ERROR, "登录状态确认失败");
+                    case SYSTEM_ERROR -> buildErrorResponse(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.SYSTEM_ERROR, "Failed to verify login status");
                 });
     }
 
@@ -135,7 +135,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                     }
                     Identity id = Identity.from(acClaims);
                     if (id == null) {
-                        log.warn("token 身份信息不合法 userId={} role={} tenantId={}", acClaims.getSubject(),
+                        log.warn("Invalid identity in token userId={} role={} tenantId={}", acClaims.getSubject(),
                                 acClaims.get(JwtCodec.CLAIM_ROLE), acClaims.get(JwtCodec.CLAIM_TENANT_ID));
                         return Mono.just(AuthResult.of(AuthOutcome.BAD_IDENTITY));
                     }

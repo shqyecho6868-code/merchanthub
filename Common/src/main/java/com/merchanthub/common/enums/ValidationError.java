@@ -23,42 +23,42 @@ public enum ValidationError {
     /**
      * Message validation failed (generic)
      */
-    VALIDATION_FAILED(91001, "消息校验失败"),
+    VALIDATION_FAILED(91001, "Message validation failed"),
 
     /**
      * The recipient is not your friend
      */
-    NOT_FRIEND(91002, "对方不是您的好友"),
+    NOT_FRIEND(91002, "The recipient is not your friend"),
 
     /**
      * You have been blocked by the recipient
      */
-    BLOCKED_BY_RECEIVER(91003, "您已被对方拉黑"),
+    BLOCKED_BY_RECEIVER(91003, "You have been blocked by the recipient"),
 
     /**
      * The friendship has been deleted
      */
-    FRIEND_DELETED(91004, "好友关系已删除"),
+    FRIEND_DELETED(91004, "The friendship has been deleted"),
 
     /**
      * You are not a member of this group
      */
-    NOT_GROUP_MEMBER(91005, "您不是该群成员"),
+    NOT_GROUP_MEMBER(91005, "You are not a member of this group"),
 
     /**
      * Sender account is disabled
      */
-    SENDER_DISABLED(91006, "发送者账号异常"),
+    SENDER_DISABLED(91006, "Sender account is disabled"),
 
     /**
      * Receiver account is disabled
      */
-    RECEIVER_DISABLED(91007, "接收者账号异常"),
+    RECEIVER_DISABLED(91007, "Receiver account is disabled"),
 
     /**
      * Service temporarily unavailable
      */
-    SERVICE_UNAVAILABLE(91008, "服务暂时不可用，请稍后重试");
+    SERVICE_UNAVAILABLE(91008, "Service temporarily unavailable, please try again later");
 
 
     /**

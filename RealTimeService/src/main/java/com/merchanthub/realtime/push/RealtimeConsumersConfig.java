@@ -51,7 +51,7 @@ public class RealtimeConsumersConfig {
                     try {
                         event = objectMapper.readTree(m.getBody());
                     } catch (IOException e) {
-                        log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        log.error("Unparseable order event, discarding msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
                         continue;
                     }
                     List<PushMessage> toPush;
@@ -59,7 +59,7 @@ public class RealtimeConsumersConfig {
                         toPush = notifyService.record(m.getTags(), event);
                     } catch (RuntimeException e) {
                         // Database unavailable: the dedup record rolls back with the transaction, so a later redelivery can process it again
-                        log.warn("处理订单事件失败，稍后重投 tag={} keys={} reconsumeTimes={}", m.getTags(), m.getKeys(), m.getReconsumeTimes(), e);
+                        log.warn("Failed to process order event, will retry tag={} keys={} reconsumeTimes={}", m.getTags(), m.getKeys(), m.getReconsumeTimes(), e);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                     }
                     for (PushMessage p : toPush) {
@@ -67,7 +67,7 @@ public class RealtimeConsumersConfig {
                             dispatcher.dispatch(p);
                         } catch (RuntimeException e) {
                             // Dedup is already recorded, so a redelivery won't push again: all we can do is log (the notice itself is persisted; the merchant can still see it in the notification center)
-                            log.error("推送分发失败 receiverKey={} msgId={}", p.receiverKey(), p.msgId(), e);
+                            log.error("Push dispatch failed receiverKey={} msgId={}", p.receiverKey(), p.msgId(), e);
                         }
                     }
                 }
@@ -75,7 +75,7 @@ public class RealtimeConsumersConfig {
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
         consumer.start();
-        log.info("订单事件消费者已启动 group={} node={}", PushTopics.ORDER_CONSUMER_GROUP, nodeId);
+        log.info("Order event consumer started group={} node={}", PushTopics.ORDER_CONSUMER_GROUP, nodeId);
         return consumer;
     }
 
@@ -101,16 +101,16 @@ public class RealtimeConsumersConfig {
                     try {
                         local.deliver(objectMapper.readValue(m.getBody(), PushMessage.class));
                     } catch (IOException e) {
-                        log.error("无法解析的转发消息，丢弃 msgId={}", m.getMsgId(), e);
+                        log.error("Unparseable forwarded message, discarding msgId={}", m.getMsgId(), e);
                     } catch (RuntimeException e) {
-                        log.warn("本地投递失败（消息仍是待送达，上线补发）msgId={}", m.getMsgId(), e);
+                        log.warn("Local delivery failed (message is still pending, redelivered on coming online) msgId={}", m.getMsgId(), e);
                     }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
         consumer.start();
-        log.info("节点转发消费者已启动 group={} tag={}", PushTopics.nodeConsumerGroup(nodeId.value()), nodeId);
+        log.info("Node forwarding consumer started group={} tag={}", PushTopics.nodeConsumerGroup(nodeId.value()), nodeId);
         return consumer;
     }
 }

@@ -53,16 +53,16 @@ public class PayTimeoutService {
         try {
             consumedEventMapper.insert(mark);
         } catch (DuplicateKeyException e) {
-            log.info("重复的超时关单消息，跳过 eventId={} orderNo={} tenantId={}", msg.eventId(), msg.orderNo(), msg.tenantId());
+            log.info("Duplicate timeout-close message, skipping eventId={} orderNo={} tenantId={}", msg.eventId(), msg.orderNo(), msg.tenantId());
             return false;
         }
-        return closeIfPending(msg.orderNo(), msg.tenantId(), "支付超时");
+        return closeIfPending(msg.orderNo(), msg.tenantId(), "payment timeout");
     }
 
     /** Called by the timeout-order scan: the order is long past its payment deadline but still pending */
     @Transactional(rollbackFor = Exception.class)
     public boolean closeExpired(long orderNo, long tenantId) {
-        return closeIfPending(orderNo, tenantId, "支付超时（扫描兜底）");
+        return closeIfPending(orderNo, tenantId, "payment timeout (scan fallback)");
     }
 
     /** Called only from the two transactional methods above (self-invocation bypasses the transaction annotation, so it isn't annotated; transitioner is MANDATORY and fails fast without a transaction) */
@@ -70,7 +70,7 @@ public class PayTimeoutService {
         boolean won = transitioner.transit(orderNo, tenantId, OrderEvent.PAY_TIMEOUT, "SYSTEM", 0L, remark);
         if (!won) {
             // Usually: already paid (payment success won the CAS first). Return normally: no close, no event, no inventory change
-            log.info("【超时关单·CAS 输】订单已不是待支付，不关单、不释放库存 orderNo={} tenantId={}", orderNo, tenantId);
+            log.info("[Timeout close: CAS lost] Order no longer pending, not closing or releasing inventory orderNo={} tenantId={}", orderNo, tenantId);
             return false;
         }
         // E1: include the buyer so realtime can push "order closed". If the CAS won, the order definitely exists
@@ -81,7 +81,7 @@ public class PayTimeoutService {
                 OrderEvent.PAY_TIMEOUT.name(), buyerId);
         outboxWriter.append(tenantId, closed.eventId(), String.valueOf(orderNo), OrderEventTopics.TOPIC,
                 OrderEventTopics.TAG_ORDER_CLOSED, codec.toJson(closed), null);
-        log.info("【超时关单·CAS 赢】待支付→已关闭，已写 ORDER_CLOSED 事件（库存将释放）orderNo={} tenantId={} remark={}",
+        log.info("[Timeout close: CAS won] pending -> closed, ORDER_CLOSED event written (inventory will be released) orderNo={} tenantId={} remark={}",
                 orderNo, tenantId, remark);
         return true;
     }

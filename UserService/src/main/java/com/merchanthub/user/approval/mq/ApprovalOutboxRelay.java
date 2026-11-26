@@ -80,7 +80,7 @@ public class ApprovalOutboxRelay {
     private int scanOnce() {
         List<ApprovalOutbox> due = mapper.selectDue(LocalDateTime.now(clock), batchSize);
         if (!due.isEmpty()) {
-            log.info("本地消息表扫描：{} 条到期待发送", due.size());
+            log.info("Outbox scan: {} records due for sending", due.size());
         }
         for (ApprovalOutbox row : due) {
             publish(row);   // each record handled and caught separately: one failure doesn't affect the rest of the batch
@@ -97,7 +97,7 @@ public class ApprovalOutboxRelay {
             SendResult result = producer.send(toMessage(row));
             if (result.getSendStatus() == SendStatus.SEND_OK) {
                 mapper.markSent(row.getId(), LocalDateTime.now(clock));
-                log.info("本地消息表投递成功 outboxId={} eventId={} bizKey={} tenantId={} msgId={}",
+                log.info("Outbox delivery succeeded outboxId={} eventId={} bizKey={} tenantId={} msgId={}",
                         row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), result.getMsgId());
             } else {
                 onFailure(row, "sendStatus=" + result.getSendStatus());
@@ -118,10 +118,10 @@ public class ApprovalOutboxRelay {
                 giveUp ? ApprovalOutbox.FAILED : ApprovalOutbox.PENDING, next, truncate(error));
         if (giveUp) {
             // In production hook an alert here; after manual investigation, set status back to 0 to redeliver
-            log.error("本地消息表投递失败已达上限 {} 次，停止自动重试 outboxId={} eventId={} bizKey={} tenantId={} error={}",
+            log.error("Outbox delivery failed {} times (limit reached), stopping automatic retries outboxId={} eventId={} bizKey={} tenantId={} error={}",
                     newCount, row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), error);
         } else {
-            log.warn("本地消息表投递失败，第 {} 次，{} 后重试 outboxId={} eventId={} bizKey={} tenantId={} updated={} error={}",
+            log.warn("Outbox delivery failed, attempt {}, retry at {} outboxId={} eventId={} bizKey={} tenantId={} updated={} error={}",
                     newCount, next, row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), updated, error);
         }
     }

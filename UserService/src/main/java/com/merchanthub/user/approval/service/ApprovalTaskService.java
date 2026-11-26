@@ -55,7 +55,7 @@ public class ApprovalTaskService {
         TenantInfo me = TenantContext.get();
         Task task = findMine(taskId, me);
         if (!approved && (comment == null || comment.isBlank())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "驳回必须填写原因");
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "A reason is required when rejecting");
         }
         if (FlowVars.TASK_APPLICANT_REVISE.equals(task.getTaskDefinitionKey())) {
             // The applicant's "revise and resubmit" isn't an approval; it goes through the /merchant-applications endpoints (which carry the revised content)
@@ -68,15 +68,15 @@ public class ApprovalTaskService {
         // Let the engine record "who handled it": written to history fields like ACT_HI_COMMENT.USER_ID_; it's a thread-local, so it must be cleared afterwards
         Authentication.setAuthenticatedUserId(String.valueOf(me.userId()));
         try {
-            taskService.addComment(taskId, task.getProcessInstanceId(), (approved ? "通过" : "驳回")
-                    + (comment == null || comment.isBlank() ? "" : "：" + comment));
+            taskService.addComment(taskId, task.getProcessInstanceId(), (approved ? "Approved" : "Rejected")
+                    + (comment == null || comment.isBlank() ? "" : ": " + comment));
             taskService.complete(taskId, vars);
         } catch (FlowableException e) {
             throw FlowableErrors.translate(e);
         } finally {
             Authentication.setAuthenticatedUserId(null);
         }
-        log.info("审批办理 taskId={} task={} approved={} by userId={} role={} tenantId={}",
+        log.info("Approval handled taskId={} task={} approved={} by userId={} role={} tenantId={}",
                 taskId, task.getTaskDefinitionKey(), approved, me.userId(), me.role(), me.tenantId());
     }
 

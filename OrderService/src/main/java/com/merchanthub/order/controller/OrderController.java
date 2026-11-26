@@ -78,7 +78,7 @@ public class OrderController {
         // @RequireRole(BUYER) already guarantees a context; the gateway always injects X-User-Id for user tokens
         Long userId = TenantContext.get().userId();
         if (userId == null) {
-            throw new UnauthorizedException("缺少用户身份");
+            throw new UnauthorizedException("Missing user identity");
         }
         return userId;
     }

@@ -35,7 +35,7 @@ public class ListingStateService {
         Product p = productMapper.selectById(productId);
         if (p == null) {
             // The tenant plugin appended tenant_id: another merchant's product simply "doesn't exist" here
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
+            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Product not found");
         }
         if (!ProductStatus.submittable(p.getStatus())) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_SUBMITTABLE);
@@ -46,7 +46,7 @@ public class ListingStateService {
         }
         Product after = productMapper.selectById(productId);
         writeLog(after, p.getStatus(), ProductStatus.IN_REVIEW, "SUBMIT_LISTING", SOURCE_API, null);
-        log.info("商品提交上架审核 productId={} round={} tenantId={}", productId, after.getAuditRound(), after.getTenantId());
+        log.info("Product submitted for listing review productId={} round={} tenantId={}", productId, after.getAuditRound(), after.getTenantId());
         return after;
     }
 
@@ -63,13 +63,13 @@ public class ListingStateService {
                                String source) {
         int to = approved ? ProductStatus.LISTED : ProductStatus.REJECTED;
         if (productMapper.applyAuditResult(productId, round, to, approved ? null : reason, processInstanceId) != 1) {
-            log.info("审批结果未生效（重复 / 过期 / 非审核中）productId={} round={} approved={} source={}",
+            log.info("Approval result not applied (duplicate / stale / not under review) productId={} round={} approved={} source={}",
                     productId, round, approved, source);
             return false;
         }
         Product p = productMapper.selectById(productId);
         writeLog(p, ProductStatus.IN_REVIEW, to, approved ? "LISTING_APPROVED" : "LISTING_REJECTED", source, reason);
-        log.info("审批结果已回写 productId={} round={} status={} source={} pid={}", productId, round, to, source, processInstanceId);
+        log.info("Approval result written back productId={} round={} status={} source={} pid={}", productId, round, to, source, processInstanceId);
         return true;
     }
 
