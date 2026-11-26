@@ -14,6 +14,17 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http" {
   ip_protocol       = "tcp"
 }
 
+# G-下：云内压测（k6 跑在中间件 EC2 上，perf/cloud/run-in-vpc.sh）经 NAT 出公网再访问 ALB，
+# ALB 看到的来源是 NAT 的 EIP。只放行 80，不放 9101
+resource "aws_vpc_security_group_ingress_rule" "alb_http_from_nat" {
+  security_group_id = aws_security_group.alb.id
+  cidr_ipv4         = "${aws_eip.nat.public_ip}/32"
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+  description       = "k6 load test from middleware EC2 via NAT"
+}
+
 resource "aws_vpc_security_group_ingress_rule" "alb_ws" {
   for_each          = toset(var.allowed_cidrs)
   security_group_id = aws_security_group.alb.id

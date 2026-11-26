@@ -94,6 +94,8 @@ resource "aws_iam_role_policy" "middleware" {
         Resource = "${aws_cloudwatch_log_group.middleware.arn}:*"
       },
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/*" },
+      # G-下：云内压测把 k6 结果传回 S3，本机再下载（perf/cloud/run-in-vpc.sh）
+      { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/results/*" },
       { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = aws_ssm_parameter.mysql_password.arn }
     ]
   })
