@@ -57,3 +57,4 @@ perf/results/*
 *.tfplan
 terraform.tfvars
 crash.log
+.claude/worktrees/
