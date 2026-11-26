@@ -25,6 +25,9 @@ locals {
     ROCKETMQ_NAMESRV       = "${local.mw_ip}:9876"
     ES_URIS                = "http://${local.mw_ip}:9200"
     S3_BUCKET              = aws_s3_bucket.assets.bucket
+    # G-下：压测商家 901 的下单限流提额（默认每商家 20 QPS，C2），否则压到的是限流器而不是下单链路。
+    # 与 F1 本地压测的 tenant-overrides[901]=100000 一致；只有 order 读这个配置，其他服务忽略
+    MERCHANTHUB_ORDER_SENTINEL_RATELIMIT_TENANTOVERRIDES_901 = "100000"
   }
 }
 
