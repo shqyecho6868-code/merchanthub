@@ -2,6 +2,7 @@ package com.merchanthub.order.mq.outbox;
 
 import com.merchanthub.common.tenant.TenantContext;
 import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import com.merchanthub.order.mq.OrderEventTopics;
@@ -99,6 +100,14 @@ public class OutboxRelay {
     }
 
     public void publish(OrderOutbox row) {
+        // 每条记录单独打开它自己的 traceId（写入时那个请求的），处理完还原：
+        // 投递日志能和下单请求串起来，stamp 也会把它写进消息属性；扫描一批时一条一换，不会串到下一条（老数据没有 trace_id 就新生成）
+        try (TraceContext.Scope ignored = TraceContext.open(row.getTraceId())) {
+            doPublish(row);
+        }
+    }
+
+    private void doPublish(OrderOutbox row) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (mapper.claim(row.getId(), now, now.plusSeconds(leaseSeconds)) != 1) {
             return;   // 被别的实例 / 线程抢走了，或者已经不是待发送状态
@@ -152,7 +161,8 @@ public class OutboxRelay {
             // 补发时投递时间已经过去也照样设：Broker 会立即投递，超时关单马上执行，结果仍然正确
             msg.setDeliverTimeMs(row.getDeliverAt().toInstant(ZoneOffset.UTC).toEpochMilli());
         }
-        // C1：用 outbox 行自己的 tenant_id，不用线程上下文（这里是 SYSTEM，不代表任何商家）
+        // C1：用 outbox 行自己的 tenant_id，不用线程上下文（这里是 SYSTEM，不代表任何商家）；
+        // traceId 由 stamp 从 MDC 取，publish 已按行的 trace_id 打开
         return TenantMessages.stamp(msg, row.getTenantId());
     }
 

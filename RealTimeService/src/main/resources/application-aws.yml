@@ -40,7 +40,7 @@ management:
       probes:
         enabled: true
 
-# CloudWatch 里按租户搜日志：TenantContext 放进 MDC 的 tenantId 打在每行日志级别后面
+# CloudWatch 里按链路 / 租户搜日志：TraceIdFilter 放进 MDC 的 traceId、TenantContext 放进 MDC 的 tenantId 打在每行日志级别后面
 logging:
   pattern:
-    level: "%5p [tenant:%X{tenantId:-}]"
+    level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

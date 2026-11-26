@@ -1,5 +1,6 @@
 package com.merchanthub.order.mq.outbox;
 
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,9 @@ public class OutboxWriter {
         row.setTag(tag);
         row.setPayload(payload);
         row.setDeliverAt(deliverAt);
+        // 真正发送的是另一个线程（提交后的线程池 / XXL-Job 扫描），那时 MDC 里已经没有这个请求的 traceId，
+        // 所以和 tenant_id 一样落进行里，由行自己决定消息属于哪条链路
+        row.setTraceId(TraceContext.current());
         row.setStatus(OrderOutbox.PENDING);
         row.setRetryCount(0);
         // 定时消息也是"现在就发给 Broker"，由 Broker 到点再投递；next_retry_at 只管我们什么时候把它交给 Broker

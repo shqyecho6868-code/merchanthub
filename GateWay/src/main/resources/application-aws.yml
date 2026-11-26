@@ -34,7 +34,7 @@ management:
       probes:
         enabled: true
 
-# CloudWatch 里按租户搜日志：TenantContext 放进 MDC 的 tenantId 打在每行日志级别后面
+# 和各服务同一日志格式（方便 CloudWatch 统一查询）；网关是 WebFlux，不往 MDC 放 traceId，这两列为空，traceId 见响应头 X-Trace-Id
 logging:
   pattern:
-    level: "%5p [tenant:%X{tenantId:-}]"
+    level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

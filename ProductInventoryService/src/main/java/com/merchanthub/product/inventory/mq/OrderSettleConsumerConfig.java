@@ -2,6 +2,7 @@ package com.merchanthub.product.inventory.mq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.product.inventory.service.ReservationSettleService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -47,30 +48,33 @@ public class OrderSettleConsumerConfig {
         consumer.subscribe(OrderSettledEvent.TOPIC, OrderSettledEvent.TAG_ORDER_PAID + " || " + OrderSettledEvent.TAG_ORDER_CLOSED);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                OrderSettledEvent event;
-                try {
-                    event = objectMapper.readValue(m.getBody(), OrderSettledEvent.class);
-                } catch (IOException e) {
-                    log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
-                    continue;
-                }
-                try {
-                    // C1：按消息里的商家恢复租户上下文，预占记录、库存的 SQL 都会自动带上 tenant_id
-                    TenantMessages.consumeAs(m, () -> {
-                        if (OrderSettledEvent.TAG_ORDER_PAID.equals(m.getTags())) {
-                            settleService.confirm(event.orderNo(), event.tenantId());
-                        } else {
-                            settleService.release(event.orderNo(), event.tenantId(), event.event());
-                        }
-                    });
-                } catch (RuntimeException e) {
-                    // 数据库不可用 / reserved 不足（数据不一致）：事务已整体回滚，让 RocketMQ 稍后重投
-                    log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",
-                            m.getTags(), event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
-                    // E3：重试耗尽进死信前告警；预占对账（reservationReconJob）会按订单真实状态兜底了结
-                    DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
-                            event.tenantId(), e);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    OrderSettledEvent event;
+                    try {
+                        event = objectMapper.readValue(m.getBody(), OrderSettledEvent.class);
+                    } catch (IOException e) {
+                        log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        continue;
+                    }
+                    try {
+                        // C1：按消息里的商家恢复租户上下文，预占记录、库存的 SQL 都会自动带上 tenant_id
+                        TenantMessages.consumeAs(m, () -> {
+                            if (OrderSettledEvent.TAG_ORDER_PAID.equals(m.getTags())) {
+                                settleService.confirm(event.orderNo(), event.tenantId());
+                            } else {
+                                settleService.release(event.orderNo(), event.tenantId(), event.event());
+                            }
+                        });
+                    } catch (RuntimeException e) {
+                        // 数据库不可用 / reserved 不足（数据不一致）：事务已整体回滚，让 RocketMQ 稍后重投
+                        log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",
+                                m.getTags(), event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
+                        // E3：重试耗尽进死信前告警；预占对账（reservationReconJob）会按订单真实状态兜底了结
+                        DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
+                                event.tenantId(), e);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;

@@ -2,6 +2,7 @@ package com.merchanthub.order.mq.payment;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -38,30 +39,33 @@ public class PaySuccessConsumerConfig {
         consumer.subscribe(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                PaySuccessEvent event;
-                try {
-                    event = objectMapper.readValue(m.getBody(), PaySuccessEvent.class);
-                } catch (IOException e) {
-                    log.error("无法解析的支付成功事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
-                    continue;
-                }
-                try {
-                    // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
-                    TenantMessages.consumeAs(m, () -> service.handle(event));
-                } catch (OrderNotVisibleException e) {
-                    log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
-                            event.eventId(), event.orderNo(), m.getReconsumeTimes());
-                    // 订单始终不出现（重试 16 次约 4 小时 46 分）：进死信前告警，交给对账
-                    DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
-                            consumer.getMaxReconsumeTimes(), event.tenantId(), e);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
-                } catch (RuntimeException e) {
-                    // 数据库不可用等：整个事务（含去重记录）已回滚，让 RocketMQ 稍后重投
-                    log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
-                            event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
-                    DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
-                            consumer.getMaxReconsumeTimes(), event.tenantId(), e);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    PaySuccessEvent event;
+                    try {
+                        event = objectMapper.readValue(m.getBody(), PaySuccessEvent.class);
+                    } catch (IOException e) {
+                        log.error("无法解析的支付成功事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        continue;
+                    }
+                    try {
+                        // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                        TenantMessages.consumeAs(m, () -> service.handle(event));
+                    } catch (OrderNotVisibleException e) {
+                        log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                                event.eventId(), event.orderNo(), m.getReconsumeTimes());
+                        // 订单始终不出现（重试 16 次约 4 小时 46 分）：进死信前告警，交给对账
+                        DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
+                                consumer.getMaxReconsumeTimes(), event.tenantId(), e);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    } catch (RuntimeException e) {
+                        // 数据库不可用等：整个事务（含去重记录）已回滚，让 RocketMQ 稍后重投
+                        log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                                event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
+                        DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
+                                consumer.getMaxReconsumeTimes(), event.tenantId(), e);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;

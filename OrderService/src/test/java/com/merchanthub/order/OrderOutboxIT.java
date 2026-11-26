@@ -1,5 +1,6 @@
 package com.merchanthub.order;
 
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.order.client.dto.ReserveRequest;
 import com.merchanthub.order.mq.OrderEventTopics;
 import com.merchanthub.order.service.OrderPersistService;
@@ -44,15 +45,23 @@ class OrderOutboxIT extends OrderItSupport {
 
     @Test
     void orderAndOutboxRowCommittedTogether_thenDelivered() {
-        long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
+        // 模拟 TraceIdFilter 已经把网关传来的 traceId 放进了下单请求线程的 MDC
+        String traceId = "it-outbox-trace-0001";
+        long orderNo;
+        try (TraceContext.Scope ignored = TraceContext.open(traceId)) {
+            orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
+        }
 
         Map<String, Object> row = jdbc.queryForMap("SELECT * FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", String.valueOf(orderNo));
         assertThat(row.get("tenant_id")).isEqualTo(TENANT);
         assertThat(row.get("topic")).isEqualTo(OrderEventTopics.TOPIC);
+        assertThat(row.get("trace_id")).as("traceId 随 outbox 行落库（发送在另一个线程，MDC 跟不过去）").isEqualTo(traceId);
 
         await().atMost(Duration.ofSeconds(60)).until(() -> !observer.received(orderNo).isEmpty());
         MessageExt m = observer.received(orderNo).get(0);
         assertThat(m.getUserProperty(OrderEventTopics.PROP_EVENT_ID)).isEqualTo(String.valueOf(row.get("event_id")));
+        // 链路追踪：下单请求的 traceId 经 outbox 行 → 线程池投递 → 消息属性，消费者（consumeAs）据此恢复到 MDC
+        assertThat(m.getUserProperty(TraceContext.MQ_PROPERTY)).isEqualTo(traceId);
         await().atMost(Duration.ofSeconds(10)).until(() -> jdbc.queryForObject(
                 "SELECT status FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", Integer.class, String.valueOf(orderNo)) == 1);
     }
