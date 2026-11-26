@@ -112,11 +112,23 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
         int hits = HITS.get();
+        long elapsedMs = timedCall();
 
+        // 同 order 的 FeignResilienceIT（P47）：Sentinel 熔断统计按整 10 秒对齐，3 次调用跨过窗口边界时
+        // 凑不够 min-requests，熔断器还没打开（G-下 CI 在 payment 这份上复现，P51）。
+        // 这次调用若仍打到了下游，最多再补 3 次，直到某次没打到下游（= 熔断已打开）
+        for (int extra = 0; extra < 3 && HITS.get() != hits; extra++) {
+            hits = HITS.get();
+            elapsedMs = timedCall();
+        }
+        assertThat(elapsedMs).as("熔断后快速失败").isLessThan(100);
+        assertThat(HITS.get()).as("熔断后不再发请求").isEqualTo(hits);
+    }
+
+    private long timedCall() {
         long start = System.nanoTime();
         assertCode(1, ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
-        assertThat((System.nanoTime() - start) / 1_000_000).as("熔断后快速失败").isLessThan(100);
-        assertThat(HITS.get()).as("熔断后不再发请求").isEqualTo(hits);
+        return (System.nanoTime() - start) / 1_000_000;
     }
 
     @Test
