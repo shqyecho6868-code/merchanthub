@@ -32,7 +32,7 @@ PAY_NO=$(echo "$PAY" | field payNo)
 AMOUNT=$(echo "$PAY" | field amount)
 [[ "$PAY_NO" == ERR:* ]] && exit 1
 
-step "4. 模拟支付渠道回调（payNo=$PAY_NO，金额 $AMOUNT 分）"
+step "4. 模拟支付渠道回调（payNo=${PAY_NO}，金额 $AMOUNT 分）"
 curl -sS -X POST "$BASE/payments/callback/mock" -H "$J" \
   -d "{\"payNo\":$PAY_NO,\"channelTradeNo\":\"AWS-$PAY_NO\",\"amount\":$AMOUNT}"
 echo

@@ -21,7 +21,7 @@ echo SEED_OK"
 PARAMS=$(python3 -c 'import json,sys; print(json.dumps({"commands": sys.argv[1].split("\n")}))' "$REMOTE")
 CID=$(aws ssm send-command --region "$REGION" --instance-ids "$IID" --document-name AWS-RunShellScript \
   --parameters "$PARAMS" --query Command.CommandId --output text)
-echo "已下发（CommandId=$CID），等待执行..."
+echo "已下发（CommandId=${CID}），等待执行..."
 for _ in $(seq 1 30); do
   sleep 4
   STATUS=$(aws ssm get-command-invocation --region "$REGION" --command-id "$CID" --instance-id "$IID" --query Status --output text 2>/dev/null || echo Pending)
