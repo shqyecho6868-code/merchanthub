@@ -13,13 +13,18 @@ spring:
       # ElastiCache 没开 AUTH（未开传输加密时不支持密码），靠私有子网 + 安全组只放行 ECS 访问。空字符串 = 不发 AUTH
       password: ""
   cloud:
+    # Fargate task 里除了 VPC 网卡（10.20.x）还有一块 169.254.172.x 的链路本地网卡（ECS 内部用，P50）。
+    # Spring 默认取"第一个非回环地址"，会把 169.254 注册进 Nacos，别的服务按这个地址连不上。
+    # 这里指定只用 VPC 网段（infra/env/network.tf 的 10.20.0.0/16）
+    inetutils:
+      preferred-networks:
+        - 10.20.
     nacos:
       # 云上 Nacos 关了鉴权（只在私有子网、安全组只放行 ECS），客户端不带账号 = 不发登录请求
       username: ""
       password: ""
       discovery:
         server-addr: ${NACOS_ADDR}
-        # Fargate 每个 task 有独立的 VPC 网卡，注册的就是 task 的私网 IP，其他服务能直接连
   elasticsearch:
     uris: ${ES_URIS}
 

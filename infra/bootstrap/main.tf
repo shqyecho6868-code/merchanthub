@@ -36,10 +36,14 @@ variable "monthly_budget_usd" {
   default     = "20"
 }
 
-variable "github_repo" {
-  description = "允许部署的仓库（owner/name）"
+# GitHub 已对本仓库启用"不可变 subject"（P49）：OIDC token 的 sub 带 owner / 仓库的数字 ID，
+# 形如 repo:owner@<ownerId>/name@<repoId>:ref:...，不再是 repo:owner/name:ref:...
+# 好处：仓库改名或删掉后被别人用同名重建，新仓库的 ID 不同，换不到凭证。
+# 查询：gh api repos/<owner>/<name>/actions/oidc/customization/sub --jq .sub_claim_prefix
+variable "github_sub_prefix" {
+  description = "允许部署的仓库在 OIDC token sub 里的前缀"
   type        = string
-  default     = "shqyecho6868-code/merchanthub"
+  default     = "repo:shqyecho6868-code@267807370/merchanthub@1460433640"
 }
 
 data "aws_caller_identity" "current" {}
@@ -95,9 +99,11 @@ resource "aws_iam_role" "github_deploy" {
       Principal = { Federated = aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        # 只认 main 分支：PR、其他分支、fork 都换不到凭证
-        StringLike = { "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          # 只认 main 分支：PR、其他分支、fork 都换不到凭证
+          "token.actions.githubusercontent.com:sub" = "${var.github_sub_prefix}:ref:refs/heads/main"
+        }
       }
     }]
   })

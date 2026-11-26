@@ -7,7 +7,9 @@ set -euxo pipefail
 dnf install -y docker
 systemctl enable --now docker
 mkdir -p /usr/local/lib/docker/cli-plugins
-curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+# 带重试（P50）：实例刚启动时 NAT 出网偶尔还不通，第一次 apply 就因为这里 137 秒连不上 github.com 整个脚本退出
+curl -fsSL --retry 10 --retry-all-errors --retry-delay 15 --connect-timeout 20 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose \
   https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-x86_64
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
