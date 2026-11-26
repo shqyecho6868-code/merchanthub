@@ -40,7 +40,11 @@ class JwtCodecTest {
         String token = codec.issue(1L, null, "BUYER", Duration.ofMinutes(5));
 
         assertThat(other.parse(token)).isNull();
-        assertThat(codec.parse(token.substring(0, token.length() - 2) + "xx")).isNull();
+        // 篡改签名中间的一个字符。不能改末尾：32 字节签名的 base64url 最后一个字符只有 4 位有效、2 位是填充位，
+        // 原来"末两位换成 xx"在签名恰好以等价字符结尾时（约 1/1000）篡改无效，CI 偶发失败（P51）
+        int i = token.lastIndexOf('.') + 5;
+        char tampered = token.charAt(i) == 'A' ? 'B' : 'A';
+        assertThat(codec.parse(token.substring(0, i) + tampered + token.substring(i + 1))).isNull();
         assertThat(codec.parse(codec.issue(1L, null, "BUYER", Duration.ofMillis(-1000)))).isNull();
         assertThat(codec.parse("")).isNull();
         assertThat(codec.parse(null)).isNull();

@@ -8,7 +8,8 @@
 # 库存记账规则（B1 / B3-下）：预占 available-=q, reserved+=q（记录 10）；确认 reserved-=q（20）；释放 available+=q, reserved-=q（30）
 # 所以对每个 SKU 恒有：初始可售 - 当前可售 = 预占中(10) + 已确认(20) 的数量；reserved = 预占中(10) 的数量
 cd "$(dirname "$0")/../.." || exit 1
-set -a; . ./.env; set +a
+# G-下：云上执行时没有 .env，由 MYSQL_CLI 指定连 RDS 的客户端（perf/cloud/check.sh）
+[ -f ./.env ] && { set -a; . ./.env; set +a; }
 RUN_ID=$1
 WAIT=${2:-60}
 T="901,902"
@@ -19,8 +20,9 @@ if [ -n "$HOT_STOCK" ]; then
 else
   INIT_SQL="IF(i.tenant_id = 901, 1000000, 100000)"
 fi
-q() { docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -N -e "$1"; }
-qt() { docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -t -e "$1"; }
+MYSQL_CLI=${MYSQL_CLI:-docker exec -i -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot}
+q() { $MYSQL_CLI -N -e "$1"; }
+qt() { $MYSQL_CLI -t -e "$1"; }
 FAIL=0
 result() {   # $1=检查名 $2=异常行数 $3=明细 SQL（异常时打印）
   if [ "$2" = "0" ]; then
