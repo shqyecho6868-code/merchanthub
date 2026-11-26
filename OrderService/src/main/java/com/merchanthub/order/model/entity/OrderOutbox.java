@@ -33,6 +33,8 @@ public class OrderOutbox {
     private LocalDateTime nextRetryAt;
     private String lastError;
     private LocalDateTime sentAt;
+    /** 写入这行时请求的 traceId（V6）；投递时放回消息属性，链路从下单请求延续到消费者 */
+    private String traceId;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

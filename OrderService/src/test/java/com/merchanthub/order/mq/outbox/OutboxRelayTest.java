@@ -1,5 +1,6 @@
 package com.merchanthub.order.mq.outbox;
 
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.order.mapper.OrderOutboxMapper;
 import com.merchanthub.order.model.entity.OrderOutbox;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
@@ -9,6 +10,7 @@ import org.apache.rocketmq.common.message.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.MDC;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
@@ -111,6 +113,35 @@ class OutboxRelayTest {
         relay.scan();
         verify(mapper).markSent(eq(1L), any());
         verify(mapper).markSent(eq(2L), any());
+    }
+
+    /**
+     * 链路追踪：发件箱是另一个线程在发，请求的 MDC 早没了 —— 靠 outbox 行里的 trace_id 把链路接上。
+     * 扫描一批时每条消息带的是<b>自己那行</b>的 traceId，发完线程上的 MDC 被还原（XXL-Job / 线程池线程复用）
+     */
+    @Test
+    void scan_eachMessageCarriesItsOwnRowTraceId_andMdcCleared() throws Exception {
+        OrderOutbox a = row(0);
+        a.setTraceId("trace-of-order-a");
+        OrderOutbox b = row(0);
+        b.setId(2L);
+        b.setTraceId("trace-of-order-b");
+        when(mapper.selectDue(any(), eq(100))).thenReturn(List.of(a, b));
+        when(mapper.claim(anyLong(), any(), any())).thenReturn(1);
+        List<String> mdcWhileSending = new java.util.ArrayList<>();
+        when(producer.send(any(Message.class))).thenAnswer(inv -> {
+            mdcWhileSending.add(MDC.get(TraceContext.MDC_KEY));
+            return ok();
+        });
+
+        relay.scan();
+
+        ArgumentCaptor<Message> msg = ArgumentCaptor.forClass(Message.class);
+        verify(producer, org.mockito.Mockito.times(2)).send(msg.capture());
+        assertThat(msg.getAllValues()).extracting(m -> m.getUserProperty(TraceContext.MQ_PROPERTY))
+                .containsExactly("trace-of-order-a", "trace-of-order-b");
+        assertThat(mdcWhileSending).as("发送时的日志也带着这行的 traceId").containsExactly("trace-of-order-a", "trace-of-order-b");
+        assertThat(MDC.get(TraceContext.MDC_KEY)).as("扫描线程用完是干净的").isNull();
     }
 
     @Test

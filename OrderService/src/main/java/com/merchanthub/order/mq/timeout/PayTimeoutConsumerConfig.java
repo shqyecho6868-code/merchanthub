@@ -3,6 +3,7 @@ package com.merchanthub.order.mq.timeout;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.order.mq.OrderEventTopics;
 import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
@@ -35,23 +36,26 @@ public class PayTimeoutConsumerConfig {
         consumer.subscribe(OrderEventTopics.TIMEOUT_TOPIC, OrderEventTopics.TAG_PAY_TIMEOUT);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                PayTimeoutMessage msg;
-                try {
-                    msg = objectMapper.readValue(m.getBody(), PayTimeoutMessage.class);
-                } catch (IOException e) {
-                    log.error("无法解析的超时关单消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
-                    continue;
-                }
-                try {
-                    // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
-                    TenantMessages.consumeAs(m, () -> service.handle(msg));
-                } catch (RuntimeException e) {
-                    log.warn("处理超时关单消息失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
-                            msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);
-                    // E3：重试耗尽进死信前告警；超时订单扫描（orderTimeoutScanJob）也会兜底关单
-                    DeadLetters.onFailure(alarm.getIfAvailable(), PayTimeoutService.CONSUMER_GROUP, m,
-                            consumer.getMaxReconsumeTimes(), msg.tenantId(), e);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    PayTimeoutMessage msg;
+                    try {
+                        msg = objectMapper.readValue(m.getBody(), PayTimeoutMessage.class);
+                    } catch (IOException e) {
+                        log.error("无法解析的超时关单消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        continue;
+                    }
+                    try {
+                        // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                        TenantMessages.consumeAs(m, () -> service.handle(msg));
+                    } catch (RuntimeException e) {
+                        log.warn("处理超时关单消息失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
+                                msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);
+                        // E3：重试耗尽进死信前告警；超时订单扫描（orderTimeoutScanJob）也会兜底关单
+                        DeadLetters.onFailure(alarm.getIfAvailable(), PayTimeoutService.CONSUMER_GROUP, m,
+                                consumer.getMaxReconsumeTimes(), msg.tenantId(), e);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;

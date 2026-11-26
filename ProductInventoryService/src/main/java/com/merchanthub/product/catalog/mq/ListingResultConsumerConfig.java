@@ -2,6 +2,7 @@ package com.merchanthub.product.catalog.mq;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.product.catalog.service.ListingStateService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -43,26 +44,29 @@ public class ListingResultConsumerConfig {
         consumer.subscribe(ListingResultEvent.TOPIC, ListingResultEvent.TAG);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                ListingResultEvent e;
-                try {
-                    e = objectMapper.readValue(m.getBody(), ListingResultEvent.class);
-                } catch (IOException ex) {
-                    log.error("无法解析的审批结果消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), ex);
-                    continue;
-                }
-                try {
-                    // C1：按消息里的商家恢复上下文，CAS 自动带 tenant_id —— 别的商家的消息改不了这个商家的商品
-                    TenantMessages.consumeAs(m, () -> stateService.applyResult(e.productId(), e.round(),
-                            ListingResultEvent.APPROVED.equals(e.result()), e.rejectReason(), e.processInstanceId(),
-                            ListingStateService.SOURCE_MQ));
-                } catch (RuntimeException ex) {
-                    // 数据库不可用等：事务已回滚，稍后重投；重投仍失败 16 次进死信，补偿扫描反查兜底
-                    log.warn("处理审批结果失败，稍后重投 eventId={} productId={} reconsumeTimes={}",
-                            e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
-                    // E3：最后一次重试也失败 → 告警 + 记 recon_exception
-                    DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
-                            TenantMessages.tenantIdOf(m), ex);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    ListingResultEvent e;
+                    try {
+                        e = objectMapper.readValue(m.getBody(), ListingResultEvent.class);
+                    } catch (IOException ex) {
+                        log.error("无法解析的审批结果消息，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), ex);
+                        continue;
+                    }
+                    try {
+                        // C1：按消息里的商家恢复上下文，CAS 自动带 tenant_id —— 别的商家的消息改不了这个商家的商品
+                        TenantMessages.consumeAs(m, () -> stateService.applyResult(e.productId(), e.round(),
+                                ListingResultEvent.APPROVED.equals(e.result()), e.rejectReason(), e.processInstanceId(),
+                                ListingStateService.SOURCE_MQ));
+                    } catch (RuntimeException ex) {
+                        // 数据库不可用等：事务已回滚，稍后重投；重投仍失败 16 次进死信，补偿扫描反查兜底
+                        log.warn("处理审批结果失败，稍后重投 eventId={} productId={} reconsumeTimes={}",
+                                e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
+                        // E3：最后一次重试也失败 → 告警 + 记 recon_exception
+                        DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
+                                TenantMessages.tenantIdOf(m), ex);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;

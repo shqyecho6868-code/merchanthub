@@ -87,3 +87,8 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+# 本地 / 测试日志也带 traceId 和 tenantId（和 application-aws.yml 同一格式）：按 traceId 搜就能串起一张订单经过的 HTTP → Feign → MQ 消费
+logging:
+  pattern:
+    level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

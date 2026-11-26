@@ -2,6 +2,8 @@ package com.merchanthub.realtime.push;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.merchanthub.common.tenant.mq.TenantMessages;
+import com.merchanthub.common.trace.TraceContext;
 import com.merchanthub.realtime.config.NodeId;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
@@ -43,27 +45,30 @@ public class RealtimeConsumersConfig {
                 PushTopics.TAG_ORDER_CREATED, PushTopics.TAG_ORDER_PAID, PushTopics.TAG_ORDER_CLOSED));
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                JsonNode event;
-                try {
-                    event = objectMapper.readTree(m.getBody());
-                } catch (IOException e) {
-                    log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
-                    continue;
-                }
-                List<PushMessage> toPush;
-                try {
-                    toPush = notifyService.record(m.getTags(), event);
-                } catch (RuntimeException e) {
-                    // 数据库不可用：去重记录随事务回滚，稍后重投还能重新处理
-                    log.warn("处理订单事件失败，稍后重投 tag={} keys={} reconsumeTimes={}", m.getTags(), m.getKeys(), m.getReconsumeTimes(), e);
-                    return ConsumeConcurrentlyStatus.RECONSUME_LATER;
-                }
-                for (PushMessage p : toPush) {
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    JsonNode event;
                     try {
-                        dispatcher.dispatch(p);
+                        event = objectMapper.readTree(m.getBody());
+                    } catch (IOException e) {
+                        log.error("无法解析的订单事件，丢弃 msgId={} keys={}", m.getMsgId(), m.getKeys(), e);
+                        continue;
+                    }
+                    List<PushMessage> toPush;
+                    try {
+                        toPush = notifyService.record(m.getTags(), event);
                     } catch (RuntimeException e) {
-                        // 已经记过去重了，重投也不会再推：只能记日志（通知本身已落库，商家打开通知中心仍能看到）
-                        log.error("推送分发失败 receiverKey={} msgId={}", p.receiverKey(), p.msgId(), e);
+                        // 数据库不可用：去重记录随事务回滚，稍后重投还能重新处理
+                        log.warn("处理订单事件失败，稍后重投 tag={} keys={} reconsumeTimes={}", m.getTags(), m.getKeys(), m.getReconsumeTimes(), e);
+                        return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+                    }
+                    for (PushMessage p : toPush) {
+                        try {
+                            dispatcher.dispatch(p);
+                        } catch (RuntimeException e) {
+                            // 已经记过去重了，重投也不会再推：只能记日志（通知本身已落库，商家打开通知中心仍能看到）
+                            log.error("推送分发失败 receiverKey={} msgId={}", p.receiverKey(), p.msgId(), e);
+                        }
                     }
                 }
             }
@@ -91,12 +96,15 @@ public class RealtimeConsumersConfig {
         consumer.subscribe(PushTopics.PUSH_TOPIC, nodeId.value());
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                try {
-                    local.deliver(objectMapper.readValue(m.getBody(), PushMessage.class));
-                } catch (IOException e) {
-                    log.error("无法解析的转发消息，丢弃 msgId={}", m.getMsgId(), e);
-                } catch (RuntimeException e) {
-                    log.warn("本地投递失败（消息仍是待送达，上线补发）msgId={}", m.getMsgId(), e);
+                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
+                    try {
+                        local.deliver(objectMapper.readValue(m.getBody(), PushMessage.class));
+                    } catch (IOException e) {
+                        log.error("无法解析的转发消息，丢弃 msgId={}", m.getMsgId(), e);
+                    } catch (RuntimeException e) {
+                        log.warn("本地投递失败（消息仍是待送达，上线补发）msgId={}", m.getMsgId(), e);
+                    }
                 }
             }
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
