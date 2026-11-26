@@ -1,17 +1,17 @@
-# MerchantHub CI：每次 push / PR 构建 + 跑全部测试（单测 + Testcontainers 集成测试）+ 产出覆盖率报告
+# MerchantHub CI: on every push / PR, build + run all tests (unit + Testcontainers integration tests) + produce coverage reports
 name: CI
 
 on:
   push:
   pull_request:
 
-# 同一分支连续 push 时，取消还没跑完的旧构建
+# Cancel unfinished older builds when the same branch is pushed again
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # G-上：基础设施代码也要过 CI —— 格式、语法、引用关系（不连 AWS，不需要凭证；真正的 plan 在本机跑）
+  # Infrastructure code goes through CI too -- formatting, syntax, references (no AWS connection or credentials; real plans run locally)
   terraform:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -41,8 +41,8 @@ jobs:
           java-version: '17'
           cache: maven
 
-      # Maven Wrapper 第一次运行要从 Maven Central 下载 Maven 本体。runner 偶发下载失败（D1 连续两次 0 秒就红，P31）：
-      # 缓存下载结果（setup-java 的 maven 缓存只管 ~/.m2/repository，不含 wrapper），并重试 3 次
+      # The Maven Wrapper downloads Maven itself from Maven Central on first run, which occasionally fails on runners (red in 0 seconds):
+      # cache the download (setup-java's maven cache only covers ~/.m2/repository, not the wrapper) and retry 3 times
       - name: Cache Maven wrapper distribution
         uses: actions/cache@v6
         with:
@@ -53,22 +53,22 @@ jobs:
         run: |
           for i in 1 2 3; do
             ./mvnw -B -v && exit 0
-            echo "第 $i 次下载 Maven 失败，20 秒后重试"; sleep 20
+            echo "Maven download attempt $i failed, retrying in 20 seconds"; sleep 20
           done
           exit 1
 
-      # GitHub 的 ubuntu runner 自带 Docker，Testcontainers 直接可用，不需要额外配置
+      # GitHub's ubuntu runners ship with Docker, so Testcontainers works with no extra setup
       - name: Build and test
         run: ./mvnw -B -ntp verify
 
-      # 把各模块 jacoco.csv 汇总成表格，显示在本次运行的 Summary 页
+      # Aggregate each module's jacoco.csv into a table on this run's Summary page
       - name: Coverage summary
         if: always()
         run: |
           {
-            echo "## 行覆盖率（JaCoCo，单测 + 集成测试合并）"
+            echo "## Line coverage (JaCoCo, unit + integration tests merged)"
             echo ""
-            echo "| 模块 | 覆盖行 / 总行 | 覆盖率 |"
+            echo "| Module | Covered / total lines | Coverage |"
             echo "|---|---|---|"
             found=0
             for f in */target/site/jacoco/jacoco.csv; do
@@ -77,7 +77,7 @@ jobs:
               awk -F, -v m="${f%%/*}" 'NR>1 {miss+=$8; cov+=$9}
                 END {t=miss+cov; printf "| %s | %d / %d | %.1f%% |\n", m, cov, t, (t ? cov*100/t : 0)}' "$f"
             done
-            [ "$found" = 1 ] || echo "| （无覆盖率数据） | - | - |"
+            [ "$found" = 1 ] || echo "| (no coverage data) | - | - |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage reports

@@ -15,7 +15,7 @@ import java.time.Duration;
  * The tricky part: a producer first asks the NameServer for routes, receives the "brokerIP1:listenPort" the Broker registered itself with, then connects to it directly.
  * Testcontainers maps container ports to random host ports by default; the Broker doesn't know that random port, so the registered address is unreachable from the host.
  * Fix: find a free port P on the host, have the Broker listen on P inside the container too, map P->P fixed, and set brokerIP1 to the Docker host address.
- * That way the address the Broker registers is reachable from the host. (Same problem as using host.docker.internal in docker-compose; see the A2 notes.)
+ * That way the address the Broker registers is reachable from the host. (Same problem as using host.docker.internal in docker-compose.)
  * The NameServer port can be randomly mapped as usual, since we hand its address to clients ourselves.
  */
 public class RocketMqContainer extends GenericContainer<RocketMqContainer> {

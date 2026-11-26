@@ -50,7 +50,7 @@ spring:
               filters:
                 - RewritePath=/api/(?<segment>.*), /$\{segment}
 
-            # C1: trading services. Exposed externally under a unified /api prefix, stripped when forwarding (/api/orders/1 -> order's /orders/1).
+            # Trading services. Exposed externally under a unified /api prefix, stripped when forwarding (/api/orders/1 -> order's /orders/1).
             # /internal/** is blocked twice: no route for it here, and AuthorizeFilter also rejects it by path segment as a fallback (guards against /api/orders/../internal and the like)
             - id: order
               uri: lb://order

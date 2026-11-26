@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * C1 integration test: during MQ consumption the tenant context comes from <b>message properties</b> and is really applied to the SQL.
+ * Integration test: during MQ consumption the tenant context comes from <b>message properties</b> and is really applied to the SQL.
  * Three contrasting cases using the timeout-close consumer (real RocketMQ); all orders belong to merchant 7:
  * <ol>
  *   <li>Message with tenantId=7 -> order closed</li>

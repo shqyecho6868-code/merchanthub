@@ -6,7 +6,7 @@ import org.testcontainers.containers.MySQLContainer;
 /**
  * Singleton containers: within one JVM (= one failsafe run of one Maven module), all test classes share one set of containers.
  * <p>
- * Difference from the {@code @Container static} in the A2+ example: that style stops the containers after each test class and restarts them for the next,
+ * Difference from the {@code @Container static} in a typical Testcontainers example: that style stops the containers after each test class and restarts them for the next,
  * and MySQL takes about 10 seconds each time, so it gets slow with many test classes. Here there's no @Container: a container starts on first use
  * and lives until the JVM exits; Testcontainers' Ryuk container handles final cleanup.
  * <p>

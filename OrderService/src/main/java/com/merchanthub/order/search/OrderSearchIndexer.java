@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Syncs one order to ES (E2).
+ * Syncs one order to ES.
  * <p>
  * Key design: <b>binlog is only a signal that "this order changed"; the document is rebuilt from the latest MySQL data and fully overwritten</b>.
  * <ul>

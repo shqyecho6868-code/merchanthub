@@ -38,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Product listing approval (D1, product side): submit → Feign start (user-tenant stubbed) → result write-back (idempotent, out-of-order safe) → compensation scan.
+ * Product listing approval (product side): submit → Feign start (user-tenant stubbed) → result write-back (idempotent, out-of-order safe) → compensation scan.
  * Scenario: merchant 7's product "Flagship Phone" (draft) is submitted by staff 2002; merchant 8's staff 3002 tries to touch it.
  */
 @SpringBootTest

@@ -23,6 +23,6 @@ public final class OrderEventTopics {
     public static final String TIMEOUT_TOPIC = "ORDER_TIMEOUT";
     public static final String TAG_PAY_TIMEOUT = "PAY_TIMEOUT";
 
-    /** Custom message property: our own event ID, which consumers use for idempotency (not RocketMQ's msgId, see B2 notes Q4) */
+    /** Custom message property: our own event ID, which consumers use for idempotency (not RocketMQ's msgId, which changes on resend) */
     public static final String PROP_EVENT_ID = "EVENT_ID";
 }

@@ -18,13 +18,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B1 core concurrency test: 100 buyers race for a SKU with stock 10, each buying 1 unit with a distinct order number.
+ * Core concurrency test: 100 buyers race for a SKU with stock 10, each buying 1 unit with a distinct order number.
  * <p>
  * Expected: exactly 10 orders succeed, 90 get "insufficient stock"; available = 0, reserved = 10, 10 reservation records.
  * What prevents overselling is the conditional update in InventoryMapper.tryReserve {@code WHERE ... AND available >= #{qty}}:
  * UPDATEs on the same row are serialized by InnoDB row locks, so each request evaluates the latest available committed by the previous one.
  * <p>
- * Destructive experiment (B1, 2026-11-18): remove {@code AND available >= #{qty}} and rerun this test →
+ * Destructive experiment : remove {@code AND available >= #{qty}} and rerun this test →
  * 100 orders succeed, 0 insufficient, available = -90, reserved = 100, 100 reservation records — oversold by 90 units.
  * Conclusions:
  * 1. Oversell prevention relies on the WHERE condition: it makes "check whether there's enough" and "deduct" happen atomically in one statement;
@@ -78,7 +78,7 @@ class ConcurrentOversellIT extends ProductItSupport {
         Map<String, Object> row = jdbc.queryForMap("SELECT available, reserved FROM inventory WHERE sku_id = ?", SKU);
         long records = jdbc.queryForObject("SELECT COUNT(*) FROM inventory_reservation", Long.class);
 
-        // Printed for humans: watch this line during the 🧑 hands-on run
+        // Printed for humans: watch this line during a manual run
         System.out.printf("%n===== Concurrent order results: %d succeeded, %d insufficient stock, %d other errors; available=%s, reserved=%s, %d reservation records =====%n%n",
                 success.get(), insufficient.get(), otherErrors.size(), row.get("available"), row.get("reserved"), records);
 

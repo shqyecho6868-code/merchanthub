@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * Unit test example (A2+): proves JUnit 5 + Mockito + AssertJ work.
+ * Unit test example: proves JUnit 5 + Mockito + AssertJ work.
  * <p>
  * Unit test conventions: no Spring context, no middleware; instantiate the class under test directly and use Mockito doubles for external dependencies.
  * Names end with Test → run by surefire in the test phase, no Docker needed.
@@ -63,7 +63,7 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("C2 rate limited: HTTP 429 + Retry-After + error code 42900, not the catch-all 500")
+    @DisplayName("Rate limited: HTTP 429 + Retry-After + error code 42900, not the catch-all 500")
     void tooManyRequests_429() {
         var resp = handler.tooManyRequestsHandler(new TooManyRequestsException("Merchant 7 is placing orders too frequently"));
 

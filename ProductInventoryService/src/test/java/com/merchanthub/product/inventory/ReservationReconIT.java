@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * E3: inventory reservation reconciliation (extension of B3-下's dangling-reservation scan). Reservations held for 30+ minutes and still RESERVED are settled by the order's real status:
+ * Inventory reservation reconciliation (extension of the dangling-reservation scan). Reservations held for 30+ minutes and still RESERVED are settled by the order's real status:
  * missing / closed → release; paid → confirm deduction; pending payment → leave it; query failure → skip the whole round.
  */
 @SpringBootTest(properties = "merchanthub.inventory.reservation-recon.older-than=30m")

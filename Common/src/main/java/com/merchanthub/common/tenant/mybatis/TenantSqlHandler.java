@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Rules for the MyBatis-Plus tenant plugin (C1): decides whether each SQL gets {@code tenant_id = ?} and with which value.
+ * Rules for the MyBatis-Plus tenant plugin: decides whether each SQL gets {@code tenant_id = ?} and with which value.
  * <p>
  * The rules only look at {@link TenantContext}:
  * <ul>

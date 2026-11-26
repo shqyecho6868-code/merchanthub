@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 
 /**
- * Globally unique ID generator (order numbers, payment numbers, etc.), replacing the old SnowflakeUtil / SnowflakeDynamicUtil (pitfalls P1).
+ * Globally unique ID generator (order numbers, payment numbers, etc.), replacing the old SnowflakeUtil / SnowflakeDynamicUtil.
  * <p>
  * On startup it claims a slot in Redis as its workerId and renews it periodically in the background.
  * Whether it may still issue IDs is decided by a <b>local deadline</b>: before each renewal we record the send time t; on success, deadline = t + lease duration.
@@ -92,7 +92,7 @@ public class SnowflakeIdGenerator implements InitializingBean, DisposableBean {
         if (nanoClock.getAsLong() - leaseDeadlineNanos >= 0) {
             throw new IllegalStateException("Snowflake slot lease expired (not renewed for too long), refusing to issue IDs slot=" + slot);
         }
-        // On clock rollback hutool throws IllegalStateException and no ID is issued (known limitation, see B1 notes)
+        // On clock rollback hutool throws IllegalStateException and no ID is issued (known limitation)
         return snowflake.nextId();
     }
 

@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Merchants search orders by keyword (E2, demo only): analyzed match on product name / spec, or the exact order number.
+ * Merchants search orders by keyword (demo only): analyzed match on product name / spec, or the exact order number.
  * <p>
  * <b>Tenant isolation</b>: tenantId is <b>always</b> added as a filter on every query (the caller takes it from the gateway-injected identity, never from the frontend).
  * The MyBatis tenant plugin doesn't cover ES; missing this step means cross-merchant data leakage.

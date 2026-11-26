@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Inventory reservation reconciliation (E3, extended from B3-下's dangling-reservation scan): reservations still RESERVED after older-than
+ * Inventory reservation reconciliation (extends the dangling-reservation scan): reservations still RESERVED after older-than
  * are settled according to the order's real status — normally the ORDER_PAID / ORDER_CLOSED event would have settled them long ago; if one is still hanging, the event was lost or went to the DLQ.
  * <table>
  *   <tr><th>Order status</th><th>Action</th><th>Typical cause</th></tr>
@@ -26,13 +26,13 @@ import java.util.Map;
  *   <tr><td>Paid 20 / Shipped 30 / Completed 40</td><td>Confirm deduction</td><td>ORDER_PAID event lost / in DLQ</td></tr>
  *   <tr><td>Pending payment 10</td><td>Leave it</td><td>Order lifecycle not over yet</td></tr>
  * </table>
- * Safety preconditions (B3-下 notes section 4):
+ * Safety preconditions:
  * <ol>
  *   <li>The reservation is old enough (30 minutes by default, far beyond the order transaction timeout and the 15-minute payment window): if the order can't be found, it really doesn't exist</li>
  *   <li>Query failure ≠ missing: if order times out / is down, skip the whole round — better to return stock late than wrongly</li>
  *   <li>Both confirm and release go through the reservation CAS (WHERE status = 10): racing with a late event or another instance takes effect only once</li>
  * </ol>
- * Scheduled by XXL-Job's reservationReconJob (it was @Scheduled before E3).
+ * Scheduled by XXL-Job's reservationReconJob (formerly @Scheduled).
  */
 @Slf4j
 @Component

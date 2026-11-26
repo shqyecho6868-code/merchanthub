@@ -28,7 +28,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * payment-side reconciliation (E3): treat the payment as the source of truth and check whether the order side matches. Two things:
+ * payment-side reconciliation: treat the payment as the source of truth and check whether the order side matches. Two things:
  * <ol>
  *   <li><b>Payment succeeded ↔ order</b>: for payments that succeeded longer ago than the grace period, ask order "have you processed this payment's success event".
  *     <ul>

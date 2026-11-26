@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Timeout-order scan (E3, left over from B3-下): the main path is the ORDER_TIMEOUT scheduled message; this is the safety net for when it never arrives --
+ * Timeout-order scan: the main path is the ORDER_TIMEOUT scheduled message; this is the safety net for when it never arrives --
  * outbox delivery marked as failed (2), message retries exhausted into the DLQ, or the broker lost the scheduled message.
  * <p>
  * Only scans orders "past the deadline + grace period": within the grace period the scheduled message is most likely in flight, so racing to close is pointless (closing is idempotent, just wasteful).

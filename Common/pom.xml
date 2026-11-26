@@ -31,11 +31,11 @@
 
     <dependencies>
         <!--
-          Common 是被所有服务依赖的公共库。
-          非 optional：纯工具依赖（JWT、hutool、lang3），会传递给使用方。
-          optional：Servlet / MyBatis / AOP 相关，Common 自己编译要用，但不传递；
-          使用方需要时自己声明，对应的 Bean 用 @ConditionalOnClass 按需装配。
-          这样 Gateway（WebFlux）不会被动带上 Servlet 栈。
+          Common is the shared library every service depends on.
+          Non-optional: pure utility dependencies (JWT, hutool, lang3), passed on to consumers.
+          Optional: Servlet / MyBatis / AOP related; Common needs them to compile, but they are not transitive;
+          consumers declare them when needed, and the matching beans are wired on demand via @ConditionalOnClass.
+          This keeps the Gateway (WebFlux) from being dragged onto the Servlet stack.
         -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -88,14 +88,14 @@
             <artifactId>mybatis-plus-jsqlparser</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- 雪花 workerId 租约（B1）用；optional：只有自己声明了 Redis 的服务才会装配 ID 生成器 -->
+        <!-- Used for the snowflake workerId lease; optional: only services that declare Redis themselves get the ID generator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
             <optional>true</optional>
         </dependency>
 
-        <!-- C1 租户上下文透传：Feign 拦截器、RocketMQ 消息带 tenantId。optional：用到的服务自己声明，版本由 Spring Cloud / SCA BOM 管理 -->
+        <!-- Tenant context propagation: Feign interceptor, tenantId on RocketMQ messages. Optional: services that use it declare it; versions come from the Spring Cloud / SCA BOM -->
         <dependency>
             <groupId>io.github.openfeign</groupId>
             <artifactId>feign-core</artifactId>
@@ -107,14 +107,14 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- E3：XXL-Job 执行器自动装配。optional：只有声明了它的服务才会注册成执行器 -->
+        <!-- XXL-Job executor auto-configuration. Optional: only services that declare it register as executors -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>
             <optional>true</optional>
         </dependency>
 
-        <!-- 共享容器与测试基类（B1 从这里抽出去），test 范围，不会传递 -->
+        <!-- Shared containers and test base classes (extracted into their own module), test scope, not transitive -->
         <dependency>
             <groupId>com.merchanthub</groupId>
             <artifactId>TestSupport</artifactId>

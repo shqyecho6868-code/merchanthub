@@ -38,11 +38,11 @@ import static org.mockito.Mockito.verify;
  * Destructive experiment ②: with the local message table approach, MQ is unavailable; observe how the compensation scan re-sends.
  * <p>
  * "MQ unavailable" is simulated with a spy making the producer's first N sends throw MQClientException (the same kind of exception the client gets when the broker is down).
- * We don't stop the shared RocketMQ container: other test classes in the same JVM use it. The manual experiment that really stops the broker is recorded in B2 notes 7.4.
+ * We don't stop the shared RocketMQ container: other test classes in the same JVM use it. The manual experiment that really stops the broker was done by hand.
  * <p>
  * Backoff set to 1s and scan every 500ms so several retries finish within seconds.
- * Since E3 the scan is scheduled by XXL-Job and the service has no timer of its own: here a background thread calls relay.scan() every 500ms
- * to simulate the admin trigger. Only this context's relay (with the spy producer) scans, so other cached contexts can't steal the re-send (P17).
+ * The scan is scheduled by XXL-Job and the service has no timer of its own: here a background thread calls relay.scan() every 500ms
+ * to simulate the admin trigger. Only this context's relay (with the spy producer) scans, so other cached contexts can't steal the re-send.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
@@ -94,7 +94,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
 
     /**
      * The first failTimes sends of the "order created" event fail, then it recovers.
-     * Count only ORDER_EVENT: since B3-下 each order also writes an ORDER_TIMEOUT scheduled message row, which must not consume the failure count
+     * Count only ORDER_EVENT: each order also writes an ORDER_TIMEOUT scheduled message row, which must not consume the failure count
      */
     private void mqDownFor(int failTimes) throws Exception {
         AtomicInteger calls = new AtomicInteger();
@@ -159,7 +159,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         for (int i = 0; i < 8; i++) {
             pool.submit(() -> {
                 start.await();
-                TenantContext.runAsSystem(() -> relay.publish(row));   // the worker thread sets its own context (C1)
+                TenantContext.runAsSystem(() -> relay.publish(row));   // the worker thread sets its own context
                 return null;
             });
         }

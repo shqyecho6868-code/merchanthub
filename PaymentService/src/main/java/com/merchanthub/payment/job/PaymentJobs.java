@@ -5,7 +5,7 @@ import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** XXL-Job entry point for payment (E3); the logic lives in {@link PaymentReconciler} */
+/** XXL-Job entry point for payment; the logic lives in {@link PaymentReconciler} */
 @Component
 @RequiredArgsConstructor
 public class PaymentJobs {

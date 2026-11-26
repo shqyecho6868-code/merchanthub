@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * When racing payment success on the same order, the CAS in {@link OrderStatusTransitioner} lets only one side win:
  * the loser writes nothing, so it produces no inventory event -- "the loser doesn't touch inventory" isn't left to the loser's discipline; it simply has no event to send.
  * <p>
- * E3: two entry points share {@link #closeIfPending}:
+ * Two entry points share {@link #closeIfPending}:
  * <ul>
  *   <li>{@link #handle}: ORDER_TIMEOUT scheduled message (main path), deduplicated first</li>
  *   <li>{@link #closeExpired}: timeout-order scan (safety net: scheduled message lost / sent to DLQ), no dedup needed -- the CAS itself is the idempotency gate</li>
@@ -73,7 +73,7 @@ public class PayTimeoutService {
             log.info("[Timeout close: CAS lost] Order no longer pending, not closing or releasing inventory orderNo={} tenantId={}", orderNo, tenantId);
             return false;
         }
-        // E1: include the buyer so realtime can push "order closed". If the CAS won, the order definitely exists
+        // Include the buyer so realtime can push "order closed". If the CAS won, the order definitely exists
         Orders order = ordersMapper.selectByOrderNoAcrossTenants(orderNo);
         Long buyerId = order == null ? null : order.getBuyerId();
         // Write the "closed" event in the same transaction as the close CAS: once the close commits, inventory release is guaranteed (if the process dies, the scan re-sends)

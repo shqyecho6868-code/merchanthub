@@ -7,12 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * order's XXL-Job task entry points (E3). This class is only a "scheduling adapter": it calls the business classes and writes results to the job log;
+ * order's XXL-Job task entry points. This class is only a "scheduling adapter": it calls the business classes and writes results to the job log;
  * business logic lives in the called classes, which tests call directly without an admin server.
  * <p>
  * Why switch from @Scheduled to XXL-Job: @Scheduled runs on every instance, so multiple instances can only avoid duplicates via SQL claiming;
  * changing frequency needs a release, executions aren't visible, and there's no manual trigger. XXL-Job's admin picks a single instance per routing strategy,
- * and its console can change Cron, view logs, trigger manually, and alert on failure (D51).
+ * and its console can change Cron, view logs, trigger manually, and alert on failure.
  */
 @Component
 @RequiredArgsConstructor

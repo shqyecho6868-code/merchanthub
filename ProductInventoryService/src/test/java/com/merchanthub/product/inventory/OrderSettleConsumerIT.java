@@ -26,8 +26,8 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * End to end: ORDER_CLOSED / ORDER_PAID on ORDER_EVENT (each delivered 3 times) → consumer → stock changes only once.
- * E3: max retries set to 0 (straight to DLQ on first failure) to verify the DLQ alert; kept in the same test class rather than a separate one:
- * different config = a different Spring context, and same-group consumers in two contexts split the queues, so the message may land on the one without the reduced retry count (same kind of issue as P17)
+ * Max retries set to 0 (straight to DLQ on first failure) to verify the DLQ alert; kept in the same test class rather than a separate one:
+ * different config = a different Spring context, and same-group consumers in two contexts split the queues, so the message may land on the one without the reduced retry count
  */
 @SpringBootTest(properties = {
         "merchanthub.inventory.settle-consumer.enabled=true",
@@ -72,7 +72,7 @@ class OrderSettleConsumerIT extends ProductItSupport {
         String json = "{\"eventId\":" + System.nanoTime() + ",\"orderNo\":" + orderNo + ",\"tenantId\":" + TENANT
                 + ",\"event\":\"" + (tag.equals(OrderSettledEvent.TAG_ORDER_PAID) ? "PAY_SUCCESS" : "PAY_TIMEOUT") + "\"}";
         for (int i = 0; i < 3; i++) {
-            // C1: carry tenantId like messages sent by order do; the consumer restores the tenant context from it
+            // Carry tenantId like messages sent by order do; the consumer restores the tenant context from it
             producer.send(TenantMessages.stamp(new Message(OrderSettledEvent.TOPIC, tag, json.getBytes(StandardCharsets.UTF_8)), TENANT));
         }
     }
@@ -100,7 +100,7 @@ class OrderSettleConsumerIT extends ProductItSupport {
     }
 
     /**
-     * DLQ monitoring (E3): inventory data is already inconsistent (the reservation record says 1 unit reserved, but the inventory row's reserved is 0), so release must fail and retrying won't help.
+     * DLQ monitoring: inventory data is already inconsistent (the reservation record says 1 unit reserved, but the inventory row's reserved is 0), so release must fail and retrying won't help.
      * Conclusion: on the last failure, write recon_exception (DEAD_LETTER) + an ERROR alert; the message then goes to %DLQ%inventory-order-settle
      */
     @Test

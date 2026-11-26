@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * order-side reconciliation (E3): handles two kinds of problems that "can't be auto-fixed, only flagged + alerted".
+ * order-side reconciliation: handles two kinds of problems that "can't be auto-fixed, only flagged + alerted".
  * <ol>
  *   <li><b>pay_anomaly</b>: money received, order not paid (paid after close / duplicate payment / amount or merchant mismatch).
  *       <b>Don't modify the order</b>: a closed order's inventory was released long ago and may have been bought by someone else; "reviving" it as paid would oversell or be unfulfillable;

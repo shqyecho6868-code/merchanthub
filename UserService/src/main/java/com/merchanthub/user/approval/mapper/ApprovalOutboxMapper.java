@@ -22,7 +22,7 @@ public interface ApprovalOutboxMapper extends BaseMapper<ApprovalOutbox> {
      * Claim a record: only push next_retry_at out to the lease deadline, <b>without changing status</b>.
      * Only one instance (or thread) can update it; whoever gets 1 sends it. During the lease, other instances' scan condition next_retry_at <= now doesn't match, so they can't see it.
      * <p>
-     * Why not change status: see order's OrderOutboxMapper.claim (the bug found in the B2 🔍 code review); here too we only extend the lease.
+     * Why not change status: see order's OrderOutboxMapper.claim (a bug caught in code review); here too we only extend the lease.
      * If the lease expires without a result (e.g. the process was killed mid-send), the record automatically becomes "due" again and the next scan picks it up.
      */
     @Update("UPDATE approval_outbox SET next_retry_at = #{leaseUntil}"

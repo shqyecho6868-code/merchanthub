@@ -7,8 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * C2: rate-limit / circuit-breaker thresholds. Loaded into Sentinel rules (in memory only) by {@link SentinelRulesConfig} at startup.
- * In production the rules should be persisted in the Nacos config center + pushed dynamically; otherwise rules changed in the dashboard are lost on restart (out of C2 scope, see C2 notes).
+ * Rate-limit / circuit-breaker thresholds. Loaded into Sentinel rules (in memory only) by {@link SentinelRulesConfig} at startup.
+ * In production the rules should be persisted in the Nacos config center + pushed dynamically; otherwise rules changed in the dashboard are lost on restart (out of scope for this demo).
  */
 @Data
 @ConfigurationProperties(prefix = "merchanthub.order.sentinel")
@@ -19,7 +19,7 @@ public class SentinelProperties {
 
     @Data
     public static class RateLimit {
-        /** Default per-merchant order-placement QPS threshold (per instance). Derivation: per-instance capacity 100 / ~5 merchants expected to run promotions at once = 20, see C2 notes Q2 */
+        /** Default per-merchant order-placement QPS threshold (per instance). Derivation: per-instance capacity 100 / ~5 merchants expected to run promotions at once = 20 */
         private int perTenantQps = 20;
         /** Exceptions: per-merchant thresholds (paid plans / pre-registered promotions), key = tenantId */
         private Map<Long, Integer> tenantOverrides = new HashMap<>();

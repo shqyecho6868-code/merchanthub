@@ -15,21 +15,21 @@ import java.util.Base64;
 import java.util.Date;
 
 /**
- * JWT issuing and verification (D1: replaces the old static JwtUtil).
+ * JWT issuing and verification (replaces the old static JwtUtil).
  * <p>
  * Two differences from the old code:
  * <ol>
  *   <li><b>The secret comes from config</b> ({@code merchanthub.jwt.secret}) instead of being hard-coded in CommonConstant:
  *       hard-coded = anyone who can see the repo can mint a token for any identity, and dev / prod can't use different secrets</li>
  *   <li><b>Only padded standard Base64 is accepted</b>: the old secret had 62 characters with no "=" padding; jjwt's lenient decoder yields one extra byte,
- *       while openssl / base64 drop it, so the two sides computed different signatures (P26). Here a length that isn't a multiple of 4 fails at startup</li>
+ *       while openssl / base64 drop it, so the two sides computed different signatures. Here a length that isn't a multiple of 4 fails at startup</li>
  * </ol>
  * The gateway only calls {@link #parse}; only user-tenant calls {@link #issue}.
  */
 @Slf4j
 public final class JwtCodec {
 
-    /** Identity claim names in the JWT (C1). The gateway turns them into X-Tenant-Id / X-Role headers after parsing */
+    /** Identity claim names in the JWT. The gateway turns them into X-Tenant-Id / X-Role headers after parsing */
     public static final String CLAIM_TENANT_ID = "tenantId";
     public static final String CLAIM_ROLE = "role";
 

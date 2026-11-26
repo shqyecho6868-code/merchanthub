@@ -48,7 +48,7 @@ public class PaymentTxListener implements TransactionListener {
      * Looks only at the payment in the shared database: succeeded and the winning attempt ID is this message's → send; still pending and the message is recent → ask again later; anything else → don't send.
      * <p>
      * Why not just check "payment succeeded": with concurrent duplicate callbacks, the half messages that lost the CAS also get checked back, and by then the payment has already succeeded;
-     * checking status alone would COMMIT all of them — 10 concurrent callbacks produced 11 events (observed in the B3 integration test, pitfalls P19).
+     * checking status alone would COMMIT all of them — 10 concurrent callbacks produced 11 events (observed in an integration test).
      */
     @Override
     public LocalTransactionState checkLocalTransaction(MessageExt msg) {

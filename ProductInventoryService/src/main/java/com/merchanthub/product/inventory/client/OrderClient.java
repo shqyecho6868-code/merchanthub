@@ -12,7 +12,7 @@ import java.util.Map;
 @FeignClient(name = "order", contextId = "inventoryOrderClient", path = "/internal/orders")
 public interface OrderClient {
 
-    /** E3: pass in a batch of order numbers, returns the status of those that <b>exist</b> (order number → status code). Batched: one call per reconciliation round */
+    /** Pass in a batch of order numbers, returns the status of those that <b>exist</b> (order number → status code). Batched: one call per reconciliation round */
     @PostMapping("/statuses")
     BaseResponse<Map<Long, Integer>> statuses(@RequestBody List<Long> orderNos);
 }

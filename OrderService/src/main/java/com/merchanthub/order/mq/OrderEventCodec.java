@@ -46,7 +46,7 @@ public class OrderEventCodec {
         // Index the keys: the dashboard / mqadmin can find this message by order number or event ID, the most common lookup when troubleshooting
         msg.setKeys(orderNo + " " + eventId);
         msg.putUserProperty(OrderEventTopics.PROP_EVENT_ID, String.valueOf(eventId));
-        // C1: which merchant the message belongs to; consumers restore the tenant context from it
+        // Which merchant the message belongs to; consumers restore the tenant context from it
         return TenantMessages.stamp(msg, tenantId);
     }
 

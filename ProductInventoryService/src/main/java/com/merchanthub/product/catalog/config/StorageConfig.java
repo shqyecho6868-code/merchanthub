@@ -14,7 +14,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
 /**
- * G-上: S3 is enabled only in the cloud (aws profile); local and tests use DisabledImageStorage, so the app starts without AWS credentials.
+ * S3 is enabled only in the cloud (aws profile); local and tests use DisabledImageStorage, so the app starts without AWS credentials.
  */
 @Configuration
 public class StorageConfig {

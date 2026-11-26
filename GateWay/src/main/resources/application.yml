@@ -11,7 +11,7 @@ spring:
 server:
   port: 10010
 
-# F1: load-test monitoring. Only expose health and prometheus (no sensitive endpoints like env / heapdump);
+# Load-test monitoring. Only expose health and prometheus (no sensitive endpoints like env / heapdump);
 # service ports are not exposed outside the gateway and /actuator is not routed by the gateway, so it is unreachable externally.
 # Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (default is only count / sum / max)
 management:

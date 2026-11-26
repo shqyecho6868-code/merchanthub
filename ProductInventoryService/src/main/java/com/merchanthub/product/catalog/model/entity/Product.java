@@ -23,9 +23,9 @@ public class Product {
     private String mainImage;
     /** 0 draft / 1 under review / 2 listed / 3 delisted / 4 rejected */
     private Integer status;
-    /** D1: which listing-review submission this is */
+    /** Which listing-review submission this is */
     private Integer auditRound;
-    /** D1: process instance ID of this round's approval; null = not started successfully yet */
+    /** Process instance ID of this round's approval; null = not started successfully yet */
     private String auditInstanceId;
     private LocalDateTime auditSubmittedAt;
     private String rejectReason;

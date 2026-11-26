@@ -1,2 +1,2 @@
-# 复制为 terraform.tfvars（不提交）后填写
+# Copy to terraform.tfvars (not committed) and fill in
 alert_email = "you@example.com"

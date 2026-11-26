@@ -13,10 +13,10 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * Order placement request. Only accepts "what and how many"; price, amounts, time, and merchant are all decided server-side (B1 notes 5.1).
+ * Order placement request. Only accepts "what and how many"; price, amounts, time, and merchant are all decided server-side.
  * buyerId isn't here: it comes from the gateway-injected X-User-Id header, preventing impersonation.
  * <p>
- * tenantId (C2): which merchant's store the buyer is ordering from. The store / checkout page already knows the store, so the frontend can always send it.
+ * tenantId: which merchant's store the buyer is ordering from. The store / checkout page already knows the store, so the frontend can always send it.
  * It's used only for <b>per-merchant rate limiting at the entry</b> (throttled requests consume no downstream resources); the persisted merchant is still determined by SKU ownership,
  * and a mismatch is rejected outright (SKU_TENANT_MISMATCH), so changing this field can't book an order under another merchant.
  */
@@ -33,7 +33,7 @@ public class CreateOrderRequest {
     /** Amount payable (cents) shown to the buyer on the checkout page, optional; only used for comparison, not for pricing */
     private Long expectedPayAmount;
 
-    /** Merchant being ordered from (C2, the hot parameter for rate limiting); must match SKU ownership */
+    /** Merchant being ordered from (the hot parameter for rate limiting); must match SKU ownership */
     @NotNull
     private Long tenantId;
 

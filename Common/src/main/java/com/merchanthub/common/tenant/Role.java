@@ -1,7 +1,7 @@
 package com.merchanthub.common.tenant;
 
 /**
- * Four business roles + one internal role, SYSTEM (C1).
+ * Four business roles + one internal role, SYSTEM.
  * <ul>
  *   <li>PLATFORM_ADMIN: platform administrator, belongs to no merchant, can see the whole platform</li>
  *   <li>MERCHANT_ADMIN: merchant administrator, can only view and modify their own merchant's data</li>

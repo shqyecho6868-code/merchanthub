@@ -19,7 +19,7 @@ spring:
 merchanthub:
   rocketmq:
     namesrv-addr: namesrv:9876
-  # E3: register with the XXL-Job admin (scheduler)
+  # Register with the XXL-Job admin (scheduler)
   job:
     xxl:
       enabled: true

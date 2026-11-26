@@ -3,7 +3,7 @@ package com.merchanthub.common.tenant;
 import java.util.List;
 
 /**
- * Identity headers injected by the gateway after parsing the JWT and forwarded between services via Feign (C1).
+ * Identity headers injected by the gateway after parsing the JWT and forwarded between services via Feign.
  * <p>
  * Downstream services <b>trust these three headers unconditionally</b>, so the gateway must first strip any same-named headers from external requests before writing its own parsed values;
  * otherwise a client could send {@code X-Tenant-Id: 8} itself and impersonate merchant 8.

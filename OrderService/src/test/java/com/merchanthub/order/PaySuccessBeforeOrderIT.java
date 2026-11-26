@@ -49,7 +49,7 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
     private OrderPlacer orderPlacer;
     @Autowired
     private ObjectMapper objectMapper;
-    /** The app's UTC clock. Can't use LocalDateTime.now(): this machine is on PST, so expire_at would land 8 hours in the past -> timeout message delivered immediately (P24) */
+    /** The app's UTC clock. Can't use LocalDateTime.now(): this machine is on PST, so expire_at would land 8 hours in the past -> timeout message delivered immediately */
     @Autowired
     private Clock clock;
 

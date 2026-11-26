@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** Product status history (table product_status_log, D1) */
+/** Product status history (table product_status_log) */
 @Data
 @TableName("product_status_log")
 public class ProductStatusLog {

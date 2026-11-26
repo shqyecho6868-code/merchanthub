@@ -20,17 +20,17 @@ spring:
         # Sentinel dashboard (mh-sentinel in docker-compose)
         dashboard: 127.0.0.1:8858
         # The dashboard runs in a container and must connect back to port 8719 on this host, so it needs a host IP reachable from inside the container.
-        # The dashboard accepts only IPs, not hostnames (host.docker.internal gives Bad IP, P30), so deploy/c2/start-order.sh looks it up and passes it in
+        # The dashboard accepts only IPs, not hostnames (host.docker.internal gives Bad IP), so deploy/c2/start-order.sh looks it up and passes it in
         client-ip: ${SENTINEL_CLIENT_IP:}
 
-  # E2: order search replica (mh-es in docker-compose, security disabled locally)
+  # Order search replica (mh-es in docker-compose, security disabled locally)
   elasticsearch:
     uris: http://127.0.0.1:9200
 
 merchanthub:
   rocketmq:
     namesrv-addr: 127.0.0.1:9876
-  # E3: register locally with the docker-compose XXL-Job admin (console at http://127.0.0.1:8090/xxl-job-admin)
+  # Register locally with the docker-compose XXL-Job admin (console at http://127.0.0.1:8090/xxl-job-admin)
   job:
     xxl:
       enabled: true

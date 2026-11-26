@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    # D1: old name UserService -> user-tenant (gateway routes and Feign both use this name)
+    # Old name UserService -> user-tenant (gateway routes and Feign both use this name)
     name: user-tenant
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
@@ -20,7 +20,7 @@ spring:
   liquibase:
     enabled: false
 
-# Flowable 7 (D1)
+# Flowable 7
 flowable:
   # Create / upgrade the ACT_* engine tables automatically on startup (the task requires "engine tables created by Flowable"). Production often sets false + a DBA runs the official SQL
   database-schema-update: true
@@ -43,19 +43,19 @@ mybatis-plus:
 
 merchanthub:
   tenant:
-    # Tenant plugin enabled since C1 (it was off before because the old IM tables had no tenant_id).
+    # Tenant plugin enabled (it was off before because the old IM tables had no tenant_id).
     # These three are "platform-level" tables that themselves define tenants / cross-tenant login, so they're not filtered by merchant:
     #   tenant (the tenant itself), account (at login we don't know who it is yet), merchant_application (the merchant doesn't exist yet when applying)
     # listing_approval and approval_outbox are merchant-scoped tables and get tenant_id appended as usual
     ignore-tables: tenant,account,merchant_application
-  # E3: the compensation scan is triggered by XXL-Job's approvalOutboxRelayJob (frequency configured in the admin)
+  # The compensation scan is triggered by XXL-Job's approvalOutboxRelayJob (frequency configured in the admin)
   job:
     xxl:
       enabled: false
       appname: user-tenant
       port: 9204
 
-# G-上 (closing an F1 leftover): only expose health and prometheus, same as other services. The ALB target group health-checks the container's /actuator/health directly
+# only expose health and prometheus, same as other services. The ALB target group health-checks the container's /actuator/health directly
 management:
   endpoints:
     web:

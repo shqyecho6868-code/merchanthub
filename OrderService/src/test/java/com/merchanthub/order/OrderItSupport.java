@@ -59,7 +59,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
     private TenantContext.Scope tenantScope;
 
     /**
-     * C1: the tenant plugin is fail-closed; a thread without context touching business tables throws. These cases call services directly on the test thread (bypassing
+     * The tenant plugin is fail-closed; a thread without context touching business tables throws. These cases call services directly on the test thread (bypassing
      * the Web / MQ entry points), so by default the test thread gets a cross-tenant SYSTEM identity; tenant isolation itself is verified by TenantIsolationIT.
      * For cases going through real MQ, the consumer thread's context is still restored from the tenantId in the message, unaffected by this.
      */
@@ -83,7 +83,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
         }
     }
 
-    /** C2: Sentinel rules / breaker state are JVM-global; reset per case from this context's config so an "open breaker" left by another test class doesn't leak in */
+    /** Sentinel rules / breaker state are JVM-global; reset per case from this context's config so an "open breaker" left by another test class doesn't leak in */
     @BeforeEach
     void resetSentinel() {
         sentinelRules.reload();

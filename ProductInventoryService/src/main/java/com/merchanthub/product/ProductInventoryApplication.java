@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
- * product-inventory service. The package is split into two subdomains (D2):
+ * product-inventory service. The package is split into two subdomains:
  * catalog (products, SKUs) and inventory (stock, reservation records). Subdomains call each other only through service interfaces, never each other's mappers,
  * so if inventory becomes a hotspot and needs its own service later, the boundary is already here.
  */

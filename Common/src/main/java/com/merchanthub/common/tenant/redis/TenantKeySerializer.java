@@ -6,7 +6,7 @@ import org.springframework.data.redis.serializer.RedisSerializer;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Automatically adds the tenant prefix to Redis keys (C1): "cart:sku:101" → "t:7:cart:sku:101". Strips the prefix when keys are read back (e.g. scan / keys).
+ * Automatically adds the tenant prefix to Redis keys: "cart:sku:101" → "t:7:cart:sku:101". Strips the prefix when keys are read back (e.g. scan / keys).
  * <p>
  * Why in the serializer instead of each caller building keys: key building is string concatenation scattered everywhere, and missing one spot leaks across tenants;
  * the serializer sits on every command's path, so with {@link TenantRedis} it's impossible to forget.

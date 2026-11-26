@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Runs the MyBatis-Plus tenant plugin directly and inspects the rewritten SQL (no database).
- * The "AND tenant_id = 7" seen in the logs during the 🧑 hands-on experiment is added by this step.
+ * The "AND tenant_id = 7" seen in the logs during a manual experiment is added by this step.
  */
 class TenantSqlHandlerTest {
 

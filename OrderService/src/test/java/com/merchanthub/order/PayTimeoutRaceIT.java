@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * No order ever has both ORDER_PAID and ORDER_CLOSED -- so inventory can never be "both confirmed and released".
  * Remove {@code AND status = #{from}} from the CAS and rerun: you'll see both events written for the same order and 3 log rows.
  * <p>
- * This test caught a bug on its first run (pitfalls P22): timeout won, yet the payment side's anomaly was recorded as DUPLICATE_PAYMENT / order status 10.
+ * This test caught a bug on its first run: timeout won, yet the payment side's anomaly was recorded as DUPLICATE_PAYMENT / order status 10.
  * Cause: after the CAS failed, the order status was read with a plain SELECT, which under repeatable read sees the transaction's starting snapshot. Fixed by switching to a FOR UPDATE current read.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
@@ -87,7 +87,7 @@ class PayTimeoutRaceIT extends OrderItSupport {
             int status = jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo);
             long paidEvents = count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'", key);
             long closedEvents = count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", key);
-            // With order_status = 50: the recorded "order status at the time" must also be the latest (P22: a snapshot read would record 10 and misclassify as DUPLICATE_PAYMENT)
+            // With order_status = 50: the recorded "order status at the time" must also be the latest (a snapshot read would record 10 and misclassify as DUPLICATE_PAYMENT)
             long anomalies = count("SELECT COUNT(*) FROM pay_anomaly WHERE order_no = ? AND type = 'PAID_AFTER_CLOSED' AND order_status = 50", orderNo);
             // Status log: CREATE + exactly one transition
             assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ?", orderNo)).isEqualTo(2);
@@ -131,7 +131,7 @@ class PayTimeoutRaceIT extends OrderItSupport {
      * <p>
      * This is the <b>most common</b> path in production: a scheduled message can't be recalled once sent, so every paid order receives a timeout message.
      * The timeout side's CAS(10->50) affects 0 rows -> order stays paid, no log entry, no ORDER_CLOSED (inventory isn't released).
-     * Remove {@code AND status = #{from}} from the CAS and rerun: you'll see the paid order closed and inventory confirmed then released (B4 experiment ③).
+     * Remove {@code AND status = #{from}} from the CAS and rerun: you'll see the paid order closed and inventory confirmed then released (a manual experiment).
      */
     @Test
     void timeoutAfterPaid_noop_orderStaysPaid_noClosedEvent() {

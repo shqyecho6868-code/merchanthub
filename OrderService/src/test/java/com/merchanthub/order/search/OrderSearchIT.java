@@ -30,7 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * E2 (demo only): after orders sync to ES, search by merchant + keyword. The Canal part (reading the binlog) isn't started in tests;
+ * Order search (demo only): after orders sync to ES, search by merchant + keyword. The Canal part (reading the binlog) isn't started in tests;
  * we call indexer.sync(orderNo) directly -- exactly what the Canal thread does once it has the order number (extracting order numbers is covered by CanalOrderSyncTest).
  * <p>
  * Focus on <b>tenant isolation</b>: ES bypasses the MyBatis tenant plugin, so the tenantId filter must be added by hand; merchant 8 can't find merchant 7's orders.

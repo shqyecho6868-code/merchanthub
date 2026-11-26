@@ -32,7 +32,7 @@ merchanthub:
   jwt:
     secret: ${JWT_SECRET}
 
-# G-上 (closing an F1 leftover): only expose health and prometheus, same as other services. The ALB target group health-checks the container's /actuator/health directly
+# only expose health and prometheus, same as other services. The ALB target group health-checks the container's /actuator/health directly
 management:
   endpoints:
     web:

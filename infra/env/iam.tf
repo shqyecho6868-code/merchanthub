@@ -1,6 +1,6 @@
-# ECS 里有两个角色，分工不同（常被问）：
-#   execution role：ECS 代理用 —— 拉 ECR 镜像、写 CloudWatch 日志、启动前从 SSM 读密码注入环境变量
-#   task role：容器里的业务代码用 —— product-inventory 签 S3 上传 URL、HeadObject；ECS Exec 进容器排错
+# ECS has two roles with different jobs (a common interview question):
+#   execution role: used by the ECS agent -- pull ECR images, write CloudWatch logs, read passwords from SSM before start and inject them as env vars
+#   task role: used by the application code in the container -- product-inventory presigns S3 upload URLs, HeadObject; ECS Exec for debugging
 data "aws_iam_policy_document" "ecs_tasks_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -45,20 +45,20 @@ resource "aws_iam_role_policy" "ecs_task" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # 预签名 URL 用 task role 的身份签：签名者必须自己有 PutObject 权限，URL 才有效。只给 products/ 前缀
+      # Presigned URLs are signed with the task role's identity: the signer itself must have PutObject for the URL to be valid. products/ prefix only
       {
         Effect   = "Allow"
         Action   = ["s3:PutObject", "s3:GetObject"]
         Resource = "${aws_s3_bucket.assets.arn}/products/*"
       },
-      # HeadObject 对象不存在时，没有 ListBucket 权限 S3 返回 403 而不是 404，代码就分不清"没上传"和"没权限"
+      # Without ListBucket, HeadObject on a missing object returns 403 instead of 404, and the code can't tell "not uploaded" from "no permission"
       {
         Effect    = "Allow"
         Action    = ["s3:ListBucket"]
         Resource  = aws_s3_bucket.assets.arn
         Condition = { StringLike = { "s3:prefix" = ["products/*"] } }
       },
-      # ECS Exec（aws ecs execute-command 进容器排错）
+      # ECS Exec (aws ecs execute-command into a container for debugging)
       {
         Effect   = "Allow"
         Action   = ["ssmmessages:CreateControlChannel", "ssmmessages:CreateDataChannel", "ssmmessages:OpenControlChannel", "ssmmessages:OpenDataChannel"]
@@ -68,7 +68,7 @@ resource "aws_iam_role_policy" "ecs_task" {
   })
 }
 
-# 中间件 EC2：SSM 托管（Session Manager 登录、send-command 灌种子数据）+ 容器日志写 CloudWatch + 读种子 SQL 和数据库密码
+# Middleware EC2: SSM-managed (Session Manager login, send-command to load seed data) + container logs to CloudWatch + read seed SQL and DB passwords
 resource "aws_iam_role" "middleware" {
   name = "${var.name}-middleware"
   assume_role_policy = jsonencode({
@@ -94,7 +94,7 @@ resource "aws_iam_role_policy" "middleware" {
         Resource = "${aws_cloudwatch_log_group.middleware.arn}:*"
       },
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/*" },
-      # G-下：云内压测把 k6 结果传回 S3，本机再下载（perf/cloud/run-in-vpc.sh）
+      # In-VPC load tests upload k6 results to S3 for download to the laptop (perf/cloud/run-in-vpc.sh)
       { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/results/*" },
       { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = aws_ssm_parameter.mysql_password.arn }
     ]

@@ -1,4 +1,4 @@
--- 来源：xxl-job 官方仓库 tag 3.4.2 的 doc/db/tables_xxl_job.sql（与 docker-compose 的 xuxueli/xxl-job-admin:3.4.2 对应），未改动
+-- Source: doc/db/tables_xxl_job.sql from the official xxl-job repo at tag 3.4.2 (matches xuxueli/xxl-job-admin:3.4.2 in docker-compose); only comments and sample text translated to English
 #
 # XXL-JOB
 # Copyright (c) 2015-present, xuxueli.
@@ -13,10 +13,10 @@ SET NAMES utf8mb4;
 CREATE TABLE `xxl_job_group`
 (
     `id`           int(11)     NOT NULL AUTO_INCREMENT,
-    `app_name`     varchar(64) NOT NULL COMMENT '执行器AppName',
-    `title`        varchar(64) NOT NULL COMMENT '执行器名称',
-    `address_type` tinyint(4)  NOT NULL DEFAULT '0' COMMENT '执行器地址类型：0=自动注册、1=手动录入',
-    `address_list` text COMMENT '执行器地址列表，多地址逗号分隔',
+    `app_name`     varchar(64) NOT NULL COMMENT 'Executor AppName',
+    `title`        varchar(64) NOT NULL COMMENT 'Executor name',
+    `address_type` tinyint(4)  NOT NULL DEFAULT '0' COMMENT 'Executor address type: 0=auto-registered, 1=entered manually',
+    `address_list` text COMMENT 'Executor address list, comma-separated',
     `update_time`  datetime             DEFAULT NULL,
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
@@ -39,29 +39,29 @@ CREATE TABLE `xxl_job_registry`
 CREATE TABLE `xxl_job_info`
 (
     `id`                        int(11)      NOT NULL AUTO_INCREMENT,
-    `job_group`                 int(11)      NOT NULL COMMENT '执行器主键ID',
+    `job_group`                 int(11)      NOT NULL COMMENT 'Executor primary key ID',
     `job_desc`                  varchar(255) NOT NULL,
     `add_time`                  datetime              DEFAULT NULL,
     `update_time`               datetime              DEFAULT NULL,
-    `author`                    varchar(64)           DEFAULT NULL COMMENT '作者',
-    `alarm_email`               varchar(255)          DEFAULT NULL COMMENT '报警邮件',
-    `schedule_type`             varchar(50)  NOT NULL DEFAULT 'NONE' COMMENT '调度类型',
-    `schedule_conf`             varchar(128)          DEFAULT NULL COMMENT '调度配置，值含义取决于调度类型',
-    `misfire_strategy`          varchar(50)  NOT NULL DEFAULT 'DO_NOTHING' COMMENT '调度过期策略',
-    `executor_route_strategy`   varchar(50)           DEFAULT NULL COMMENT '执行器路由策略',
-    `executor_handler`          varchar(255)          DEFAULT NULL COMMENT '任务handler',
-    `executor_param`            text                  DEFAULT NULL COMMENT '任务参数',
-    `executor_block_strategy`   varchar(50)           DEFAULT NULL COMMENT '阻塞处理策略',
-    `executor_timeout`          int(11)      NOT NULL DEFAULT '0' COMMENT '任务执行超时时间，单位秒',
-    `executor_fail_retry_count` int(11)      NOT NULL DEFAULT '0' COMMENT '失败重试次数',
-    `glue_type`                 varchar(50)  NOT NULL COMMENT 'GLUE类型',
-    `glue_source`               mediumtext COMMENT 'GLUE源代码',
-    `glue_remark`               varchar(128)          DEFAULT NULL COMMENT 'GLUE备注',
-    `glue_updatetime`           datetime              DEFAULT NULL COMMENT 'GLUE更新时间',
-    `child_jobid`               varchar(255)          DEFAULT NULL COMMENT '子任务ID，多个逗号分隔',
-    `trigger_status`            tinyint(4)   NOT NULL DEFAULT '0' COMMENT '调度状态：0-停止，1-运行',
-    `trigger_last_time`         bigint(13)   NOT NULL DEFAULT '0' COMMENT '上次调度时间',
-    `trigger_next_time`         bigint(13)   NOT NULL DEFAULT '0' COMMENT '下次调度时间',
+    `author`                    varchar(64)           DEFAULT NULL COMMENT 'Author',
+    `alarm_email`               varchar(255)          DEFAULT NULL COMMENT 'Alarm email',
+    `schedule_type`             varchar(50)  NOT NULL DEFAULT 'NONE' COMMENT 'Schedule type',
+    `schedule_conf`             varchar(128)          DEFAULT NULL COMMENT 'Schedule config; meaning depends on the schedule type',
+    `misfire_strategy`          varchar(50)  NOT NULL DEFAULT 'DO_NOTHING' COMMENT 'Misfire strategy',
+    `executor_route_strategy`   varchar(50)           DEFAULT NULL COMMENT 'Executor routing strategy',
+    `executor_handler`          varchar(255)          DEFAULT NULL COMMENT 'Job handler',
+    `executor_param`            text                  DEFAULT NULL COMMENT 'Job parameters',
+    `executor_block_strategy`   varchar(50)           DEFAULT NULL COMMENT 'Blocking strategy',
+    `executor_timeout`          int(11)      NOT NULL DEFAULT '0' COMMENT 'Job execution timeout, in seconds',
+    `executor_fail_retry_count` int(11)      NOT NULL DEFAULT '0' COMMENT 'Retry count on failure',
+    `glue_type`                 varchar(50)  NOT NULL COMMENT 'GLUE type',
+    `glue_source`               mediumtext COMMENT 'GLUE source code',
+    `glue_remark`               varchar(128)          DEFAULT NULL COMMENT 'GLUE remark',
+    `glue_updatetime`           datetime              DEFAULT NULL COMMENT 'GLUE update time',
+    `child_jobid`               varchar(255)          DEFAULT NULL COMMENT 'Child job IDs, comma-separated',
+    `trigger_status`            tinyint(4)   NOT NULL DEFAULT '0' COMMENT 'Trigger status: 0-stopped, 1-running',
+    `trigger_last_time`         bigint(13)   NOT NULL DEFAULT '0' COMMENT 'Last trigger time',
+    `trigger_next_time`         bigint(13)   NOT NULL DEFAULT '0' COMMENT 'Next trigger time',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;
@@ -69,10 +69,10 @@ CREATE TABLE `xxl_job_info`
 CREATE TABLE `xxl_job_logglue`
 (
     `id`          int(11)      NOT NULL AUTO_INCREMENT,
-    `job_id`      int(11)      NOT NULL COMMENT '任务，主键ID',
-    `glue_type`   varchar(50) DEFAULT NULL COMMENT 'GLUE类型',
-    `glue_source` mediumtext COMMENT 'GLUE源代码',
-    `glue_remark` varchar(128) NOT NULL COMMENT 'GLUE备注',
+    `job_id`      int(11)      NOT NULL COMMENT 'Job primary key ID',
+    `glue_type`   varchar(50) DEFAULT NULL COMMENT 'GLUE type',
+    `glue_source` mediumtext COMMENT 'GLUE source code',
+    `glue_remark` varchar(128) NOT NULL COMMENT 'GLUE remark',
     `add_time`    datetime    DEFAULT NULL,
     `update_time` datetime    DEFAULT NULL,
     PRIMARY KEY (`id`)
@@ -84,20 +84,20 @@ CREATE TABLE `xxl_job_logglue`
 CREATE TABLE `xxl_job_log`
 (
     `id`                        bigint(20)          NOT NULL AUTO_INCREMENT,
-    `job_group`                 int(11)             NOT NULL COMMENT '执行器主键ID',
-    `job_id`                    int(11)             NOT NULL COMMENT '任务，主键ID',
-    `executor_address`          varchar(255)        DEFAULT NULL COMMENT '执行器地址，本次执行的地址',
-    `executor_handler`          varchar(255)        DEFAULT NULL COMMENT '任务handler',
-    `executor_param`            text                DEFAULT NULL COMMENT '任务参数',
-    `executor_sharding_param`   varchar(20)         DEFAULT NULL COMMENT '任务分片参数，格式如 1/2',
-    `executor_fail_retry_count` int(11)             NOT NULL DEFAULT '0' COMMENT '失败重试次数',
-    `trigger_time`              datetime            DEFAULT NULL COMMENT '调度-时间',
-    `trigger_code`              int(11)             NOT NULL COMMENT '调度-结果',
-    `trigger_msg`               text                COMMENT '调度-日志',
-    `handle_time`               datetime            DEFAULT NULL COMMENT '执行-时间',
-    `handle_code`               int(11)             NOT NULL COMMENT '执行-状态',
-    `handle_msg`                text                COMMENT '执行-日志',
-    `alarm_status`              tinyint(4)          NOT NULL DEFAULT '0' COMMENT '告警状态：0-默认、1-无需告警、2-告警成功、3-告警失败',
+    `job_group`                 int(11)             NOT NULL COMMENT 'Executor primary key ID',
+    `job_id`                    int(11)             NOT NULL COMMENT 'Job primary key ID',
+    `executor_address`          varchar(255)        DEFAULT NULL COMMENT 'Executor address used for this run',
+    `executor_handler`          varchar(255)        DEFAULT NULL COMMENT 'Job handler',
+    `executor_param`            text                DEFAULT NULL COMMENT 'Job parameters',
+    `executor_sharding_param`   varchar(20)         DEFAULT NULL COMMENT 'Job sharding parameter, e.g. 1/2',
+    `executor_fail_retry_count` int(11)             NOT NULL DEFAULT '0' COMMENT 'Retry count on failure',
+    `trigger_time`              datetime            DEFAULT NULL COMMENT 'Trigger time',
+    `trigger_code`              int(11)             NOT NULL COMMENT 'Trigger result',
+    `trigger_msg`               text                COMMENT 'Trigger log',
+    `handle_time`               datetime            DEFAULT NULL COMMENT 'Handle time',
+    `handle_code`               int(11)             NOT NULL COMMENT 'Handle status',
+    `handle_msg`                text                COMMENT 'Handle log',
+    `alarm_status`              tinyint(4)          NOT NULL DEFAULT '0' COMMENT 'Alarm status: 0-default, 1-no alarm needed, 2-alarm sent, 3-alarm failed',
     PRIMARY KEY (`id`),
     KEY `I_trigger_time` (`trigger_time`),
     KEY `I_handle_code` (`handle_code`),
@@ -109,10 +109,10 @@ CREATE TABLE `xxl_job_log`
 CREATE TABLE `xxl_job_log_report`
 (
     `id`            int(11) NOT NULL AUTO_INCREMENT,
-    `trigger_day`   datetime         DEFAULT NULL COMMENT '调度-时间',
-    `running_count` int(11) NOT NULL DEFAULT '0' COMMENT '运行中-日志数量',
-    `suc_count`     int(11) NOT NULL DEFAULT '0' COMMENT '执行成功-日志数量',
-    `fail_count`    int(11) NOT NULL DEFAULT '0' COMMENT '执行失败-日志数量',
+    `trigger_day`   datetime         DEFAULT NULL COMMENT 'Trigger time',
+    `running_count` int(11) NOT NULL DEFAULT '0' COMMENT 'Running log count',
+    `suc_count`     int(11) NOT NULL DEFAULT '0' COMMENT 'Succeeded log count',
+    `fail_count`    int(11) NOT NULL DEFAULT '0' COMMENT 'Failed log count',
     `update_time`   datetime         DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `i_trigger_day` (`trigger_day`) USING BTREE
@@ -123,7 +123,7 @@ CREATE TABLE `xxl_job_log_report`
 
 CREATE TABLE `xxl_job_lock`
 (
-    `lock_name` varchar(50) NOT NULL COMMENT '锁名称',
+    `lock_name` varchar(50) NOT NULL COMMENT 'Lock name',
     PRIMARY KEY (`lock_name`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4;
@@ -133,11 +133,11 @@ CREATE TABLE `xxl_job_lock`
 CREATE TABLE `xxl_job_user`
 (
     `id`         int(11)     NOT NULL AUTO_INCREMENT,
-    `username`   varchar(50) NOT NULL COMMENT '账号',
-    `password`   varchar(100) NOT NULL COMMENT '密码加密信息',
-    `token`      varchar(100) DEFAULT NULL COMMENT '登录token',
-    `role`       tinyint(4)  NOT NULL COMMENT '角色：0-普通用户、1-管理员',
-    `permission` varchar(255) DEFAULT NULL COMMENT '权限：执行器ID列表，多个逗号分割',
+    `username`   varchar(50) NOT NULL COMMENT 'Username',
+    `password`   varchar(100) NOT NULL COMMENT 'Encrypted password',
+    `token`      varchar(100) DEFAULT NULL COMMENT 'Login token',
+    `role`       tinyint(4)  NOT NULL COMMENT 'Role: 0-normal user, 1-admin',
+    `permission` varchar(255) DEFAULT NULL COMMENT 'Permission: executor ID list, comma-separated',
     PRIMARY KEY (`id`),
     UNIQUE KEY `i_username` (`username`) USING BTREE
 ) ENGINE = InnoDB
@@ -147,39 +147,39 @@ CREATE TABLE `xxl_job_user`
 ## —————————————————————— for default data ——————————————————
 
 INSERT INTO `xxl_job_group`(`id`, `app_name`, `title`, `address_type`, `address_list`, `update_time`)
-    VALUES (1, 'xxl-job-executor-sample', '通用执行器Sample', 0, NULL, now()),
-           (2, 'xxl-job-executor-sample-ai', 'AI执行器Sample', 0, NULL, now());
+    VALUES (1, 'xxl-job-executor-sample', 'Generic executor sample', 0, NULL, now()),
+           (2, 'xxl-job-executor-sample-ai', 'AI executor sample', 0, NULL, now());
 
 INSERT INTO `xxl_job_info`(`id`, `job_group`, `job_desc`, `add_time`, `update_time`, `author`, `alarm_email`,
                            `schedule_type`, `schedule_conf`, `misfire_strategy`, `executor_route_strategy`,
                            `executor_handler`, `executor_param`, `executor_block_strategy`, `executor_timeout`,
                            `executor_fail_retry_count`, `glue_type`, `glue_source`, `glue_remark`, `glue_updatetime`,
                            `child_jobid`)
-VALUES (1, 1, '示例任务01', now(), now(), 'XXL', '', 'CRON', '0 0 0 * * ? *',
-        'DO_NOTHING', 'FIRST', 'demoJobHandler', '', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE代码初始化',
+VALUES (1, 1, 'Sample job 01', now(), now(), 'XXL', '', 'CRON', '0 0 0 * * ? *',
+        'DO_NOTHING', 'FIRST', 'demoJobHandler', '', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE code init',
         now(), ''),
-       (2, 2, 'Ollama示例任务', now(), now(), 'XXL', '', 'NONE', '',
+       (2, 2, 'Ollama sample job', now(), now(), 'XXL', '', 'NONE', '',
         'DO_NOTHING', 'FIRST', 'ollamaJobHandler', '{
-    "input": "Java实现二叉树层序遍历",
-    "prompt": "你是一个研发工程师，擅长解决技术类问题。",
+    "input": "Implement level-order traversal of a binary tree in Java",
+    "prompt": "You are a software engineer who is good at solving technical problems.",
     "model": "qwen3.5:0.8b"
-}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE代码初始化',
+}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE code init',
         now(), ''),
-       (3, 2, 'Dify示例任务', now(), now(), 'XXL', '', 'NONE', '',
+       (3, 2, 'Dify sample job', now(), now(), 'XXL', '', 'NONE', '',
         'DO_NOTHING', 'FIRST', 'difyWorkflowJobHandler', '{
     "inputs":{
-        "input":"查询班级各学科前三名"
+        "input":"Find the top three students in each subject of the class"
     },
     "user": "xxl-job",
     "baseUrl": "http://localhost/v1",
     "apiKey": "app-OUVgNUOQRIMokfmuJvBJoUTN"
-}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE代码初始化',
+}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE code init',
         now(), ''),
-       (4, 2, 'OpenClaw示例任务', now(), now(), 'XXL', '', 'NONE', '',
+       (4, 2, 'OpenClaw sample job', now(), now(), 'XXL', '', 'NONE', '',
         'DO_NOTHING', 'FIRST', 'openClawJobHandler', '{
-    "input": "查看下上海今天得天气，给出出游建议",
-    "prompt": "你是一个出游助手，擅长做旅游规划"
-}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE代码初始化',
+    "input": "Check the weather in Shanghai today and suggest an outing plan",
+    "prompt": "You are a travel assistant who is good at trip planning"
+}', 'SERIAL_EXECUTION', 0, 0, 'BEAN', '', 'GLUE code init',
         now(), '');
 
 INSERT INTO `xxl_job_user`(`id`, `username`, `password`, `role`, `permission`)

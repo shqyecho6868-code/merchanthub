@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Since B3-下 the outbox is order's generic outbox (paid / closed / timeout-close messages all use it) and no longer follows the event-mode switch;
+ * The outbox is order's generic outbox (paid / closed / timeout-close messages all use it) and no longer follows the event-mode switch;
  * event-mode only decides whether the "order created" event uses transactional messages or the local message table
  */
 @Configuration
@@ -27,7 +27,7 @@ public class OutboxConfig {
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(3000);
-        producer.setTopics(List.of(OrderEventTopics.TOPIC, OrderEventTopics.TIMEOUT_TOPIC));   // prefetch routes at startup (P18)
+        producer.setTopics(List.of(OrderEventTopics.TOPIC, OrderEventTopics.TIMEOUT_TOPIC));   // prefetch routes at startup
         return producer;
     }
 

@@ -19,7 +19,7 @@ import java.util.function.Supplier;
  * - Business failure (body.code != 200): pass through the downstream error code and message as-is, e.g. "insufficient stock"
  * - Timeout / connection failure / 5xx: convert to DOWNSTREAM_UNAVAILABLE (degrade: fail fast with a clear message instead of dumping stack traces)
  * <p>
- * C2: each call is wrapped in a Sentinel resource (names in ProductInventoryClient.RES_*); circuit-breaker rules in SentinelRulesConfig.
+ * Each call is wrapped in a Sentinel resource (names in ProductInventoryClient.RES_*); circuit-breaker rules in SentinelRulesConfig.
  * Downstream keeps being slow / failing -> breaker opens, and for the next N seconds <b>no requests are sent</b>; we degrade immediately.
  * Benefit: order threads don't pile up on 3s timeouts one by one (otherwise a slow downstream drags order down too), and the downstream gets breathing room to recover.
  * <p>
@@ -48,7 +48,7 @@ public final class RemoteResults {
         try {
             resp = call.get();
         } catch (RetryableException e) {
-            // Timeout or connection failure: we don't know whether the other side executed it (see "known gap" in B1 notes section 2)
+            // Timeout or connection failure: we don't know whether the other side executed it (a known gap, covered by the dangling-reservation scan)
             Tracer.traceEntry(e, entry);
             log.warn("Remote call timed out or failed to connect: {}", resource, e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);

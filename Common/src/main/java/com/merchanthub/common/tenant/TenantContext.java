@@ -5,7 +5,7 @@ import org.slf4j.MDC;
 import java.util.function.Supplier;
 
 /**
- * Tenant context: a ThreadLocal holding "who the current thread is acting for" (C1).
+ * Tenant context: a ThreadLocal holding "who the current thread is acting for".
  * <p>
  * Written by: the web interceptor (request headers), MQ consumers (message properties), scheduled jobs (explicit {@link #runAsSystem}).
  * Read by: the MyBatis-Plus tenant plugin when building SQL, the Feign interceptor forwarding headers, Redis key prefixes, RBAC checks.
@@ -74,7 +74,7 @@ public final class TenantContext {
     }
 
     private static void putMdc(TenantInfo info) {
-        // Logs carry tenantId (CLAUDE.md section 6): search logs by tenantId to find "whose request" it was
+        // Logs carry tenantId: search logs by tenantId to find "whose request" it was
         if (info == null || info.tenantId() == null) {
             MDC.remove("tenantId");
         } else {

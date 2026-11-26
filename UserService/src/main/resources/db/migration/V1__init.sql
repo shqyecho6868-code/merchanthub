@@ -1,87 +1,87 @@
--- user-tenant 服务的业务表（库 mh_user，D1）。Flowable 的 ACT_* 表不在这里，由引擎启动时自动建。
--- 约定同其他服务：时间列 DATETIME(3) 存 UTC，created_at / updated_at 由数据库维护，deleted 逻辑删除。
+-- Business tables of the user-tenant service (database mh_user). Flowable's ACT_* tables are not here; the engine creates them on startup.
+-- Same conventions as other services: time columns DATETIME(3) in UTC, created_at / updated_at maintained by the database, deleted = soft delete.
 
--- 租户（商家）。平台级表：它本身就是"租户"的定义，不再按 tenant_id 过滤
+-- Tenant (merchant). Platform-level table: it is the definition of a tenant itself, so it is not filtered by tenant_id
 CREATE TABLE tenant (
     id                    BIGINT      NOT NULL AUTO_INCREMENT,
-    name                  VARCHAR(64) NOT NULL COMMENT '店铺名',
-    status                TINYINT     NOT NULL DEFAULT 1 COMMENT '1 营业中 / 0 停用',
-    source_application_id BIGINT      COMMENT '由哪张入驻申请创建；唯一 → 同一张申请重复执行"通过"也只会建一个租户',
+    name                  VARCHAR(64) NOT NULL COMMENT 'Shop name',
+    status                TINYINT     NOT NULL DEFAULT 1 COMMENT '1 active / 0 disabled',
+    source_application_id BIGINT      COMMENT 'Onboarding application it was created from; unique, so approving the same application twice still creates only one tenant',
     created_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at            DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted               TINYINT     NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uk_source_application (source_application_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '租户（商家）';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Tenant (merchant)';
 
--- 账号：买家、商家管理员 / 员工、平台管理员都在这张表，靠 role + tenant_id 区分
+-- Accounts: buyers, merchant admins / staff and platform admins all live in this table, told apart by role + tenant_id
 CREATE TABLE account (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
-    tenant_id     BIGINT       COMMENT '商家角色必填；买家 / 平台管理员为 NULL（规则同网关 Identity）',
+    tenant_id     BIGINT       COMMENT 'Required for merchant roles; NULL for buyers / platform admins (same rule as the gateway Identity)',
     username      VARCHAR(64)  NOT NULL,
-    password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt（自带随机盐），替换旧 IM 的 MD5 + 固定盐',
+    password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt (random salt built in)',
     role          VARCHAR(32)  NOT NULL COMMENT 'PLATFORM_ADMIN / MERCHANT_ADMIN / MERCHANT_STAFF / BUYER',
-    status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 正常 / 0 禁用',
+    status        TINYINT      NOT NULL DEFAULT 1 COMMENT '1 normal / 0 disabled',
     created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted       TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
-    -- 登录名全平台唯一；也是"两张入驻申请抢同一个登录名"时的最终裁决
+    -- Login names are unique platform-wide; also the final arbiter when two onboarding applications race for the same login name
     UNIQUE KEY uk_username (username),
     KEY idx_tenant (tenant_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '账号';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Account';
 
--- 商家入驻申请。平台级表：申请时商家还不存在
+-- Merchant onboarding applications. Platform-level table: the merchant doesn't exist yet when applying
 CREATE TABLE merchant_application (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
-    applicant_user_id   BIGINT       NOT NULL COMMENT '申请人（已登录的平台账号，驳回后只有他能改）',
+    applicant_user_id   BIGINT       NOT NULL COMMENT 'Applicant (logged-in platform account; only they can edit after a rejection)',
     shop_name           VARCHAR(64)  NOT NULL,
-    admin_username      VARCHAR(64)  NOT NULL COMMENT '通过后开通的商家管理员登录名',
-    admin_password_hash VARCHAR(100) NOT NULL COMMENT '只存 BCrypt，不存明文',
-    status              TINYINT      NOT NULL DEFAULT 10 COMMENT '10 审核中 / 20 已驳回（待修改）/ 30 已通过 / 40 已撤回',
+    admin_username      VARCHAR(64)  NOT NULL COMMENT 'Login name of the merchant admin created on approval',
+    admin_password_hash VARCHAR(100) NOT NULL COMMENT 'BCrypt only, never plaintext',
+    status              TINYINT      NOT NULL DEFAULT 10 COMMENT '10 under review / 20 rejected (awaiting changes) / 30 approved / 40 withdrawn',
     reject_reason       VARCHAR(255),
-    submit_count        INT          NOT NULL DEFAULT 1 COMMENT '第几次提交（驳回后重提 +1）',
-    process_instance_id VARCHAR(64)  COMMENT 'Flowable 流程实例 ID；驳回重提仍是同一个实例',
-    tenant_id           BIGINT       COMMENT '通过后创建的商家 ID',
+    submit_count        INT          NOT NULL DEFAULT 1 COMMENT 'Submission count (+1 on resubmission after rejection)',
+    process_instance_id VARCHAR(64)  COMMENT 'Flowable process instance ID; resubmission after rejection keeps the same instance',
+    tenant_id           BIGINT       COMMENT 'Merchant ID created on approval',
     created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted             TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_applicant (applicant_user_id, status)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '商家入驻申请';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Merchant onboarding application';
 
--- 商品上架审批单：一次提交（product 的一个 audit_round）= 一行 = 一个流程实例
+-- Product listing approvals: one submission (one audit_round of a product) = one row = one process instance
 CREATE TABLE listing_approval (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
     tenant_id           BIGINT       NOT NULL,
     product_id          BIGINT       NOT NULL,
-    audit_round         INT          NOT NULL COMMENT 'product 侧第几次提交审核',
-    product_name        VARCHAR(128) NOT NULL COMMENT '待办列表里显示；审批看的是提交时的名字',
+    audit_round         INT          NOT NULL COMMENT 'Submission round on the product side',
+    product_name        VARCHAR(128) NOT NULL COMMENT 'Shown in the task list; the reviewer sees the name as submitted',
     initiator_user_id   BIGINT,
     process_instance_id VARCHAR(64)  NOT NULL,
-    status              TINYINT      NOT NULL DEFAULT 10 COMMENT '10 审批中 / 30 已通过 / 40 已驳回',
+    status              TINYINT      NOT NULL DEFAULT 10 COMMENT '10 in review / 30 approved / 40 rejected',
     reject_reason       VARCHAR(255),
     created_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at          DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted             TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
-    -- 发起幂等：Flowable 不保证 businessKey 唯一，product 重试 / 补偿重复发起时靠这个唯一键只留一个实例
+    -- Idempotent start: Flowable doesn't guarantee a unique businessKey; when product retries / compensation starts it again, this unique key keeps a single instance
     UNIQUE KEY uk_product_round (tenant_id, product_id, audit_round),
     KEY idx_process_instance (process_instance_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '商品上架审批单';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Product listing approval';
 
--- 审批结果的本地消息表：和"流程结束"在同一个事务里写入（结构同 order_outbox，B2）
+-- Outbox for approval results: written in the same transaction as "process ended" (same structure as order_outbox)
 CREATE TABLE approval_outbox (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
     tenant_id     BIGINT       NOT NULL,
-    event_id      BIGINT       NOT NULL COMMENT '事件唯一 ID（雪花），重发不变',
-    biz_key       VARCHAR(64)  NOT NULL COMMENT '如 listing:7:1001:2，放进消息 keys 方便排查',
+    event_id      BIGINT       NOT NULL COMMENT 'Unique event ID (snowflake); unchanged on resend',
+    biz_key       VARCHAR(64)  NOT NULL COMMENT 'e.g. listing:7:1001:2; set as message keys for troubleshooting',
     topic         VARCHAR(64)  NOT NULL,
     tag           VARCHAR(64)  NOT NULL,
     payload       JSON         NOT NULL,
-    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0 待发送 / 1 已发送 / 2 发送失败（超过重试上限）',
+    status        TINYINT      NOT NULL DEFAULT 0 COMMENT '0 pending / 1 sent / 2 failed (retry limit exceeded)',
     retry_count   INT          NOT NULL DEFAULT 0,
-    next_retry_at DATETIME(3)  NOT NULL COMMENT '最早什么时候可以（再）发送；也用作发送中的租约截止时间',
+    next_retry_at DATETIME(3)  NOT NULL COMMENT 'Earliest time it may be sent (again); also the lease deadline while sending',
     last_error    VARCHAR(512),
     sent_at       DATETIME(3),
     created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -90,4 +90,4 @@ CREATE TABLE approval_outbox (
     PRIMARY KEY (id),
     UNIQUE KEY uk_event_id (event_id),
     KEY idx_status_next_retry (status, next_retry_at)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '审批结果本地消息表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Approval result outbox';

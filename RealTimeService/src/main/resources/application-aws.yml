@@ -1,4 +1,4 @@
-# G-上: AWS cloud config. ECS sets SPRING_PROFILES_ACTIVE=prod,aws -- prod provides routes and other common config; this file only overrides "cloud addresses and credentials".
+# AWS cloud config. ECS sets SPRING_PROFILES_ACTIVE=prod,aws -- prod provides routes and other common config; this file only overrides "cloud addresses and credentials".
 # Addresses are written into the ECS task env vars by Terraform; secrets come from SSM Parameter Store (task definition secrets), never baked into the image or the repo
 
 spring:
@@ -13,7 +13,7 @@ spring:
       # ElastiCache has no AUTH (passwords aren't supported without in-transit encryption); protected by private subnets + a security group that only allows ECS. Empty string = don't send AUTH
       password: ""
   cloud:
-    # Besides the VPC NIC (10.20.x), a Fargate task has a 169.254.172.x link-local NIC (used internally by ECS, P50).
+    # Besides the VPC NIC (10.20.x), a Fargate task has a 169.254.172.x link-local NIC (used internally by ECS).
     # Spring picks "the first non-loopback address" by default and would register 169.254 in Nacos, which other services cannot reach.
     # So restrict it to the VPC CIDR (10.20.0.0/16 from infra/env/network.tf)
     inetutils:

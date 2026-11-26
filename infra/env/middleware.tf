@@ -1,5 +1,5 @@
-# 一台 EC2 用 docker compose 跑 Nacos、RocketMQ（NameServer + Broker）、Elasticsearch。
-# 这三个 AWS 没有"开箱即用又便宜"的托管版（Amazon MQ 不支持 RocketMQ；OpenSearch 要单独收费），学习项目合并到一台机器
+# One EC2 instance runs Nacos, RocketMQ (NameServer + Broker) and Elasticsearch with docker compose.
+# AWS has no cheap, ready-to-use managed version of these (Amazon MQ doesn't support RocketMQ; OpenSearch is billed separately), so they share one machine
 data "aws_ssm_parameter" "al2023" {
   name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
 }
@@ -11,7 +11,7 @@ resource "aws_instance" "middleware" {
   vpc_security_group_ids = [aws_security_group.middleware.id]
   iam_instance_profile   = aws_iam_instance_profile.middleware.name
 
-  # 只允许 IMDSv2（要先拿 token 才能读元数据），防 SSRF 读走实例凭证 —— 行业通行的加固项
+  # IMDSv2 only (a token is required before reading metadata), preventing SSRF from stealing instance credentials -- standard hardening
   metadata_options {
     http_tokens                 = "required"
     http_put_response_hop_limit = 2
@@ -29,10 +29,10 @@ resource "aws_instance" "middleware" {
     compose_file    = file("${path.module}/middleware-compose.yml")
     compose_version = "v5.6.1"
   })
-  # user_data 只在首次启动执行一次；内容变了要重建机器才生效
+  # user_data runs only on first boot; changing it requires replacing the instance
   user_data_replace_on_change = true
 
-  # 镜像都要从公网拉，必须等 NAT 通了再启动，否则 user_data 里 docker pull 全失败
+  # Images are pulled from the internet, so wait for NAT before starting, otherwise every docker pull in user_data fails
   depends_on = [aws_nat_gateway.main, aws_route_table_association.private]
 
   tags = { Name = "${var.name}-middleware" }

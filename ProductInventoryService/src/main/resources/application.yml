@@ -1,6 +1,6 @@
 server:
   port: 8106
-  # F1: let Micrometer read Tomcat thread pool metrics (busy / max) to tell during load tests whether the thread pool saturates first
+  # Let Micrometer read Tomcat thread pool metrics (busy / max) to tell during load tests whether the thread pool saturates first
   tomcat:
     mbeanregistry:
       enabled: true
@@ -12,20 +12,20 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # Keep the Hikari pool at its default of 10; don't casually enlarge it (measured in F1, docs/perf-report.md section 5): at 30, COMMIT went 6ms → 16ms,
+    # Keep the Hikari pool at its default of 10; don't casually enlarge it (measured under load testing): at 30, COMMIT went 6ms → 16ms,
     # row-lock wait 59s → 890s, and throughput dropped. The bottleneck is the database (commit flush + inventory row locks); pool queuing is only a symptom, and a bigger pool just moves the queue into the database
-  # Schema is managed by Flyway (db/migration/V*.sql), same as the order service (D26). Databases created by spring.sql.init before B3 have no Flyway history table:
+  # Schema is managed by Flyway (db/migration/V*.sql), same as the order service. Databases created by spring.sql.init before Flyway was introduced have no Flyway history table:
   # baseline-on-migrate records such an existing database as V1 and only runs scripts from V2 on; an empty database runs from V1 as usual
   cloud:
     openfeign:
       client:
         config:
           # Cross-service calls must have timeouts: the dangling scan queries orders; if order is slow, skip this batch and check again next round
-          # The key is the @FeignClient contextId (inventoryOrderClient), not the service name (fixed in C2, P29)
+          # The key is the @FeignClient contextId (inventoryOrderClient), not the service name 
           inventoryOrderClient:
             connect-timeout: 1000
             read-timeout: 3000
-          # D1: start / query listing approvals. No retry after a timeout — left to the compensation scan (the start API is idempotent, so re-sending is safe)
+          # Start / query listing approvals. No retry after a timeout — left to the compensation scan (the start API is idempotent, so re-sending is safe)
           productListingApprovalClient:
             connect-timeout: 1000
             read-timeout: 3000
@@ -49,10 +49,10 @@ mybatis-plus:
 merchanthub:
   inventory:
     settle-consumer:
-      # Subscribe to order's ORDER_PAID / ORDER_CLOSED to confirm-deduct / release (B3-下)
+      # Subscribe to order's ORDER_PAID / ORDER_CLOSED to confirm-deduct / release
       enabled: true
     reservation-recon:
-      # Reservation reconciliation (E3, formerly B3-下's dangling-reservation scan): reservations still RESERVED after older-than → release / confirm based on the order's real status.
+      # Reservation reconciliation (formerly the dangling-reservation scan): reservations still RESERVED after older-than → release / confirm based on the order's real status.
       # Triggered by XXL-Job's reservationReconJob; the frequency is configured in the admin.
       # Must be much larger than the order-placement transaction timeout (5 s): only after this long can a missing order be considered never coming.
       # Must also exceed the order payment window (15m) plus margin: normal pending-payment orders legitimately hold stock and shouldn't be fetched and queried every round
@@ -60,11 +60,11 @@ merchanthub:
       batch-size: 100
   product:
     listing-result-consumer:
-      # Subscribe to user-tenant's listing approval results and write back the product status (D1)
+      # Subscribe to user-tenant's listing approval results and write back the product status
       enabled: true
     listing-compensate:
-      # "Under review" with no result after older-than → query user-tenant: if the message was lost, write back from the query; if the start never succeeded, start it again (D1).
-      # Triggered by XXL-Job's listingCompensateJob since E3
+      # "Under review" with no result after older-than → query user-tenant: if the message was lost, write back from the query; if the start never succeeded, start it again.
+      # Triggered by XXL-Job's listingCompensateJob
       # Much longer than the normal "approval finished → message arrives" latency (seconds), to avoid racing normal consumption; but not too long, or merchants wait ages when a message is lost
       older-than: 2m
       batch-size: 100
@@ -74,7 +74,7 @@ merchanthub:
       appname: product-inventory
       port: 9203
 
-# F1: load-test monitoring. Only health and prometheus are exposed (not sensitive endpoints like env / heapdump);
+# Load-test monitoring. Only health and prometheus are exposed (not sensitive endpoints like env / heapdump);
 # service ports aren't exposed through the gateway and /actuator isn't in the gateway routes, so it's unreachable from outside.
 # Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (by default there's only count / sum / max)
 management:

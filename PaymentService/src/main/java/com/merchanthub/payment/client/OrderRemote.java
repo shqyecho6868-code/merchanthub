@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.function.Supplier;
 
 /**
- * Wraps payment → order calls in a Sentinel circuit breaker (E3, C2 follow-up). Same approach as order's RemoteResults:
+ * Wraps payment → order calls in a Sentinel circuit breaker. Same approach as order's RemoteResults:
  * <ul>
  *   <li>Circuit open: no request is sent at all, DOWNSTREAM_UNAVAILABLE is thrown immediately — payment threads don't pile up on 3-second timeouts one by one</li>
  *   <li>Only timeouts / connection failures / 5xx count toward breaker stats; 4xx and business failures (order not found) show the downstream is healthy and don't count</li>

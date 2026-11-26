@@ -30,7 +30,7 @@ import java.util.concurrent.ExecutorService;
  * <ul>
  *   <li>{@link #publishAsync}: sent once right after the order transaction commits (fast path)</li>
  *   <li>{@link #scan}: periodically re-sends due records (safety net: MQ unavailable, process died before sending, fast-path task dropped).
- *       Since E3 it is scheduled by XXL-Job ({@code orderOutboxRelayJob}) instead of Spring @Scheduled</li>
+ *       Scheduled by XXL-Job ({@code orderOutboxRelayJob}) instead of Spring @Scheduled</li>
  * </ul>
  * When several instances scan at once, the conditional update in {@link OrderOutboxMapper#claim} ensures only one instance sends a given record at a time.
  */
@@ -78,7 +78,7 @@ public class OutboxRelay {
     }
 
     /**
-     * Safety net: scan due pending records. Since E3 triggered by XXL-Job (the admin guarantees only one instance is invoked at a time);
+     * Safety net: scan due pending records. Triggered by XXL-Job (the admin guarantees only one instance is invoked at a time);
      * even triggering on two instances manually is safe: the conditional update in claim lets only one instance send each record.
      *
      * @return number of due records found in this round
@@ -154,14 +154,14 @@ public class OutboxRelay {
     private Message toMessage(OrderOutbox row) {
         Message msg = new Message(row.getTopic(), row.getTag(), row.getPayload().getBytes(StandardCharsets.UTF_8));
         msg.setKeys(row.getBizKey() + " " + row.getEventId());
-        // Use our own event_id as the idempotency key: RocketMQ's msgId changes on resend, event_id doesn't (B2 notes Q4)
+        // Use our own event_id as the idempotency key: RocketMQ's msgId changes on resend, event_id doesn't
         msg.putUserProperty(OrderEventTopics.PROP_EVENT_ID, String.valueOf(row.getEventId()));
         if (row.getDeliverAt() != null) {
             // RocketMQ 5 scheduled messages: delivered when the broker's timing wheel fires, millisecond precision (4.x only had 18 fixed delay levels).
             // Still set it on resend even if the delivery time has passed: the broker delivers immediately, timeout close runs right away, and the result is still correct
             msg.setDeliverTimeMs(row.getDeliverAt().toInstant(ZoneOffset.UTC).toEpochMilli());
         }
-        // C1: use the outbox row's own tenant_id, not the thread context (which is SYSTEM here and represents no merchant);
+        // Use the outbox row's own tenant_id, not the thread context (which is SYSTEM here and represents no merchant);
         // stamp takes traceId from MDC, which publish has already opened from the row's trace_id
         return TenantMessages.stamp(msg, row.getTenantId());
     }

@@ -46,12 +46,12 @@ public class PayTimeoutConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1: restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
+                        // Restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
                         TenantMessages.consumeAs(m, () -> service.handle(msg));
                     } catch (RuntimeException e) {
                         log.warn("Failed to process timeout-close message, will be redelivered eventId={} orderNo={} reconsumeTimes={}",
                                 msg.eventId(), msg.orderNo(), m.getReconsumeTimes(), e);
-                        // E3: alert before retries are exhausted and it goes to the DLQ; the timeout-order scan (orderTimeoutScanJob) also closes it as a fallback
+                        // Alert before retries are exhausted and it goes to the DLQ; the timeout-order scan (orderTimeoutScanJob) also closes it as a fallback
                         DeadLetters.onFailure(alarm.getIfAvailable(), PayTimeoutService.CONSUMER_GROUP, m,
                                 consumer.getMaxReconsumeTimes(), msg.tenantId(), e);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;

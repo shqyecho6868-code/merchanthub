@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""G-下：把 k6 的逐请求 CSV（--out csv）按 N 秒切片，输出每片的 完成数 / QPS / 错误数 / P50 / P99。
-扩容、故障演练要看"随时间怎么变"，k6 的汇总只有整段平均，看不出拐点和恢复时间。
-  python3 perf/cloud/timeline.py perf/results/<RUN_ID>/raw.csv.gz [切片秒数=5]
-错误 = HTTP 非 2xx/429 或超时（status 0）；429 是限流按设计拒绝，单独计数。时间为太平洋时间，方便和 ECS 事件对照。"""
+"""Slice k6's per-request CSV (--out csv) into N-second buckets and print completed / QPS / errors / P50 / P99 per bucket.
+Scale-out and failure drills need "how it changes over time"; k6's summary is a whole-run average that hides turning points and recovery time.
+  python3 perf/cloud/timeline.py perf/results/<RUN_ID>/raw.csv.gz [bucket seconds=5]
+Error = HTTP status not 2xx/429, or timeout (status 0); 429 is a by-design rate-limit rejection and counted separately.
+Times are Pacific time, to line up with ECS events."""
 import csv, gzip, sys
 from datetime import datetime, timezone, timedelta
 
@@ -30,8 +31,8 @@ def pct(xs, p):
     return xs[min(len(xs) - 1, int(len(xs) * p))] if xs else 0
 
 tz = timezone(timedelta(hours=-8))
-print(f"{'时间(PT)':<10}{'完成':>6}{'QPS':>8}{'错误':>6}{'429':>5}{'P50ms':>9}{'P99ms':>9}")
+print(f"{'Time(PT)':<10}{'Done':>6}{'QPS':>8}{'Errors':>7}{'429':>5}{'P50ms':>9}{'P99ms':>9}")
 for t in sorted(buckets):
     d, err, lim = buckets[t]
     ts = datetime.fromtimestamp(t, tz).strftime('%H:%M:%S')
-    print(f"{ts:<10}{len(d):>6}{len(d)/step:>8.1f}{err:>6}{lim:>5}{pct(d,.5):>9.0f}{pct(d,.99):>9.0f}")
+    print(f"{ts:<10}{len(d):>6}{len(d)/step:>8.1f}{err:>7}{lim:>5}{pct(d,.5):>9.0f}{pct(d,.99):>9.0f}")

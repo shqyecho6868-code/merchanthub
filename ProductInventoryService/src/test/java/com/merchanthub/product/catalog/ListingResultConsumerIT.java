@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * End to end (D1): the same "listing approved" message delivered 3 times → consumer → product goes from 1 to 2 only once, with a single history row.
+ * End to end: the same "listing approved" message delivered 3 times → consumer → product goes from 1 to 2 only once, with a single history row.
  * Another message whose properties carry merchant 8 (a different merchant) can't modify merchant 7's product.
  */
 @SpringBootTest(properties = "merchanthub.product.listing-result-consumer.enabled=true")

@@ -37,7 +37,7 @@ public class OrderController {
 
     /**
      * Place an order: buyers only. The buyer ID comes from the identity injected by the gateway after parsing the token; no user fields in the request body are trusted.
-     * C2: rate-limit per merchant first; over the threshold return 429 immediately without going further (whether tenantId matches SKU ownership is checked in the service)
+     * Rate-limit per merchant first; over the threshold return 429 immediately without going further (whether tenantId matches SKU ownership is checked in the service)
      */
     @PostMapping
     @RequireRole(Role.BUYER)
@@ -55,7 +55,7 @@ public class OrderController {
     }
 
     /**
-     * E2: merchants search orders by keyword (product name / spec / order number) against the ES replica, with second-level lag.
+     * Merchants search orders by keyword (product name / spec / order number) against the ES replica, with second-level lag.
      * The merchant ID comes only from the gateway-injected identity (not accepted as a parameter) and is a mandatory filter in the ES query
      */
     @GetMapping("/search")

@@ -1,7 +1,8 @@
 #!/bin/bash
-# G-下：在云上跑 F1 的数据一致性检查（perf/check/check.sh 原样复用，只把 mysql 客户端换成连 RDS 的）。
-# 脚本经 S3 传到中间件 EC2 上执行。可选参数：k6 统计的下单成功总数，核对"k6 成功次数 = 库里 901 订单数"（订单不丢）
-#   ./perf/cloud/check.sh [k6 成功总数]
+# Run the data consistency check against the cloud (reuses perf/check/check.sh as is; only the mysql client is swapped for one connected to RDS).
+# The script is shipped via S3 and runs on the middleware EC2. Optional arg: k6's total successful orders, to verify
+# "k6 successes = merchant 901 orders in the DB" (no orders lost)
+#   ./perf/cloud/check.sh [k6 successful orders]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 BUCKET=$(terraform -chdir=infra/env output -raw assets_bucket)
@@ -11,4 +12,4 @@ EXPECT=${1:-}
 export MYSQL_CLI=\"\$MYSQL\"
 bash /tmp/check.sh '' 90 || true
 N=\$(\$MYSQL -N -e 'SELECT COUNT(*) FROM mh_order.orders WHERE tenant_id = 901')
-echo \"库里商家 901 订单数：\$N（k6 下单成功合计：${EXPECT:-未提供}）\""
+echo \"Merchant 901 orders in DB: \$N (k6 successful orders: ${EXPECT:-not given})\""

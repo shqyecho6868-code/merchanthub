@@ -26,7 +26,7 @@ public interface OrderOutboxMapper extends BaseMapper<OrderOutbox> {
      * Only one instance (or thread) can update it; only the one that gets 1 sends it. During the lease other instances' scan condition next_retry_at <= now fails, so they don't see it.
      * <p>
      * Why not set it to 1 (sent) here: on send failure markRetry's condition is status = 0, which would match no rows,
-     * and the record would be stuck as "sent" forever, never scanned again -- the message lost with no error at all (the bug found in the B2 🔍 code review).
+     * and the record would be stuck as "sent" forever, never scanned again -- the message lost with no error at all (a bug caught in code review).
      * If the lease expires without a result (e.g. the process was killed mid-send), the record automatically becomes "due" again and the next scan picks it up.
      */
     @Update("UPDATE order_outbox SET next_retry_at = #{leaseUntil}"
@@ -48,7 +48,7 @@ public interface OrderOutboxMapper extends BaseMapper<OrderOutbox> {
                   @Param("newRetryCount") int newRetryCount, @Param("status") int status,
                   @Param("nextRetryAt") LocalDateTime nextRetryAt, @Param("error") String error);
 
-    /** E3 archiving: ids of a batch of records "sent and older than before" (using index (status, sent_at)) */
+    /** Archiving: ids of a batch of records "sent and older than before" (using index (status, sent_at)) */
     @Select("SELECT id FROM order_outbox WHERE status = 1 AND sent_at < #{before} ORDER BY id LIMIT #{limit}")
     List<Long> selectArchivable(@Param("before") LocalDateTime before, @Param("limit") int limit);
 
@@ -63,7 +63,7 @@ public interface OrderOutboxMapper extends BaseMapper<OrderOutbox> {
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach></script>")
     int deleteSent(@Param("ids") List<Long> ids);
 
-    /** E3 alerting: records whose delivery failures hit the limit (status = 2) */
+    /** Alerting: records whose delivery failures hit the limit (status = 2) */
     @Select("SELECT * FROM order_outbox WHERE status = 2 AND deleted = 0 ORDER BY id LIMIT #{limit}")
     List<OrderOutbox> selectFailed(@Param("limit") int limit);
 }

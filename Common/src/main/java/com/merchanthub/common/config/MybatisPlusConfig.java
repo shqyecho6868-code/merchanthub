@@ -38,7 +38,7 @@ public class MybatisPlusConfig {
     public MybatisPlusInterceptor mybatisPlusInterceptor(Environment env) {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
 
-        // Tenant plugin (C1): appends a tenant_id condition on business tables; rules live in TenantSqlHandler.
+        // Tenant plugin: appends a tenant_id condition on business tables; rules live in TenantSqlHandler.
         // Must come before the pagination plugin: rewrite the SQL with tenant_id first, then pagination builds count and LIMIT from the rewritten SQL;
         // the other way round the count query would miss the tenant condition (this order is required by the MyBatis-Plus docs).
         // Can be turned off per service (merchanthub.tenant.enabled=false); the old IM services have all been migrated or removed, so it is on everywhere today

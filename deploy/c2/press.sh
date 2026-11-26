@@ -1,8 +1,8 @@
 #!/bin/bash
-# C2 🧑 压测：大商家（租户 7）高并发下单 + 小商家（租户 8）少量下单，同时进行，结束后按 HTTP 状态码汇总。
-#   ./deploy/c2/press.sh [持续秒数=20] [租户7并发数=20] [租户8每秒单数=2]
-# 只依赖 curl，直连 order（8107）并自带买家身份头（C1：下游信任身份头，安全边界在网关；压测绕过网关，排除网关干扰）。
-# 期望：租户 7 大量 429（错误码 42900），租户 8 全部 200。
+# Load test: a big merchant (tenant 7) places orders at high concurrency while a small merchant (tenant 8) places a few, at the same time; summarized by HTTP status code at the end.
+#   ./deploy/c2/press.sh [durationSeconds=20] [tenant7Concurrency=20] [tenant8OrdersPerSecond=2]
+# Needs only curl; hits order (8107) directly with buyer identity headers (downstream services trust identity headers, the security boundary is the gateway; bypassing the gateway keeps it out of the measurement).
+# Expected: lots of 429 (error code 42900) for tenant 7, all 200 for tenant 8.
 cd "$(dirname "$0")/../.." || exit 1
 DURATION=${1:-20}
 BIG_CONCURRENCY=${2:-20}
@@ -11,8 +11,8 @@ URL=http://127.0.0.1:8107/orders
 OUT=$(mktemp -d)
 END=$(( $(date +%s) + DURATION ))
 
-# 一个"买家"：循环下单直到时间到，每次把 HTTP 状态码记一行
-worker() {   # $1=租户 $2=SKU $3=买家ID $4=每单间隔秒（0=不停）
+# One "buyer": keeps placing orders until time is up, writing one line per HTTP status code
+worker() {   # $1=tenant $2=SKU $3=buyerId $4=seconds between orders (0 = no pause)
   while [ "$(date +%s)" -lt "$END" ]; do
     curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 -X POST "$URL" \
       -H 'Content-Type: application/json' -H "X-User-Id: $3" -H 'X-Role: BUYER' \
@@ -21,12 +21,12 @@ worker() {   # $1=租户 $2=SKU $3=买家ID $4=每单间隔秒（0=不停）
   done
 }
 
-echo "压测 ${DURATION}s：租户 7 并发 ${BIG_CONCURRENCY} 个买家不停下单；租户 8 每秒约 ${SMALL_QPS} 单"
+echo "Load test ${DURATION}s: tenant 7 has ${BIG_CONCURRENCY} concurrent buyers ordering nonstop; tenant 8 places ~${SMALL_QPS} orders per second"
 for i in $(seq 1 "$BIG_CONCURRENCY"); do worker 7 1 $((70000 + i)) 0 & done
 worker 8 2 80001 "$(echo "scale=2; 1/$SMALL_QPS" | bc)" &
 wait
 
-summary() {   # $1=租户
+summary() {   # $1=tenant
   local total ok limited other
   total=$(cat "$OUT"/t$1.* | wc -l | tr -d ' ')
   ok=$(cat "$OUT"/t$1.* | grep -c '^200$')
@@ -34,9 +34,9 @@ summary() {   # $1=租户
   other=$((total - ok - limited))
   local rate=0
   [ "$total" -gt 0 ] && rate=$((ok * 100 / total))
-  printf '租户 %s：共 %5d 单 | 200 成功 %5d | 429 被限流 %5d | 其他 %d | 通过率 %d%%\n' \
+  printf 'Tenant %s: %5d orders | 200 ok %5d | 429 rate-limited %5d | other %d | pass rate %d%%\n' \
     "$1" "$total" "$ok" "$limited" "$other" "$rate"
-  [ "$other" -gt 0 ] && echo "  其他状态码分布：$(cat "$OUT"/t$1.* | grep -v '^200$\|^429$' | sort | uniq -c | tr '\n' ' ')"
+  [ "$other" -gt 0 ] && echo "  Other status codes: $(cat "$OUT"/t$1.* | grep -v '^200$\|^429$' | sort | uniq -c | tr '\n' ' ')"
 }
 echo "------------------------------------------------------------"
 summary 7

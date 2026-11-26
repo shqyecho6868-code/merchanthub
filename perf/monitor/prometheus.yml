@@ -1,7 +1,7 @@
-# F1：压测监控。各服务跑在宿主机上，Prometheus 在容器里，用 host.docker.internal 访问
-# 指标来自各服务的 /actuator/prometheus（Micrometer：http.server.requests 直方图、hikaricp_*、jvm_*、tomcat_*）
+# Load-test monitoring. Services run on the host and Prometheus in a container, so it scrapes via host.docker.internal
+# Metrics come from each service's /actuator/prometheus (Micrometer: http.server.requests histograms, hikaricp_*, jvm_*, tomcat_*)
 global:
-  scrape_interval: 5s       # 压测一般就几分钟，默认 15s 太粗，看不清抖动
+  scrape_interval: 5s       # tests last a few minutes; the default 15s is too coarse to see jitter
   evaluation_interval: 5s
 
 scrape_configs:

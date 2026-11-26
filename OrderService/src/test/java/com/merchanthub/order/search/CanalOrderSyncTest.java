@@ -7,7 +7,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** E2: extract order numbers from binlog row changes -- only the orders / order_item tables; inserts / updates use new values, deletes use old values; deduplicated */
+/** Extract order numbers from binlog row changes -- only the orders / order_item tables; inserts / updates use new values, deletes use old values; deduplicated */
 class CanalOrderSyncTest {
 
     private static CanalEntry.Entry row(String table, CanalEntry.EventType type, long orderNo) {

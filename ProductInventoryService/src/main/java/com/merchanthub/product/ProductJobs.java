@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * XXL-Job entry point for product-inventory (E3). It lives in the root package rather than a subdomain: job entry points are just scheduling adapters,
+ * XXL-Job entry point for product-inventory. It lives in the root package rather than a subdomain: job entry points are just scheduling adapters,
  * and each subdomain's (catalog / inventory) logic stays in its own classes.
  */
 @Component

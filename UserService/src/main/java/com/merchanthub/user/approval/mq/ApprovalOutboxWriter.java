@@ -13,7 +13,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
- * Approval result outbox: write a row <b>in the same transaction that completes the approval task</b>, send once asynchronously right after commit, and let the scan resend on failure (same as order's OutboxWriter, B2).
+ * Approval result outbox: write a row <b>in the same transaction that completes the approval task</b>, send once asynchronously right after commit, and let the scan resend on failure (same as order's OutboxWriter).
  * <p>
  * "Approved <=> a message is guaranteed" works because Flowable and MyBatis-Plus share the same DataSource and the same Spring transaction:
  * the engine deleting ACT_RU_TASK and writing ACT_HI_*, and our INSERT into approval_outbox, either commit together or roll back together.

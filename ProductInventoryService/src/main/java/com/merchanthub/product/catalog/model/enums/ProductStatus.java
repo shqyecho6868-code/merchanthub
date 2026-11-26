@@ -1,7 +1,7 @@
 package com.merchanthub.product.catalog.model.enums;
 
 /**
- * Product status (product.status). Transitions related to listing approval (D1):
+ * Product status (product.status). Transitions related to listing approval:
  * <pre>
  *   0 draft ──submit──▶ 1 under review ──approve──▶ 2 listed (buyers can order: order only accepts products with status = 2)
  *   4 rejected ─submit─▶ 1 under review ──reject──▶ 4 rejected

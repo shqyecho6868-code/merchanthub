@@ -1,8 +1,8 @@
-// S2b 卖光正确性（场景设计：我；见 docs/perf-report.md 第 2 节）
-// 问题：库存只有 500，2000 个请求同时抢，能不能恰好卖完、一件不多卖？
-// 压力：200 个 VU（每个一个买家）共 TOTAL（默认 2000）次下单，尽快打完
-// 预期：成功正好 500；其余全是"库存不足"（61001），没有 5xx / 超时；库存 0、无负数（check.sh 全过）
-// 前提：HOT_STOCK=500 ./perf/data/seed.sh（只把 SKU 90101 库存设为 500）；901 限流提额
+// S2b sell-out correctness
+// Question: with only 500 in stock and 2000 concurrent requests, does it sell exactly out without overselling a single unit?
+// Load: 200 VUs (one buyer each) place TOTAL (default 2000) orders as fast as possible
+// Expected: exactly 500 succeed; the rest are all "out of stock" (61001), no 5xx / timeouts; stock 0, never negative (check.sh passes)
+// Prerequisite: HOT_STOCK=500 ./perf/data/seed.sh (sets only SKU 90101 to 500); raise 901's rate limit
 import { config } from '../lib/config.js';
 import { loginBuyers, createOrder, ORDER_RESULTS } from '../lib/api.js';
 import { makeHandleSummary, perEndpointThresholds, bizThresholds, TREND_STATS } from '../lib/summary.js';
@@ -17,7 +17,7 @@ export const options = {
   thresholds: {
     ...perEndpointThresholds(['create_order']),
     ...bizThresholds('biz_order', ORDER_RESULTS.map((r) => ({ tenant: '901', result: r }))),
-    // 预期里"没有真错误"写成阈值：出现 error 时 k6 退出码非 0
+    // "No real errors" as a threshold: k6 exits non-zero if any error occurs
     'biz_order{tenant:901,result:error}': ['count==0'],
   },
 };
@@ -27,9 +27,9 @@ export function setup() {
 }
 
 export default function (data) {
-  // 每个 VU 固定用一个买家：200 个不同的人同时抢
+  // Each VU sticks to one buyer: 200 different people competing at once
   const buyer = data.buyers[(__VU - 1) % data.buyers.length];
   createOrder(buyer, config.bigTenant, [{ skuId: config.bigSkus[0], quantity: 1 }]);
 }
 
-export const handleSummary = makeHandleSummary('S2b 卖光');
+export const handleSummary = makeHandleSummary('S2b sell-out');

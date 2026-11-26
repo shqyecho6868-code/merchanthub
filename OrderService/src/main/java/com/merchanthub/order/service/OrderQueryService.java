@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Order queries (C1). Two entry points with different isolation:
+ * Order queries. Two entry points with different isolation:
  * <ul>
  *   <li>Merchant query: the code does <b>not</b> write a tenant_id condition; the tenant plugin adds it -- if merchant 7 queries merchant 8's order number, the SQL becomes
  *       {@code WHERE order_no = ? AND tenant_id = 7} and finds nothing</li>

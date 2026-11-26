@@ -21,10 +21,10 @@ import org.springframework.context.annotation.Configuration;
 import java.io.IOException;
 
 /**
- * Subscribes to listing approval results and writes back the product status (D1).
+ * Subscribes to listing approval results and writes back the product status.
  * <p>
  * No consumed_event dedup table: {@code UPDATE product ... WHERE status = 1 AND audit_round = ?} is itself the idempotency gate
- * (same as B3-下's inventory confirm / release). Redelivery, or the compensation scan having already applied it → the CAS affects 0 rows and we just ack.
+ * (same as inventory confirm / release). Redelivery, or the compensation scan having already applied it → the CAS affects 0 rows and we just ack.
  */
 @Slf4j
 @Configuration
@@ -54,7 +54,7 @@ public class ListingResultConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1: restore the context from the merchant in the message; the CAS automatically carries tenant_id — another merchant's message can't modify this merchant's products
+                        // Restore the context from the merchant in the message; the CAS automatically carries tenant_id — another merchant's message can't modify this merchant's products
                         TenantMessages.consumeAs(m, () -> stateService.applyResult(e.productId(), e.round(),
                                 ListingResultEvent.APPROVED.equals(e.result()), e.rejectReason(), e.processInstanceId(),
                                 ListingStateService.SOURCE_MQ));
@@ -62,7 +62,7 @@ public class ListingResultConsumerConfig {
                         // Database unavailable etc.: the transaction is rolled back, redeliver later; after 16 failed retries it goes to the DLQ and the compensation scan backstops it
                         log.warn("Failed to process approval result, will redeliver eventId={} productId={} reconsumeTimes={}",
                                 e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
-                        // E3: the last retry also failed → alert + record recon_exception
+                        // The last retry also failed → alert + record recon_exception
                         DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
                                 TenantMessages.tenantIdOf(m), ex);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;

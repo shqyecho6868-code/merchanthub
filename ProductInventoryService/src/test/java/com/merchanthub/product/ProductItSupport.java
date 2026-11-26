@@ -7,7 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * Base class for product-inventory integration tests (C1): the tenant plugin is fail-closed, so when the test thread calls a service directly it uses a SYSTEM identity by default.
+ * Base class for product-inventory integration tests: the tenant plugin is fail-closed, so when the test thread calls a service directly it uses a SYSTEM identity by default.
  * Tests that start their own threads (concurrent reservation) must set the context in each child thread — ThreadLocal doesn't propagate, which is exactly what thread pools in production must watch out for.
  */
 public abstract class ProductItSupport extends IntegrationTestBase {

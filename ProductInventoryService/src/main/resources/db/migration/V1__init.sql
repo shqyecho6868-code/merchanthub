@@ -1,67 +1,67 @@
--- product-inventory 服务的表（库 mh_product）。设计见 docs/data-model.md。
--- 约定：时间列一律 DATETIME(3) 存 UTC（连接会话时区固定为 UTC，见 application.yml）；
---      created_at / updated_at 由数据库默认值维护，应用不写；deleted 为逻辑删除。
--- B1 时由 spring.sql.init 执行；B3 起改由 Flyway 管理，这个文件作为 V1 基线，以后不能再改（改表写新的 V 文件）。
+-- Tables of the product-inventory service (database mh_product).
+-- Conventions: all time columns are DATETIME(3) in UTC (the connection session time zone is pinned to UTC, see application.yml);
+--      created_at / updated_at are maintained by database defaults, never written by the app; deleted = soft delete.
+-- Baseline migration: never edit it once applied; schema changes go into a new V file.
 
 CREATE TABLE IF NOT EXISTS product (
     id          BIGINT       NOT NULL AUTO_INCREMENT,
-    tenant_id   BIGINT       NOT NULL COMMENT '商家',
+    tenant_id   BIGINT       NOT NULL COMMENT 'Merchant',
     name        VARCHAR(128) NOT NULL,
     description TEXT,
     main_image  VARCHAR(512),
-    status      TINYINT      NOT NULL DEFAULT 0 COMMENT '0 草稿 / 1 审核中 / 2 已上架 / 3 已下架 / 4 审核驳回',
+    status      TINYINT      NOT NULL DEFAULT 0 COMMENT '0 draft / 1 under review / 2 listed / 3 delisted / 4 review rejected',
     created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted     TINYINT      NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_tenant_status (tenant_id, status)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '商品（SPU）';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Product (SPU)';
 
 CREATE TABLE IF NOT EXISTS sku (
     id         BIGINT      NOT NULL AUTO_INCREMENT,
     tenant_id  BIGINT      NOT NULL,
     product_id BIGINT      NOT NULL,
-    sku_code   VARCHAR(64) NOT NULL COMMENT '商家自定义编码，同一商家内唯一',
-    spec_json  JSON        NOT NULL COMMENT '规格，如 {"颜色":"白","尺码":"L"}',
-    price      BIGINT      NOT NULL COMMENT '售价（分）',
-    status     TINYINT     NOT NULL DEFAULT 1 COMMENT '0 停售 / 1 在售',
+    sku_code   VARCHAR(64) NOT NULL COMMENT 'Merchant-defined code, unique within a merchant',
+    spec_json  JSON        NOT NULL COMMENT 'Spec, e.g. {"color":"white","size":"L"}',
+    price      BIGINT      NOT NULL COMMENT 'Selling price (cents)',
+    status     TINYINT     NOT NULL DEFAULT 1 COMMENT '0 off sale / 1 on sale',
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted    TINYINT     NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uk_tenant_sku_code (tenant_id, sku_code),
     KEY idx_product (product_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'SKU（规格）';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'SKU (variant)';
 
--- 库存单独成表：写多的热点行，和读多写少的 SKU 描述分开，避免抢同一行锁（D15）
+-- Inventory lives in its own table: write-heavy hot rows are kept apart from the read-mostly SKU description, so they don't contend for the same row lock
 CREATE TABLE IF NOT EXISTS inventory (
     id         BIGINT      NOT NULL AUTO_INCREMENT,
     tenant_id  BIGINT      NOT NULL,
     sku_id     BIGINT      NOT NULL,
-    -- 故意不用 UNSIGNED / CHECK(available >= 0)：防超卖由条件更新负责，B1 破坏性实验要能观察到负数。
-    -- 实验后可以考虑加 CHECK 作为第二道防线（见 B1 笔记）
-    available  INT         NOT NULL DEFAULT 0 COMMENT '可售数量',
-    reserved   INT         NOT NULL DEFAULT 0 COMMENT '预占数量（已下单未支付）',
+    -- Deliberately no UNSIGNED / CHECK(available >= 0): overselling is prevented by the conditional update,
+    -- and the oversell experiment needs to be able to observe negative values. A CHECK can be added later as a second line of defense
+    available  INT         NOT NULL DEFAULT 0 COMMENT 'Sellable quantity',
+    reserved   INT         NOT NULL DEFAULT 0 COMMENT 'Reserved quantity (ordered, not yet paid)',
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted    TINYINT     NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
-    -- 预占 SQL 按 sku_id 定位，走这个唯一索引，只锁这一行
+    -- The reservation SQL locates rows by sku_id via this unique index, locking only that row
     UNIQUE KEY uk_sku (sku_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '库存';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Inventory';
 
--- 预占记录：按订单号记录每个 SKU 占了多少，B3 释放 / 确认扣减以它为准，保证幂等
+-- Reservation records: how much of each SKU an order holds; release / confirm-deduct go by these rows, which keeps them idempotent
 CREATE TABLE IF NOT EXISTS inventory_reservation (
     id         BIGINT      NOT NULL AUTO_INCREMENT,
     tenant_id  BIGINT      NOT NULL,
     order_no   BIGINT      NOT NULL,
     sku_id     BIGINT      NOT NULL,
-    quantity   INT         NOT NULL COMMENT '预占数量',
+    quantity   INT         NOT NULL COMMENT 'Reserved quantity',
     status     TINYINT     NOT NULL DEFAULT 10 COMMENT '10 RESERVED / 20 CONFIRMED / 30 RELEASED',
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     deleted    TINYINT     NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
-    -- 同一订单对同一 SKU 最多占一次：重试 / 并发重复请求撞这个键，整个预占事务回滚
+    -- An order reserves a given SKU at most once: retries / concurrent duplicates hit this key and the whole reservation transaction rolls back
     UNIQUE KEY uk_order_sku (order_no, sku_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '库存预占记录';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'Inventory reservations';

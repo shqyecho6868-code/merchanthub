@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Push route table (E1): which nodes a receiver is connected to.
+ * Push route table: which nodes a receiver is connected to.
  * <pre>
  *   key   = rt:route:{receiverKey}          e.g. rt:route:merchant:7
  *   type  = Hash, field = node ID, value = registration time

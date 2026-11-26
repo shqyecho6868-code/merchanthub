@@ -109,7 +109,7 @@ public class PaymentService {
         }
         if (p.getStatus() != PaymentStatus.PENDING.getCode()) {
             // Money arrives after the payment is closed / failed (e.g. recon just closed a stale payment while the buyer paid on the old page): money collected but no goods shipped, pending refund (refunds out of scope).
-            // E3: record in the anomaly table + alert, escalate to manual handling
+            // Record in the anomaly table + alert, escalate to manual handling
             reconAlarm.raise(p.getTenantId(), ReconAlarm.PAID_AFTER_CLOSED, "payNo:" + p.getPayNo(),
                     "Payment-success callback received while payment status is " + p.getStatus() + ", pending refund orderNo=" + p.getOrderNo()
                             + " amount=" + p.getAmount() + " channelTradeNo=" + req.channelTradeNo());
@@ -147,7 +147,7 @@ public class PaymentService {
         return CallbackOutcome.PAID;
     }
 
-    /** Timeout / connection failure / circuit open → DOWNSTREAM_UNAVAILABLE (degraded); business failures such as order not found are passed through as-is (via the Sentinel circuit breaker since E3) */
+    /** Timeout / connection failure / circuit open → DOWNSTREAM_UNAVAILABLE (degraded); business failures such as order not found are passed through as-is (via the Sentinel circuit breaker) */
     private OrderBrief queryOrder(long orderNo) {
         return OrderRemote.call(OrderClient.RES_GET_ORDER, () -> orderClient.getOrder(orderNo));
     }

@@ -44,7 +44,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Product listing approval (D1, user-tenant side): product starts it -> merchant 7 admin first review -> platform admin second review -> on end, write approval record + local outbox table -> RocketMQ.
+ * Product listing approval (user-tenant side): product starts it -> merchant 7 admin first review -> platform admin second review -> on end, write approval record + local outbox table -> RocketMQ.
  * Scenario: merchant 7's staff 2002 submits product 1001 "Flagship Phone" for round 1 review; merchant 7 admin 2001; merchant 8 admin 3001; platform admin 1.
  */
 class ListingApprovalIT extends UserItSupport {
@@ -255,7 +255,7 @@ class ListingApprovalIT extends UserItSupport {
 
         // Set it back to "pending", as if the fast path never ran
         jdbc.update("UPDATE approval_outbox SET status = 0, sent_at = NULL, next_retry_at = NOW(3) - INTERVAL 1 SECOND");
-        relay.scan();   // E3: equivalent to XXL-Job triggering approvalOutboxRelayJob once
+        relay.scan();   // Equivalent to XXL-Job triggering approvalOutboxRelayJob once
         assertThat(jdbc.queryForObject("SELECT status FROM approval_outbox", Integer.class)).isEqualTo(1);
         // The message arrived at least once (duplicate delivery is stopped by the CAS in product's consumer, see product's ListingResultConsumerIT)
         await().atMost(Duration.ofSeconds(60)).until(() -> received(pid) != null);

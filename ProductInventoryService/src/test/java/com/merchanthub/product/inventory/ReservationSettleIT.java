@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Confirm deduction / release: the reservation record CAS is the inventory side's idempotency gate.
- * Everything here verifies "duplicates / concurrency still change stock only once", per B3-下 notes section 2.
+ * Everything here verifies "duplicates / concurrency still change stock only once".
  */
 @SpringBootTest
 class ReservationSettleIT extends ProductItSupport {

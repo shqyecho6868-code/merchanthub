@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** Payment anomaly (table pay_anomaly, V4): payment succeeded but the order couldn't become paid; left for E3 reconciliation/refund */
+/** Payment anomaly (table pay_anomaly, V4): payment succeeded but the order couldn't become paid; left for reconciliation/refund */
 @Data
 @TableName("pay_anomaly")
 public class PayAnomaly {

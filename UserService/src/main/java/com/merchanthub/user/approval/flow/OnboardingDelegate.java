@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  * The two ServiceTasks of the onboarding process ({@code ${onboardingDelegate.approve(execution)}} in the BPMN).
  * <p>
  * Onboarding approval is a <b>local closed loop</b>: the engine, tenant table and account table are in the same DB, so "complete approval task + create tenant + open account + update application status" is one local transaction,
- * with no MQ needed (contrast with product listing: product is another service and can only be written back via messages, D4). If any step fails (e.g. the username is taken),
+ * with no MQ needed (contrast with product listing: product is another service and can only be written back via messages). If any step fails (e.g. the username is taken),
  * the whole transaction rolls back and the review task stays in the platform admin's queue.
  */
 @Slf4j

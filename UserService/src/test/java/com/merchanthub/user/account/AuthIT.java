@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** D1 also fixes a C1 leftover: new login (BCrypt + configurable JWT secret), token written to Redis for the gateway to check */
+/** New login (BCrypt + configurable JWT secret), token written to Redis for the gateway to check */
 class AuthIT extends UserItSupport {
 
     @Autowired

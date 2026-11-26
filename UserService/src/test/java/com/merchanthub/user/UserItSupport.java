@@ -62,7 +62,7 @@ public abstract class UserItSupport extends IntegrationTestBase {
     /**
      * Each test starts from a clean state: business tables truncated + all process instances still running in the engine deleted.
      * <p>
-     * Clearing only the business tables isn't enough (P32): tasks left by the previous test class are still in ACT_RU_TASK. On CI (Linux) the test class order differs from macOS,
+     * Clearing only the business tables isn't enough: tasks left by the previous test class are still in ACT_RU_TASK. On CI (Linux) the test class order differs from macOS,
      * and when ListingApprovalIT ran first, its leftover "merchant 7 first review" task broke MerchantOnboardingIT's "merchant 7 admin has no tasks" assertion.
      * Delete via the engine API instead of TRUNCATE on ACT_* tables: engine tables have foreign keys and caches, so dropping rows directly leaves the engine inconsistent. History tables are kept; they don't affect assertions (all queried by instance ID)
      */

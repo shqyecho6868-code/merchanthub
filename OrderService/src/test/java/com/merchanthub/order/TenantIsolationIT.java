@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * C1 integration test: order tenant isolation + RBAC (MockMvc -> interceptor -> Controller -> tenant plugin -> real MySQL).
+ * Integration test: order tenant isolation + RBAC (MockMvc -> interceptor -> Controller -> tenant plugin -> real MySQL).
  * Scenario: buyer 1001 placed order O7 at merchant 7 and order O8 at merchant 8.
  * <p>
  * Conclusion: when merchant 7's staff queries O8's order number, it returns "Order not found" -- neither Controller nor Service writes tenant_id;

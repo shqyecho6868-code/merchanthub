@@ -34,8 +34,6 @@ flowchart LR
     RDS[(Redis)]
 ```
 
-Sequence diagrams (checkout & reservation, 4-layer callback idempotency, payment-vs-timeout race, push routing) are in [docs/architecture.md](docs/architecture.md) (Chinese).
-
 ## Highlights
 
 ### 1. Order consistency
@@ -81,7 +79,7 @@ cp .env.example .env && docker compose up -d    # all middleware (fill in passwo
 ./mvnw verify                                    # build + unit tests + Testcontainers ITs + coverage
 ```
 
-Requires Docker and JDK 17 (picked automatically via Maven Toolchains, see [docs/env-setup.md](docs/env-setup.md)). Starting services, consoles and troubleshooting: [docs/runbook.md](docs/runbook.md).
+Requires Docker and JDK 17. The build pins JDK 17 through Maven Toolchains, so register one in `~/.m2/toolchains.xml` (type `jdk`, version `17`); any newer default `java` on the PATH is fine.
 
 ## Testing strategy
 
@@ -107,7 +105,7 @@ Requires Docker and JDK 17 (picked automatically via Maven Toolchains, see [docs
 
 ## Load testing
 
-k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh perf/k6/scenarios/<scenario>.js -e VUS=50 -e DURATION=1m` (steps in runbook 3.8). After each run `perf/check/check.sh` verifies no negative stock, reservation bookkeeping, and that duplicate callbacks took effect only once.
+k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh perf/k6/scenarios/<scenario>.js -e VUS=50 -e DURATION=1m` (see [`perf/README.md`](perf/README.md)). After each run `perf/check/check.sh` verifies no negative stock, reservation bookkeeping, and that duplicate callbacks took effect only once.
 
 | Scenario | Load | Result | P99 | Data check |
 |---|---|---|---|---|
@@ -119,11 +117,11 @@ k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh
 
 Tuning experiment: raising the connection pool from 10 to 30 made throughput worse (COMMIT 6 → 16 ms, row-lock wait ×15) and was reverted — the bottleneck is the database; pool queueing was only the symptom.
 
-Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only. Details in [docs/perf-report.md](docs/perf-report.md).
+Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only.
 
 ### On AWS (us-east-1)
 
-One Fargate task per service (0.5 vCPU / 1 GB), RDS db.t4g.micro; k6 runs inside the VPC (4 ms RTT) and goes through ALB → gateway → order. Details in [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md).
+One Fargate task per service (0.5 vCPU / 1 GB), RDS db.t4g.micro; k6 runs inside the VPC (4 ms RTT) and goes through ALB → gateway → order.
 
 | Scenario | Result | Bottleneck / observation | Data check |
 |---|---|---|---|
@@ -131,17 +129,5 @@ One Fargate task per service (0.5 vCPU / 1 GB), RDS db.t4g.micro; k6 runs inside
 | Hot SKU, stepped load | 81 orders/s, 0 errors (local: 240) | same as above — the hot row is no longer the bottleneck in the cloud | ✅ |
 | Scale order 1 → 3 | ~110–118 orders/s, **~1.4×** | product-inventory (88% CPU) and the gateway are still single instances; RDS connections hit 58 / 60; **~2 min** from command to new instances taking traffic (Spring needs 80+ s to start on 0.5 vCPU) | ✅ |
 | Sustained 200 orders/s overload (no rate limit) | **congestion collapse**: completions stay flat but almost every request hits the 10 s timeout | unbounded queueing; after scaling out, the old instance was still serving requests clients had already abandoned → load shedding at the entry is required | ✅ no lost orders (DB count ≥ k6 successes) |
-| Kill 1 of 3 order instances under load | 2.67% errors, recovered in **~40 s**; ECS replaced the task ~1 min later | the error window ≈ the gateway's load-balancer cache (35 s) still holding the dead instance | ✅ no lost orders, no corrupted state; ⚠️ found close events stuck in the outbox (the compensation scan has no scheduler in the cloud, P53) |
+| Kill 1 of 3 order instances under load | 2.67% errors, recovered in **~40 s**; ECS replaced the task ~1 min later | the error window ≈ the gateway's load-balancer cache (35 s) still holding the dead instance | ✅ no lost orders, no corrupted state; ⚠️ found close events stuck in the outbox (the compensation scan has no scheduler in the cloud) |
 
-## Docs (Chinese)
-
-| Doc | Content |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | architecture and sequence diagrams |
-| [docs/data-model.md](docs/data-model.md) | schema, ER diagram, order state machine |
-| [docs/decisions.md](docs/decisions.md) | decision records (chosen / rejected / cost) |
-| [docs/pitfalls.md](docs/pitfalls.md) | pitfalls (symptom → root cause → fix) |
-| [docs/runbook.md](docs/runbook.md) | startup, consoles, load testing, troubleshooting |
-| [docs/env-setup.md](docs/env-setup.md) | versions, ports, accounts |
-| [docs/progress.md](docs/progress.md) | progress and known issues |
-| [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md) | cloud load test, scale-out and failure drill: runbook and results |

@@ -20,14 +20,14 @@ import java.time.LocalDateTime;
 import static org.awaitility.Awaitility.await;
 
 /**
- * Automated version of the 🧑 kill experiment: "the old process dies after committing the local transaction, and the restarted process picks up the check-back".
+ * Automated version of the manual kill experiment: "the old process dies after committing the local transaction, and the restarted process picks up the check-back".
  * <p>
  * Setup: a bare TransactionMQProducer plays "the old process about to be killed" -- after the local transaction writes the order it returns UNKNOW,
  * then shuts down immediately (as if the process were gone). The producer in the Spring context plays "the restarted process": same producer group,
  * and it has <b>never sent a single message</b>.
  * <p>
- * Conclusion: the new process must pick up the check-back and COMMIT. This step failed in the B2 manual experiment -- a producer that has never sent doesn't heartbeat to the broker,
- * so check-back fails with "channel is null" and the half message is discarded after 15 check-backs (pitfalls P18). Fix: prefetch Topic routes at startup.
+ * Conclusion: the new process must pick up the check-back and COMMIT. This step failed in the manual experiment -- a producer that has never sent doesn't heartbeat to the broker,
+ * so check-back fails with "channel is null" and the half message is discarded after 15 check-backs. Fix: prefetch Topic routes at startup.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=TX_MESSAGE",

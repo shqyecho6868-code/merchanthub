@@ -4,7 +4,7 @@ import feign.Retryer;
 import org.springframework.context.annotation.Bean;
 
 /**
- * Dedicated config for the product-inventory Feign client (C2). <b>Intentionally not annotated with @Configuration</b>:
+ * Dedicated config for the product-inventory Feign client. <b>Intentionally not annotated with @Configuration</b>:
  * otherwise component scanning would pick it up as global config affecting all Feign clients; it only applies via @FeignClient(configuration = ...).
  */
 public class ProductInventoryFeignConfig {
@@ -20,7 +20,7 @@ public class ProductInventoryFeignConfig {
      *   <li><b>Idempotency holds only while orderNo stays the same</b>: automatic retry keeps the same orderNo, but if someone adds "re-place the order on failure" in the service layer,
      *       the new orderNo is a brand-new reservation. So "can we retry" must be decided deliberately in the business layer, not silently by the framework</li>
      * </ol>
-     * The real outcome after a timeout is covered by B3's dangling-reservation scan (reservation without an order -> release); the user sees "try again later".
+     * The real outcome after a timeout is covered by the dangling-reservation scan (reservation without an order -> release); the user sees "try again later".
      * Fetching SKUs is a read-only call and could in theory be retried, but points 1 and 2 still apply; if we ever retry, it should be only on "connection failure" (request never sent),
      * with backoff -- a future improvement.
      */

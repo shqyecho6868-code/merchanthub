@@ -5,7 +5,7 @@ package com.merchanthub.order.mq;
  * Inventory confirms the deduction or releases the reservation based on it. Carries only the fields needed to locate the reservation; downstreams query by orderNo for anything else.
  *
  * @param event   the triggering order event (PAY_SUCCESS / PAY_TIMEOUT / BUYER_CANCEL), logged on release to help investigate "why stock was returned"
- * @param buyerId added in E1: realtime uses it to push "order status changed" to the buyer. Boxed type: old messages sent before E1 lack this field and deserialize to null
+ * @param buyerId added later: realtime uses it to push "order status changed" to the buyer. Boxed type: old messages sent before it was added lack this field and deserialize to null
  */
 public record OrderSettledEvent(long eventId, long orderNo, long tenantId, String event, Long buyerId) {
 }

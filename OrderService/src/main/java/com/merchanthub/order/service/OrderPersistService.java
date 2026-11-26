@@ -46,7 +46,7 @@ public class OrderPersistService {
 
     /**
      * timeout = 5: the local transaction runs at most 5s and always rolls back on timeout. The transactional message's check-immunity time (30s) must be longer,
-     * so the local transaction has always finished when the broker checks back, and "order not found" can safely be judged a rollback (B2 notes Q2).
+     * so the local transaction has always finished when the broker checks back, and "order not found" can safely be judged a rollback.
      */
     @Transactional(rollbackFor = Exception.class, timeout = 5)
     public void saveNewOrder(NewOrder newOrder) {

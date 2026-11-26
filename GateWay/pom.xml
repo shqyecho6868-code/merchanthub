@@ -29,7 +29,7 @@
         <java.version>17</java.version>
     </properties>
     <dependencies>
-        <!-- F1：压测时看瓶颈。actuator 暴露 /actuator/prometheus，Hikari 连接池、HTTP 耗时分布、JVM 指标由 Micrometer 自动采集 -->
+        <!-- Bottleneck analysis under load: actuator exposes /actuator/prometheus; Micrometer collects Hikari pool, HTTP latency histograms and JVM metrics automatically -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>

@@ -25,7 +25,7 @@ public interface PaymentMapper extends BaseMapper<Payment> {
     int markSuccess(@Param("payNo") long payNo, @Param("channelTradeNo") String channelTradeNo,
                     @Param("paidAt") LocalDateTime paidAt, @Param("attempt") String attempt);
 
-    // ---------------- E3 reconciliation ----------------
+    // ---------------- Reconciliation ----------------
 
     /** Succeeded payments not yet reconciled whose success is older than the grace period (uses index (status, recon_status, paid_at)) */
     @Select("SELECT * FROM payment WHERE status = 1 AND recon_status = 0 AND paid_at < #{before} AND deleted = 0"

@@ -1,9 +1,9 @@
 #!/bin/sh
-# B3-下 🧑 实验：前台启动 order（8107，本地消息表模式），日志直接打在这个终端里。
-#   参数 1：支付时限（默认 15m；实验 ② 用 20s）
-#   参数 2：库存预占后、订单落库前停顿多少毫秒（默认 0；实验 ① 用 40000）
-#   ./deploy/b3/start-order.sh 15m 40000   → 实验 ①
-#   ./deploy/b3/start-order.sh 20s         → 实验 ②
+# Experiments: start order (8107, outbox mode) in the foreground; logs go to this terminal.
+#   Arg 1: payment deadline (default 15m; experiment 2 uses 20s)
+#   Arg 2: milliseconds to pause after inventory reservation and before persisting the order (default 0; experiment 1 uses 40000)
+#   ./deploy/b3/start-order.sh 15m 40000   -> experiment 1
+#   ./deploy/b3/start-order.sh 20s         -> experiment 2
 cd "$(dirname "$0")/../.." || exit 1
 . deploy/b2/env.sh
 exec "$JAVA_HOME/bin/java" -jar OrderService/target/OrderService-0.0.1-SNAPSHOT.jar \

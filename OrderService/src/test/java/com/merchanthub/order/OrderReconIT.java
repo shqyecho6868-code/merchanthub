@@ -16,7 +16,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * E3: order-side XXL-Job tasks. Calls the task entry points (OrderJobs) / business classes directly, without an admin server.
+ * Order-side XXL-Job tasks. Calls the task entry points (OrderJobs) / business classes directly, without an admin server.
  * <ul>
  *   <li>Timeout-order scan: the scheduled close message never came and the order is still pending past deadline + grace period -> fallback close, writing ORDER_CLOSED (inventory released from it)</li>
  *   <li>pay_anomaly: PAID_AFTER_CLOSED etc. marked pending refund + alert, <b>order status untouched</b></li>

@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * C2 experiment (automated): when a big merchant's promotion saturates order placement, does it drag down small merchants?
+ * Rate-limit experiment (automated): when a big merchant's promotion saturates order placement, does it drag down small merchants?
  * <p>
  * Setup: per-merchant order threshold of 5 QPS (lowered for the test; production default is 20).
  * Tenant 7: 20 threads concurrently send 60 orders (far above 5 QPS); meanwhile tenant 8 places 1 order every 300ms, 3 in total (about 3 QPS, within its own threshold).

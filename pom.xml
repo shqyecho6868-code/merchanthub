@@ -12,10 +12,10 @@
 	<artifactId>merchanthub</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>MerchantHub</name>
-	<description>MerchantHub 多租户电商交易平台</description>
+	<description>MerchantHub multi-tenant e-commerce trading platform</description>
 
 	<modules>
-		<!-- Maven 会按模块间依赖自动排构建顺序，这里的顺序只为阅读：基础模块在前，业务服务在后 -->
+		<!-- Maven orders the build by inter-module dependencies; this order is only for readability: base modules first, business services after -->
 		<module>TestSupport</module>
 		<module>Common</module>
 		<module>ProductInventoryService</module>
@@ -43,7 +43,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
-		<!-- 版本组合依据 SCA 官方版本说明：SCA 2025.0.0.0 ↔ Spring Cloud 2025.0.0 ↔ Spring Boot 3.5.x -->
+		<!-- Version combination per the official SCA version guide: SCA 2025.0.0.0 <-> Spring Cloud 2025.0.0 <-> Spring Boot 3.5.x -->
 		<spring-cloud.version>2025.0.0</spring-cloud.version>
 		<spring-cloud-alibaba.version>2025.0.0.0</spring-cloud-alibaba.version>
 		<mybatis-plus.version>3.5.12</mybatis-plus.version>
@@ -51,40 +51,40 @@
 		<hutool.version>5.7.17</hutool.version>
 		<commons-lang3.version>3.12.0</commons-lang3.version>
 		<!--
-		  不要在这里定义 netty.version：它和 Spring Boot 父 pom 的同名属性重名，会把全项目所有 Netty 模块
-		  （Gateway 的 Reactor Netty、Lettuce、RocketMQ remoting）一起覆盖。A2+ 曾因此用 4.2.0 导致 RocketMQ 客户端
-		  连不上 NameServer，见 pitfalls P12。Netty 版本交给 Boot 管理（3.5.x 为 4.1.x）。
+		  Do NOT define netty.version here: it clashes with the same-named property in the Spring Boot parent and would override every Netty module
+		  in the project (Gateway's Reactor Netty, Lettuce, RocketMQ remoting) at once. Pinning it to 4.2.0 once left the RocketMQ client
+		  unable to reach the NameServer. Let Boot manage the Netty version (4.1.x for 3.5.x).
 		-->
 		<canal.version>1.1.7</canal.version>
 		<!--
-		  必须和 SCA BOM 管理的 com.alibaba:fastjson（2.x 兼容层，2.0.58）同版本：兼容层内部直接调用 fastjson2 核心，
-		  版本错位会在运行时 NoSuchMethodError。原先为对齐 canal 1.1.7 锁在 2.0.31，导致 RocketMQ 客户端发请求失败（pitfalls P12）。
+		  Must match the com.alibaba:fastjson managed by the SCA BOM (the 2.x compatibility layer, 2.0.58): the layer calls the fastjson2 core directly,
+		  so mismatched versions fail at runtime with NoSuchMethodError. It was once pinned to 2.0.31 to match canal 1.1.7, which broke RocketMQ client requests.
 		-->
 		<fastjson2.version>2.0.58</fastjson2.version>
-		<!-- E3：替换 ShedLock 的分布式调度。3.x 要求 JDK 17 / Spring 6，与本项目基线一致 -->
+		<!-- Distributed scheduling (replaces ShedLock). 3.x requires JDK 17 / Spring 6, matching this project's baseline -->
 		<xxl-job.version>3.4.2</xxl-job.version>
 		<!--
-		  D1：Flowable 7.2.0 官方基于 Spring Boot 3.5.4 / Spring 6.2 / MyBatis 3.5.19 构建，
-		  与本项目 Boot 3.5.x、MyBatis-Plus 3.5.12（同样依赖 MyBatis 3.5.19）一致，不会出现两个 MyBatis 版本
+		  Flowable 7.2.0 is built on Spring Boot 3.5.4 / Spring 6.2 / MyBatis 3.5.19,
+		  matching this project's Boot 3.5.x and MyBatis-Plus 3.5.12 (also on MyBatis 3.5.19), so there are never two MyBatis versions
 		-->
 		<flowable.version>7.2.0</flowable.version>
 
-		<!-- 测试与覆盖率 -->
-		<!-- G-上：商品图片存 S3（替换 MinIO）。只用 s3 模块的预签名和 HeadObject，HTTP 客户端用 JDK 自带的 url-connection（见 ProductInventoryService/pom.xml） -->
+		<!-- Testing and coverage -->
+		<!-- Product images in S3. Only the s3 module's presigning and HeadObject are used; the HTTP client is the JDK url-connection one (see ProductInventoryService/pom.xml) -->
 		<aws-sdk.version>2.34.0</aws-sdk.version>
 		<jacoco.version>0.8.13</jacoco.version>
 		<!--
-		  覆盖率门禁默认关闭：现在只出报告不卡阈值。
-		  order / inventory / payment 模块写测试时在自己的 pom 里设 jacoco.check.skip=false，启用 70% 行覆盖率门禁。
+		  The coverage gate is off by default: reports only, no threshold.
+		  The order / inventory / payment modules set jacoco.check.skip=false in their own pom to enable the 70% line-coverage gate.
 		-->
 		<jacoco.check.skip>true</jacoco.check.skip>
 		<jacoco.line.minimum>0.70</jacoco.line.minimum>
 	</properties>
 
 	<!--
-	  根 pom 只放“所有模块都需要、且不进入运行时”的依赖：
-	  lombok（编译期注解处理）和 starter-test（测试范围）。
-	  其余依赖一律在 dependencyManagement 里统一版本，由各模块按需声明。
+	  The root pom only holds dependencies that every module needs and that never reach runtime:
+	  lombok (compile-time annotation processing) and starter-test (test scope).
+	  Everything else is version-managed in dependencyManagement and declared by each module as needed.
 	-->
 	<dependencies>
 		<dependency>
@@ -117,10 +117,10 @@
 			</dependency>
 
 			<!--
-			  测试框架 BOM。版本号直接复用 Spring Boot 父 pom 的属性（junit-jupiter.version / mockito.version /
-			  testcontainers.version），不另写数字：显式列出“项目用了哪些测试框架”，同时保证和 Boot 管理的版本永远一致，
-			  升级 Boot 时自动跟着升，不会出现两处版本打架。
-			  注意：Testcontainers 1.21.x 没有 RocketMQ 模块，RocketMQ 用 GenericContainer 启动（见 Common 的示例 IT）。
+			  Test framework BOMs. Versions reuse the Spring Boot parent's properties (junit-jupiter.version / mockito.version /
+			  testcontainers.version) instead of literal numbers: this lists explicitly which test frameworks the project uses while staying identical to Boot's managed versions,
+			  so they move with Boot upgrades and never conflict.
+			  Note: Testcontainers 1.21.x has no RocketMQ module, so RocketMQ runs in a GenericContainer (see the sample IT in Common).
 			-->
 			<dependency>
 				<groupId>software.amazon.awssdk</groupId>
@@ -151,7 +151,7 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- 内部模块 -->
+			<!-- Internal modules -->
 			<dependency>
 				<groupId>com.merchanthub</groupId>
 				<artifactId>Common</artifactId>
@@ -163,7 +163,7 @@
 				<version>${project.version}</version>
 			</dependency>
 
-			<!-- 持久层 -->
+			<!-- Persistence -->
 			<dependency>
 				<groupId>com.baomidou</groupId>
 				<artifactId>mybatis-plus-spring-boot3-starter</artifactId>
@@ -175,7 +175,7 @@
 				<version>${mybatis-plus.version}</version>
 			</dependency>
 
-			<!-- 工具 -->
+			<!-- Utilities -->
 			<dependency>
 				<groupId>io.jsonwebtoken</groupId>
 				<artifactId>jjwt-api</artifactId>
@@ -207,7 +207,7 @@
 				<version>${fastjson2.version}</version>
 			</dependency>
 
-			<!-- 中间件客户端 -->
+			<!-- Middleware clients -->
 			<dependency>
 				<groupId>com.xuxueli</groupId>
 				<artifactId>xxl-job-core</artifactId>
@@ -224,7 +224,7 @@
 				<version>${canal.version}</version>
 			</dependency>
 
-			<!-- 审批流（D1），只有 user-tenant 用 -->
+			<!-- Approval workflow; only user-tenant uses it -->
 			<dependency>
 				<groupId>org.flowable</groupId>
 				<artifactId>flowable-spring-boot-starter-process</artifactId>
@@ -234,7 +234,7 @@
 	</dependencyManagement>
 
 	<build>
-		<!-- 只做管理不直接生效：Common 是普通 jar，不能被 repackage 成可执行 jar -->
+		<!-- Managed only, not applied: Common is a plain jar and must not be repackaged into an executable jar -->
 		<pluginManagement>
 			<plugins>
 				<plugin>
@@ -245,18 +245,18 @@
 		</pluginManagement>
 
 		<!--
-		  测试分两层：
-		    *Test / *Tests  → surefire，test 阶段，纯单元测试，不需要 Docker（mvn test）
-		    *IT             → failsafe，integration-test 阶段，用 Testcontainers 起真实中间件（mvn verify）
-		  分开的原因：单测秒级、随时能跑；集成测试要拉镜像、起容器，慢且依赖 Docker，CI 里一起跑。
+		  Two test layers:
+		    *Test / *Tests  -> surefire, test phase, pure unit tests, no Docker needed (mvn test)
+		    *IT             -> failsafe, integration-test phase, real middleware via Testcontainers (mvn verify)
+		  Why split: unit tests take seconds and can run anytime; integration tests pull images and start containers, are slow and need Docker. CI runs both.
 		-->
 		<plugins>
 			<!--
-			  Maven Toolchains：编译和测试固定用 JDK 17，与运行 Maven 的 JDK 无关（P15 / P25 / D37）。
-			  本机默认 java 是 26，直接 ./mvnw verify 即可，不必再 export JAVA_HOME；
-			  Maven 从 ~/.m2/toolchains.xml 找 17 的路径（CI 由 setup-java 自动生成）。
-			  compiler / surefire / failsafe 都会用这里选中的 JDK，所以 Lombok 在 javac 17 里正常运行，
-			  测试 JVM（含 JaCoCo agent）也是 17。找不到 17 时这一步直接失败并提示缺少匹配的 toolchain。
+			  Maven Toolchains: compile and test always use JDK 17, regardless of the JDK running Maven.
+			  So ./mvnw verify works even when the default java is newer, without exporting JAVA_HOME;
+			  Maven finds the JDK 17 path in ~/.m2/toolchains.xml (generated by setup-java in CI).
+			  compiler / surefire / failsafe all use the JDK selected here, so Lombok runs under javac 17
+			  and the test JVM (including the JaCoCo agent) is 17 too. If no JDK 17 is found, this step fails with a missing-toolchain error.
 			-->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -272,7 +272,7 @@
 				<configuration>
 					<toolchains>
 						<jdk>
-							<!-- 写成区间而不是 "17"：纯版本号要求精确相等，CI 的 setup-java 登记的可能是 17.0.x -->
+							<!-- A range rather than "17": a bare version requires an exact match, and setup-java in CI may register 17.0.x -->
 							<version>[17,18)</version>
 						</jdk>
 					</toolchains>
@@ -281,7 +281,7 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-failsafe-plugin</artifactId>
-				<!-- 版本与 integration-test / verify 两个 execution 由 Boot 父 pom 管理，这里只需激活 -->
+				<!-- Version and the integration-test / verify executions are managed by the Boot parent; only activation is needed here -->
 			</plugin>
 			<plugin>
 				<groupId>org.jacoco</groupId>
@@ -289,9 +289,9 @@
 				<version>${jacoco.version}</version>
 				<executions>
 					<!--
-					  prepare-agent 把 JaCoCo agent 写进 argLine，surefire 和 failsafe 都读 argLine，
-					  两者的数据追加到同一个 target/jacoco.exec，所以报告 = 单测 + 集成测试的合并覆盖率。
-					  如果以后某个模块要自定义 argLine，必须写成 "@{argLine} -Xxx"，否则 agent 会被覆盖掉、覆盖率变 0。
+					  prepare-agent writes the JaCoCo agent into argLine; surefire and failsafe both read argLine
+					  and append to the same target/jacoco.exec, so the report = merged unit + integration test coverage.
+					  If a module ever customizes argLine it must be written as "@{argLine} -Xxx", otherwise the agent is dropped and coverage becomes 0.
 					-->
 					<execution>
 						<id>prepare-agent</id>
@@ -299,7 +299,7 @@
 							<goal>prepare-agent</goal>
 						</goals>
 					</execution>
-					<!-- 绑定 verify：等集成测试跑完再出报告。产物：<模块>/target/site/jacoco/index.html 和 jacoco.csv -->
+					<!-- Bound to verify: report after integration tests finish. Output: <module>/target/site/jacoco/index.html and jacoco.csv -->
 					<execution>
 						<id>report</id>
 						<phase>verify</phase>

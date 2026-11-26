@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 /**
- * Calls user-tenant's internal listing-approval API (D1). The merchant identity isn't a parameter: TenantFeignInterceptor propagates the current TenantContext as request headers
+ * Calls user-tenant's internal listing-approval API. The merchant identity isn't a parameter: TenantFeignInterceptor propagates the current TenantContext as request headers
  * and user-tenant reads it from there — product can't start approvals for other merchants. Timeouts are in application.yml (contextId = productListingApprovalClient)
  */
 @FeignClient(name = "user-tenant", contextId = "productListingApprovalClient", path = "/internal/approvals/product-listings")

@@ -49,7 +49,7 @@ public class InternalOrderController {
 
 
     /**
-     * E3: batch-query order statuses (used by product-inventory reservation reconciliation). Nonexistent orders are omitted from the result.
+     * Batch-query order statuses (used by product-inventory reservation reconciliation). Nonexistent orders are omitted from the result.
      * Returns order number -> status code; the caller decides: paid -> confirm deduction; closed / not found -> release; pending -> leave as is
      */
     @PostMapping("/statuses")
@@ -66,7 +66,7 @@ public class InternalOrderController {
     }
 
     /**
-     * E3: for payment reconciliation -- for each "payment succeeded" payment, has order processed its event?
+     * For payment reconciliation -- for each "payment succeeded" payment, has order processed its event?
      * Decided by the consumer dedup table (eventId = payNo) rather than order status: a paid order may have been paid by a <b>different</b> payment,
      * so looking only at status would miss "duplicate payment with a lost event"; the dedup table answers precisely "did this payment's event ever reach order"
      */

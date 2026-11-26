@@ -10,7 +10,7 @@ import org.apache.rocketmq.common.message.Message;
 import java.util.function.Supplier;
 
 /**
- * Tenant propagation over RocketMQ (C1): messages have no headers, so tenantId goes into a user property on send and is read back on consume to restore the context.
+ * Tenant propagation over RocketMQ: messages have no headers, so tenantId goes into a user property on send and is read back on consume to restore the context.
  * <p>
  * Why the sender passes tenantId explicitly instead of reading the ThreadLocal: order's outbox is sent by a scan thread (SYSTEM, cross-tenant),
  * so the thread context isn't the message's merchant; which merchant a message belongs to should come from the message itself (the outbox row, the payment).

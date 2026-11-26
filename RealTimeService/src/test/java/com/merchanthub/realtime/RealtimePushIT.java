@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
- * E1: two realtime nodes run in the same JVM (each with its own Spring context, Netty port and dedicated consumer group), sharing real MySQL / Redis / RocketMQ.
+ * Two realtime nodes run in the same JVM (each with its own Spring context, Netty port and dedicated consumer group), sharing real MySQL / Redis / RocketMQ.
  * <ul>
  *   <li>Node A: only accepts connections, <b>does not consume</b> order events</li>
  *   <li>Node B: consumes order events</li>

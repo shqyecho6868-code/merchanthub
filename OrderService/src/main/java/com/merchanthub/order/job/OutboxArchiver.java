@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * Outbox archiving (E3): moves records sent longer ago than the retention period into order_outbox_archive.
+ * Outbox archiving: moves records sent longer ago than the retention period into order_outbox_archive.
  * <p>
  * Why archive: each order has at least 2-3 outbox rows (created / timeout scheduled / paid or closed); without cleanup the main table grows forever,
  * and although the scan SQL uses an index, a bigger table makes writes, backups, and DDL slower. Archive instead of delete: we can still check afterwards "was this event sent, and when".

@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Called when reconciliation / compensation finds a problem it can't fix automatically: records a row in recon_exception (one table per service DB) + logs an ERROR alert (E3).
+ * Called when reconciliation / compensation finds a problem it can't fix automatically: records a row in recon_exception (one table per service DB) + logs an ERROR alert.
  * <p>
  * Why write to the DB rather than just log: logs roll over and get lost, and you can't count "how many are still open"; the exception table is the to-do list for manual handling,
  * and handle_status is set to 1 once resolved. In production, monitoring alerts on this table / this log keyword.

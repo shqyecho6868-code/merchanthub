@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * E3 (C2 follow-up): payment → order real Feign calls hit a "very slow fake order":
+ * Payment → order real Feign calls hit a "very slow fake order":
  * no retry after a read timeout; after consecutive timeouts the circuit opens, and subsequent calls send no request and degrade to DOWNSTREAM_UNAVAILABLE within a few ms.
  * Business failures (order not found, HTTP 200 + code 40400) don't count toward the circuit breaker and are passed through as-is.
  */
@@ -114,8 +114,8 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
         int hits = HITS.get();
         long elapsedMs = timedCall();
 
-        // Same as order's FeignResilienceIT (P47): Sentinel's circuit-breaker stats align to whole 10-second windows; when the 3 calls straddle a window boundary
-        // they don't reach min-requests and the breaker hasn't opened yet (reproduced on this payment copy in G-下 CI, P51).
+        // Same as order's FeignResilienceIT: Sentinel's circuit-breaker stats align to whole 10-second windows; when the 3 calls straddle a window boundary
+        // they don't reach min-requests and the breaker hasn't opened yet (also reproduced on this payment copy in CI).
         // If this call still reached the downstream, make up to 3 more calls until one doesn't (= the breaker is open)
         for (int extra = 0; extra < 3 && HITS.get() != hits; extra++) {
             hits = HITS.get();

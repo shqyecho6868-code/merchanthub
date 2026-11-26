@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
- * Delivery and compensation for the approval-result local outbox table (copied from order's OutboxRelay, B2): sends approval_outbox records with status = 0 to MQ.
+ * Delivery and compensation for the approval-result local outbox table (copied from order's OutboxRelay): sends approval_outbox records with status = 0 to MQ.
  * <p>
  * Both entry points go through the same {@link #publish}:
  * <ul>
@@ -71,7 +71,7 @@ public class ApprovalOutboxRelay {
         }));
     }
 
-    /** Safety net: scan pending records that are due. Since E3 triggered by XXL-Job's approvalOutboxRelayJob (formerly @Scheduled every 5 seconds) */
+    /** Safety net: scan pending records that are due. Triggered by XXL-Job's approvalOutboxRelayJob (formerly @Scheduled every 5 seconds) */
     public int scan() {
         // The job thread has no context at all; the scan spans all merchants anyway, so declare SYSTEM explicitly (otherwise the tenant plugin throws)
         return TenantContext.callAsSystem(this::scanOnce);
@@ -135,9 +135,9 @@ public class ApprovalOutboxRelay {
     private Message toMessage(ApprovalOutbox row) {
         Message msg = new Message(row.getTopic(), row.getTag(), row.getPayload().getBytes(StandardCharsets.UTF_8));
         msg.setKeys(row.getBizKey() + " " + row.getEventId());
-        // Use our own event_id as the idempotency key: RocketMQ's msgId changes on resend, event_id doesn't (B2 notes Q4)
+        // Use our own event_id as the idempotency key: RocketMQ's msgId changes on resend, event_id doesn't
         msg.putUserProperty("EVENT_ID", String.valueOf(row.getEventId()));
-        // C1: use the outbox row's own tenant_id, not the thread context (which is SYSTEM here and represents no merchant)
+        // Use the outbox row's own tenant_id, not the thread context (which is SYSTEM here and represents no merchant)
         return TenantMessages.stamp(msg, row.getTenantId());
     }
 

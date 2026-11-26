@@ -22,10 +22,10 @@ import static org.mockito.Mockito.doAnswer;
  * Option 1 (transactional message) check-back path.
  * <p>
  * report-unknown=true: return UNKNOW after the local commit, equivalent to "process killed before committing the message / COMMIT never reached the broker",
- * i.e. an automated version of the 🧑 kill experiment. The test broker's check-back interval is 1s and the minimum check-immunity time 3s (see RocketMqContainer).
+ * i.e. an automated version of the manual kill experiment. The test broker's check-back interval is 1s and the minimum check-immunity time 3s (see RocketMqContainer).
  * <p>
  * Uses a separate producer group: the same JVM caches other test classes' Spring contexts, whose producers are also online in the default group,
- * and the broker check-back goes to "any instance in the group" -- the first run of this test had its check-back taken by another context (observed in B2, see pitfalls).
+ * and the broker check-back goes to "any instance in the group" -- the first run of this test had its check-back taken by another context (observed in practice).
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=TX_MESSAGE",

@@ -10,15 +10,15 @@
 
     <artifactId>PaymentService</artifactId>
     <name>PaymentService</name>
-    <description>支付单、模拟支付回调（回调幂等）</description>
+    <description>Payment orders, mock payment callback (idempotent callbacks)</description>
 
     <properties>
-        <!-- 关键交易模块启用 70% 行覆盖率门禁（CLAUDE.md 第 6 节），低于阈值 mvn verify 失败 -->
+        <!-- Core transaction module: 70% line-coverage gate; mvn verify fails below the threshold -->
         <jacoco.check.skip>false</jacoco.check.skip>
     </properties>
 
     <dependencies>
-        <!-- F1：压测时看瓶颈。actuator 暴露 /actuator/prometheus，Hikari 连接池、HTTP 耗时分布、JVM 指标由 Micrometer 自动采集 -->
+        <!-- Bottleneck analysis under load: actuator exposes /actuator/prometheus; Micrometer collects Hikari pool, HTTP latency histograms and JVM metrics automatically -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -52,7 +52,7 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
-        <!-- 表结构版本管理（B2 引入，理由见 B2 笔记第 6 节）。11.x 起 MySQL 支持拆在 flyway-mysql 里 -->
+        <!-- Schema versioning. Since 11.x, MySQL support lives in the separate flyway-mysql module -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -61,12 +61,12 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
-        <!-- 支付单号用 Common 的雪花发号器，workerId 从 Redis 领取 -->
+        <!-- Payment numbers come from Common's snowflake ID generator; the workerId is leased from Redis -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- 注册到 Nacos，并通过 Feign 查询 order -->
+        <!-- Registers with Nacos and queries order via Feign -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
@@ -75,22 +75,22 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
-        <!-- Feign 按服务名调用时需要客户端负载均衡（从 Nacos 拿实例列表） -->
+        <!-- Calling Feign by service name needs client-side load balancing (instance list from Nacos) -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
-        <!-- 直接用原生客户端（与 Broker 同为 5.3.1，版本由 SCA BOM 管理），不用 starter，原因见 B2 笔记"技术选型" -->
+        <!-- Plain client (5.3.1, same as the broker, version managed by the SCA BOM) instead of the starter, for direct control over transactional / delayed messages -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client</artifactId>
         </dependency>
-        <!-- E3（C2 遗留）：调 order 的 Feign 加熔断（版本 1.8.9 由 SCA BOM 管理） -->
+        <!-- Circuit breaker on the Feign calls to order (version 1.8.9 managed by the SCA BOM) -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
         </dependency>
-        <!-- E3：XXL-Job 执行器（任务入口 job/PaymentJobs） -->
+        <!-- XXL-Job executor (job entry point: job/PaymentJobs) -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>

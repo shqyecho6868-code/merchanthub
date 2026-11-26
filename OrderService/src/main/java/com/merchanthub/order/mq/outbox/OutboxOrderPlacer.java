@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
  * OutboxRelay periodically scans due status=0 records and re-sends them (safety net)
  * </pre>
  * Consistency depends only on the MySQL local transaction: "if there's an order there's a pending message, if not there isn't". MQ being down doesn't block order placement.
- * Since B3-下 the generic outbox-writing part is extracted into {@link OutboxWriter}, which the order's other events also use.
+ * The generic outbox-writing part is extracted into {@link OutboxWriter}, which the order's other events also use.
  */
 @Component
 @RequiredArgsConstructor

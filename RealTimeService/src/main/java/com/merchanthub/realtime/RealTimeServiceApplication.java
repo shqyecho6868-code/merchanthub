@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
- * realtime: real-time push of order events (E1). Merchants get new-order alerts, buyers get order status changes.
+ * realtime: real-time push of order events. Merchants get new-order alerts, buyers get order status changes.
  * Multi-node deployment: which node a user is connected to is recorded in a Redis route table; any node consumes an order event and forwards it to the user's node via the route table;
  * every push is persisted first (offline_message) and then delivered, marked only once delivered; undelivered ones are redelivered when the user comes online.
  */

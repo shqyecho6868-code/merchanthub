@@ -1,13 +1,13 @@
-# G-上：6 个服务共用一个 Dockerfile，用 MODULE 区分（docker build --build-arg MODULE=OrderService .）。
-# 不在镜像里跑 Maven：CI 先 ./mvnw package，这里只 COPY 产物。镜像里没有任何 RUN 步骤，
-# 所以在 arm64 的 Mac 上也能直接构建 amd64 镜像（不需要 QEMU 模拟执行）
+# One Dockerfile shared by all 6 services, selected by MODULE (docker build --build-arg MODULE=OrderService .).
+# Maven doesn't run inside the image: CI runs ./mvnw package first and this only COPYs the artifact. There are no RUN steps,
+# so an amd64 image builds directly on an arm64 Mac (no QEMU emulation needed)
 FROM eclipse-temurin:17-jre
 ARG MODULE
 WORKDIR /app
 COPY ${MODULE}/target/${MODULE}-0.0.1-SNAPSHOT.jar app.jar
-# 容器内存由 ECS task 限定（1GB）：堆按容器内存的 75% 算，剩下留给元空间、线程栈、Netty 直接内存；
-# OOM 直接退出让 ECS 拉起新 task，比"半死不活"的进程好排查
+# Container memory is capped by the ECS task (1 GB): heap = 75% of container memory, the rest goes to metaspace, thread stacks and Netty direct memory;
+# on OOM exit immediately and let ECS start a new task -- easier to debug than a half-dead process
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
-# 不用 root 跑（镜像自带 ubuntu 用户，uid 1000）
+# Don't run as root (the base image ships an ubuntu user, uid 1000)
 USER 1000
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

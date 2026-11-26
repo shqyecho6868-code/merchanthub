@@ -27,7 +27,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Gateway authentication (reworked in C1). Does four things in order:
+ * Gateway authentication (reworked from the original IM). Does four things in order:
  * <ol>
  *   <li>Block /internal/**: internal service-to-service endpoints are for Feign only; external callers always get 404 (not 403, so we don't reveal "there's an endpoint here")</li>
  *   <li><b>First strip</b> any X-Tenant-Id / X-User-Id / X-Role sent by external requests: downstream trusts these three headers unconditionally, so without stripping identity could be forged</li>
@@ -41,11 +41,11 @@ import java.util.List;
 public class AuthorizeFilter implements GlobalFilter, Ordered {
 
     /**
-     * C2: switched to the reactive client. The gateway is WebFlux, with only a few event-loop threads (about the number of CPU cores) handling all requests;
+     * Switched to the reactive client. The gateway is WebFlux, with only a few event-loop threads (about the number of CPU cores) handling all requests;
      * with the old blocking StringRedisTemplate, if Redis was 100ms slow, every request queued on that thread was delayed 100ms too
      */
     private final ReactiveStringRedisTemplate redis;
-    /** D1: secret comes from merchanthub.jwt.secret, the same one user-tenant signs with */
+    /** Secret comes from merchanthub.jwt.secret, the same one user-tenant signs with */
     private final JwtCodec jwt;
 
     public AuthorizeFilter(ReactiveStringRedisTemplate redis, JwtCodec jwt) {
@@ -55,11 +55,11 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
 
     // Whitelisted paths: endpoints that don't require authentication
     static final List<String> EXCLUDE_PATHS = Arrays.asList(
-            // D1: user-tenant's new login endpoint (the old IM SMS-code login was removed)
+            // User-tenant's new login endpoint (the old IM SMS-code login was removed)
             "/api/user/login",
             "/api/user/register",
             "/api/user/refresh",
-            // Async notifications from the payment channel: the channel has no user token; in reality this relies on signature verification (left over from B3); payment handles it internally as SYSTEM
+            // Async notifications from the payment channel: the channel has no user token; in reality this relies on signature verification; payment handles it internally as SYSTEM
             "/api/payments/callback/"
     );
 

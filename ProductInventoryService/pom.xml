@@ -10,15 +10,15 @@
 
     <artifactId>ProductInventoryService</artifactId>
     <name>ProductInventoryService</name>
-    <description>商品 / SKU / 库存（预占、确认、释放）</description>
+    <description>Products / SKUs / inventory (reserve, confirm, release)</description>
 
     <properties>
-        <!-- 关键交易模块启用 70% 行覆盖率门禁（CLAUDE.md 第 6 节），低于阈值 mvn verify 失败 -->
+        <!-- Core transaction module: 70% line-coverage gate; mvn verify fails below the threshold -->
         <jacoco.check.skip>false</jacoco.check.skip>
     </properties>
 
     <dependencies>
-        <!-- F1：压测时看瓶颈。actuator 暴露 /actuator/prometheus，Hikari 连接池、HTTP 耗时分布、JVM 指标由 Micrometer 自动采集 -->
+        <!-- Bottleneck analysis under load: actuator exposes /actuator/prometheus; Micrometer collects Hikari pool, HTTP latency histograms and JVM metrics automatically -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -52,7 +52,7 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
-        <!-- 表结构版本管理（B3 从 schema.sql 切换，与 order 一致，见 D26）。11.x 起 MySQL 支持拆在 flyway-mysql 里 -->
+        <!-- Schema versioning (Flyway, same as order). Since 11.x, MySQL support lives in the separate flyway-mysql module -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -61,7 +61,7 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
-        <!-- B3-下：悬空预占扫描要问 order"这个订单存在吗"（只读内部接口） -->
+        <!-- Reservation reconciliation asks order "does this order exist?" (read-only internal API) -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
@@ -70,24 +70,24 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
-        <!-- B3-下：消费订单的 ORDER_PAID / ORDER_CLOSED 事件做确认扣减 / 释放。和 order 一样用原生客户端，版本由 SCA BOM 管理 -->
+        <!-- Consumes order's ORDER_PAID / ORDER_CLOSED events to confirm / release reservations. Plain client like order, version managed by the SCA BOM -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client</artifactId>
         </dependency>
-        <!-- 注册到 Nacos，供 order 通过 Feign 调用 -->
+        <!-- Registers with Nacos so order can call it via Feign -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
-        <!-- E3：XXL-Job 执行器（任务入口 ProductJobs） -->
+        <!-- XXL-Job executor (job entry point: ProductJobs) -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>
         </dependency>
 
-        <!-- G-上：商品图片存 S3。排除 SDK 默认的 Netty / Apache HTTP 客户端：Netty 版本由 Spring Boot 管，混进 SDK 的 Netty 客户端容易冲突；
-             本服务只有"签 URL"（纯本地计算）和偶尔一次 HeadObject，JDK 自带的 url-connection 客户端足够 -->
+        <!-- Product images live in S3. The SDK's default Netty / Apache HTTP clients are excluded: Spring Boot manages the Netty version and the SDK's Netty client tends to conflict;
+             this service only presigns URLs (pure local computation) and occasionally calls HeadObject, so the JDK url-connection client is enough -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>

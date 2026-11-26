@@ -88,7 +88,7 @@ class TenantWebMvcTest {
     }
 
     @Test
-    @DisplayName("Bad JSON → HTTP 400 (was 500 before, P23)")
+    @DisplayName("Bad JSON → HTTP 400 (was 500 before)")
     void badJson_400() throws Exception {
         mvc.perform(post("/demo/open").contentType(MediaType.APPLICATION_JSON).content("{\"price\": "))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value(40000));

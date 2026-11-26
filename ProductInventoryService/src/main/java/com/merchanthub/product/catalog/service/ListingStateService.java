@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Local status changes for product listing approval (D1). One short transaction per method: status CAS + status history committed together.
+ * Local status changes for product listing approval. One short transaction per method: status CAS + status history committed together.
  * <b>No remote calls inside the transaction</b>: the Feign call that starts the approval lives in {@link ProductListingService}, after the commit;
  * otherwise if user-tenant is 3 seconds slow, this product row's lock is held for 3 seconds.
  */

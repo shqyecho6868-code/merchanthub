@@ -42,7 +42,7 @@ public class TxMessageOrderPlacer implements OrderPlacer {
     private final OrderEventCodec codec;
     private final SnowflakeIdGenerator idGenerator;
 
-    /** Check-immunity time: must exceed the local transaction timeout (5s in OrderPersistService) so the local transaction always has a result at check-back (B2 notes Q2) */
+    /** Check-immunity time: must exceed the local transaction timeout (5s in OrderPersistService) so the local transaction always has a result at check-back */
     @Value("${merchanthub.order.tx.check-immunity-seconds:30}")
     private int checkImmunitySeconds;
 
@@ -58,7 +58,7 @@ public class TxMessageOrderPlacer implements OrderPlacer {
             result = producer.sendMessageInTransaction(msg, tx);
         } catch (MQClientException e) {
             // The half message didn't even go out (MQ unavailable): the local transaction never ran, no order created.
-            // This is the cost of the transactional-message approach: no orders while MQ is down (inventory already reserved -> dangling reservation, compensated in B3)
+            // This is the cost of the transactional-message approach: no orders while MQ is down (inventory already reserved -> dangling reservation, compensated by the dangling-reservation scan)
             log.error("Failed to send half message, order placement failed orderNo={} tenantId={}", order.orderNo(), order.tenantId(), e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }

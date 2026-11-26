@@ -16,7 +16,7 @@ spring:
         server-addr: 127.0.0.1:8848
 
 merchanthub:
-  # E3: register with the XXL-Job admin (scheduler)
+  # Register with the XXL-Job admin (scheduler)
   job:
     xxl:
       enabled: true
@@ -26,6 +26,6 @@ merchanthub:
       access-token: ${XXL_JOB_ACCESS_TOKEN}
   rocketmq:
     namesrv-addr: 127.0.0.1:9876
-  # D1: secret for signing tokens (JWT_SECRET from .env); the gateway verifies with the same one
+  # Secret for signing tokens (JWT_SECRET from .env); the gateway verifies with the same one
   jwt:
     secret: ${JWT_SECRET}

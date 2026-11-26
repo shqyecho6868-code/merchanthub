@@ -91,7 +91,7 @@ class InventoryReservationIT extends ProductItSupport {
         assertThat(records(orderNo)).isEqualTo(2);
     }
 
-    /** All-or-nothing: 102 is short → what was already deducted for 101 must roll back too, leaving no records (regression test for the bug from the B1 code review) */
+    /** All-or-nothing: 102 is short → what was already deducted for 101 must roll back too, leaving no records (regression test for a partial-reservation bug) */
     @Test
     void multiSku_oneInsufficient_nothingReserved() {
         stock(101, 10);
@@ -193,7 +193,7 @@ class InventoryReservationIT extends ProductItSupport {
                 long buyerId = 50_000L + i;
                 futures.add(pool.submit(() -> {
                     start.await();
-                    // C1: child threads don't get the test thread's ThreadLocal, so they must set the context themselves.
+                    // Child threads don't get the test thread's ThreadLocal, so they must set the context themselves.
                     // In production, reservation is called by order via Feign when a buyer places an order, so the downstream sees a BUYER identity
                     try (var ignored = TenantContext.open(new TenantInfo(null, buyerId, Role.BUYER))) {
                         return task.call();

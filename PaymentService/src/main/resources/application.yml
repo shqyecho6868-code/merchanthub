@@ -1,6 +1,6 @@
 server:
   port: 8108
-  # F1: let Micrometer read Tomcat thread pool metrics (busy / max) to tell during load tests whether the thread pool saturates first
+  # Let Micrometer read Tomcat thread pool metrics (busy / max) to tell during load tests whether the thread pool saturates first
   tomcat:
     mbeanregistry:
       enabled: true
@@ -22,7 +22,7 @@ spring:
       client:
         config:
           # Cross-service calls must have timeouts: creating a payment looks up the order; if order is slow, fail fast instead of tying up payment request threads.
-          # The key is the @FeignClient contextId (P29); since E3, contextId = paymentOrderClient
+          # The key is the @FeignClient contextId; contextId = paymentOrderClient
           paymentOrderClient:
             connect-timeout: 1000
             read-timeout: 3000
@@ -36,7 +36,7 @@ spring:
 
 merchanthub:
   payment:
-    # E3: payment → order circuit-breaker thresholds (same meaning as order's, C2 notes Q3)
+    # Payment → order circuit-breaker thresholds (same meaning as order's)
     sentinel:
       degrade:
         slow-rt-ms: 1000
@@ -45,7 +45,7 @@ merchanthub:
         min-requests: 10
         stat-interval-ms: 10000
         open-seconds: 10
-    # E3: reconciliation parameters (job paymentReconJob; frequency is configured in the XXL-Job admin)
+    # Reconciliation parameters (job paymentReconJob; frequency is configured in the XXL-Job admin)
     recon:
       # Only check payments that succeeded longer ago than this: earlier events may still be in flight
       grace: 2m
@@ -55,7 +55,7 @@ merchanthub:
       max-resend: 3
       batch-size: 200
     tx:
-      # On check-back, if the payment is still pending and the message is younger than this → UNKNOW, check again later (same as B2 order's second line of defense)
+      # On check-back, if the payment is still pending and the message is younger than this → UNKNOW, check again later (same second line of defense as order)
       rollback-min-age-seconds: 30
   job:
     xxl:
@@ -73,7 +73,7 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# F1: load-test monitoring. Only health and prometheus are exposed (not sensitive endpoints like env / heapdump);
+# Load-test monitoring. Only health and prometheus are exposed (not sensitive endpoints like env / heapdump);
 # service ports aren't exposed through the gateway and /actuator isn't in the gateway routes, so it's unreachable from outside.
 # Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (by default there's only count / sum / max)
 management:

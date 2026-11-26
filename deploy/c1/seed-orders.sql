@@ -1,7 +1,7 @@
--- C1 🧑 实验：两个商家各一张订单（直接写库，不走下单链路）。可重复执行
---   商家 7 的订单：7000000000000000001
---   商家 8 的订单：8000000000000000001
--- 买家都是 50001；状态 20（已支付），不会被超时关单影响
+-- Experiment: one order for each of two merchants (written directly, bypassing the order flow). Safe to re-run
+--   Merchant 7's order: 7000000000000000001
+--   Merchant 8's order: 8000000000000000001
+-- Both buyers are 50001; status 20 (paid), so timeout close doesn't touch them
 USE mh_order;
 INSERT INTO orders (tenant_id, order_no, buyer_id, status, total_amount, discount_amount, pay_amount, expire_at, paid_at)
 VALUES (7, 7000000000000000001, 50001, 20, 9900, 0, 9900, UTC_TIMESTAMP(3) + INTERVAL 1 DAY, UTC_TIMESTAMP(3)),

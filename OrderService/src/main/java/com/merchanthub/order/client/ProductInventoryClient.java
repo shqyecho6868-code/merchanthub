@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * Calls product-inventory's internal APIs. Timeouts are configured in application.yml (connect 1s / read 3s);
- * no automatic retry (see {@link ProductInventoryFeignConfig} for why); circuit breaking/degradation is done in {@link RemoteResults} by the resource names below (C2).
+ * no automatic retry (see {@link ProductInventoryFeignConfig} for why); circuit breaking/degradation is done in {@link RemoteResults} by the resource names below.
  * The downstream returns the unified response body: HTTP 200 + body.code; business failures are read from code, see {@link RemoteResults}.
  */
 @FeignClient(name = "product-inventory", contextId = "productInventoryClient", path = "/internal",

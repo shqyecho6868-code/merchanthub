@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.function.Supplier;
 
 /**
- * C2: per-merchant rate limiting at the order-placement entry (Sentinel hot parameters; rules in SentinelRulesConfig).
+ * Per-merchant rate limiting at the order-placement entry (Sentinel hot parameters; rules in SentinelRulesConfig).
  * <p>
  * Placed before the Controller calls the service: throttled requests <b>don't fetch SKUs, reserve, or touch the DB</b>, so rejection costs almost nothing.
  * No @SentinelResource annotation: it picks hot parameters by method-argument index, and the Controller's argument is the whole request body,

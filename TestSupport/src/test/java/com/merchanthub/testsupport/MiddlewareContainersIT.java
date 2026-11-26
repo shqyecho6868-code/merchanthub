@@ -19,7 +19,7 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Smoke test for the shared containers (lived in Common since A2+, moved to TestSupport with the containers in B1):
+ * Smoke test for the shared containers (originally in Common, moved to TestSupport with the containers):
  * proves the three singleton containers MySQL / Redis / RocketMQ start and are reachable both locally and in CI. No business logic.
  */
 class MiddlewareContainersIT {

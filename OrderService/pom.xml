@@ -10,15 +10,15 @@
 
     <artifactId>OrderService</artifactId>
     <name>OrderService</name>
-    <description>下单、订单状态机、交易快照</description>
+    <description>Order placement, order state machine, transaction snapshots</description>
 
     <properties>
-        <!-- 关键交易模块启用 70% 行覆盖率门禁（CLAUDE.md 第 6 节），低于阈值 mvn verify 失败 -->
+        <!-- Core transaction module: 70% line-coverage gate; mvn verify fails below the threshold -->
         <jacoco.check.skip>false</jacoco.check.skip>
     </properties>
 
     <dependencies>
-        <!-- F1：压测时看瓶颈。actuator 暴露 /actuator/prometheus，Hikari 连接池、HTTP 耗时分布、JVM 指标由 Micrometer 自动采集 -->
+        <!-- Bottleneck analysis under load: actuator exposes /actuator/prometheus; Micrometer collects Hikari pool, HTTP latency histograms and JVM metrics automatically -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -52,7 +52,7 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
-        <!-- 表结构版本管理（B2 引入，理由见 B2 笔记第 6 节）。11.x 起 MySQL 支持拆在 flyway-mysql 里 -->
+        <!-- Schema versioning. Since 11.x, MySQL support lives in the separate flyway-mysql module -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -61,12 +61,12 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
-        <!-- 订单号用 Common 的雪花发号器，workerId 从 Redis 领取 -->
+        <!-- Order numbers come from Common's snowflake ID generator; the workerId is leased from Redis -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
-        <!-- 注册到 Nacos，并通过 Feign 调用 product-inventory -->
+        <!-- Registers with Nacos and calls product-inventory via Feign -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
@@ -75,37 +75,37 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
-        <!-- Feign 按服务名调用时需要客户端负载均衡（从 Nacos 拿实例列表） -->
+        <!-- Calling Feign by service name needs client-side load balancing (instance list from Nacos) -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
-        <!-- C2：Sentinel（版本 1.8.9 由 SCA BOM 管理）。下单接口按租户热点参数限流 + Feign 熔断降级 -->
+        <!-- Sentinel (version 1.8.9 managed by the SCA BOM): per-tenant hot-parameter rate limiting on order placement + Feign circuit breaking -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
         </dependency>
-        <!-- 直接用原生客户端（与 Broker 同为 5.3.1，版本由 SCA BOM 管理），不用 starter，原因见 B2 笔记"技术选型" -->
+        <!-- Plain client (5.3.1, same as the broker, version managed by the SCA BOM) instead of the starter, for direct control over transactional / delayed messages -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client</artifactId>
         </dependency>
-        <!-- E3：XXL-Job 执行器（任务入口见 job/OrderJobs），自动装配在 Common -->
+        <!-- XXL-Job executor (job entry point: job/OrderJobs); auto-configuration lives in Common -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>
         </dependency>
-        <!-- E2：订单搜索。Java API Client 版本由 Spring Boot 管理（3.5.x → 8.18），与 compose 里的 ES 8.18 对齐；
-             Boot 自动装配 ElasticsearchClient（spring.elasticsearch.uris） -->
+        <!-- Order search. Java API Client version managed by Spring Boot (3.5.x -> 8.18), matching ES 8.18 in compose;
+             Boot auto-configures ElasticsearchClient (spring.elasticsearch.uris) -->
         <dependency>
             <groupId>co.elastic.clients</groupId>
             <artifactId>elasticsearch-java</artifactId>
         </dependency>
-        <!-- E2：Canal 客户端（从已删除的 OfflineDataService 迁来），读 mh_order 的 binlog 同步 ES -->
+        <!-- Canal client: reads mh_order's binlog and syncs to ES -->
         <dependency>
             <groupId>com.alibaba.otter</groupId>
             <artifactId>canal.client</artifactId>
-            <!-- 只用直连 Canal Server 的 SimpleCanalConnector：ZooKeeper 集群模式、整包 netty-all、spring-orm 都用不到，排除掉 -->
+            <!-- Only the direct SimpleCanalConnector is used: ZooKeeper cluster mode, the full netty-all bundle and spring-orm are unneeded, so they are excluded -->
             <exclusions>
                 <exclusion>
                     <groupId>io.netty</groupId>

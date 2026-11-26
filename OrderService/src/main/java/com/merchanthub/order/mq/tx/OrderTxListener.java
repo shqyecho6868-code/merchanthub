@@ -40,13 +40,13 @@ public class OrderTxListener implements TransactionListener {
 
     /**
      * If the order isn't found, the message must be at least this old before we decide ROLLBACK; otherwise return UNKNOW so the broker asks again later.
-     * Must exceed the local transaction timeout (5s). This is a second line of defense beyond the check-immunity time: in B2 the check-back arrived earlier than that (see pitfalls),
+     * Must exceed the local transaction timeout (5s). This is a second line of defense beyond the check-immunity time: in testing the check-back arrived earlier than that,
      * so we can't rely only on the broker-side window. bornTimestamp is the producer's own clock, unaffected by the broker's clock.
      */
     @Value("${merchanthub.order.tx.rollback-min-age-seconds:30}")
     private long rollbackMinAgeSeconds;
 
-    /** For the 🧑 kill experiment: pause N ms after the local commit before returning COMMIT, leaving a window to kill the process. Must be 0 in production */
+    /** For the manual kill experiment: pause N ms after the local commit before returning COMMIT, leaving a window to kill the process. Must be 0 in production */
     @Value("${merchanthub.order.tx.debug.pause-after-local-commit-ms:0}")
     private long pauseAfterLocalCommitMs;
 
@@ -92,7 +92,7 @@ public class OrderTxListener implements TransactionListener {
         boolean exists;
         try {
             // Decide the local transaction result by order number. This works only because the local transaction has always finished by check-back time
-            // (local tx timeout 5s < check-immunity time 30s, B2 notes Q2)
+            // (local tx timeout 5s < check-immunity time 30s)
             // The check-back thread is a RocketMQ thread with no tenant context: query by the merchant in the event (which also verifies the order really belongs to it)
             exists = TenantContext.callAs(TenantInfo.systemOf(event.tenantId()), () ->
                     ordersMapper.exists(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, event.orderNo())));

@@ -47,7 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * E3: payment-side reconciliation, one test case per kind of inconsistency. order is a Mockito stub (returns pay-check / statuses results per scenario);
+ * Payment-side reconciliation, one test case per kind of inconsistency. order is a Mockito stub (returns pay-check / statuses results per scenario);
  * re-sent events are caught by an observer consumer on a real RocketMQ.
  * <p>
  * What the order side does with a re-sent event (pending payment → paid; closed → record PAID_AFTER_CLOSED) is covered by order's OrderPaidIT / PayTimeoutRaceIT,

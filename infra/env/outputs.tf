@@ -1,5 +1,5 @@
 output "alb_url" {
-  description = "对外入口：HTTP 接口走 <alb_url>/api/..."
+  description = "Public entry point: HTTP APIs at <alb_url>/api/..."
   value       = "http://${aws_lb.main.dns_name}"
 }
 
@@ -8,7 +8,7 @@ output "websocket_url" {
 }
 
 output "middleware_instance_id" {
-  description = "中间件 EC2：aws ssm start-session --target <id> 登录（不需要 SSH 密钥）"
+  description = "Middleware EC2: log in with aws ssm start-session --target <id> (no SSH key needed)"
   value       = aws_instance.middleware.id
 }
 

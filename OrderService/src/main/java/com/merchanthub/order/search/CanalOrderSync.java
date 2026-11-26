@@ -19,12 +19,12 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Canal -> ES order sync (E2, demo only). Canal poses as a MySQL replica reading the binlog; here we pull row changes of mh_order.orders / order_item,
+ * Canal -> ES order sync (demo only). Canal poses as a MySQL replica reading the binlog; here we pull row changes of mh_order.orders / order_item,
  * extract the order numbers, and hand them to {@link OrderSearchIndexer} to look up and overwrite.
  * <p>
  * Retry on failure: if any order in a batch fails -> rollback, Canal hands us the <b>whole batch</b> again next time (position not advanced), retried a few seconds later;
  * since sync is "look up + full overwrite", reprocessing a batch has no side effects. If it keeps failing (e.g. ES down) the position stays put,
- * and after recovery it resumes from the checkpoint without losing changes -- the cost is ES growing staler (lag) meanwhile; see E2 notes.
+ * and after recovery it resumes from the checkpoint without losing changes -- the cost is ES growing staler (lag) meanwhile.
  * <p>
  * Off by default (tests and environments without Canal don't connect); enable for local demos with deploy/e2/start-order-canal.sh.
  */

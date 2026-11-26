@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
-/** Netty WebSocket server (inherited from the original IM; E1 changes: configurable port, receiver derived from identity during auth, business handling moved to a separate thread group) */
+/** Netty WebSocket server (inherited from the original IM; changes: configurable port, receiver derived from identity during auth, business handling moved to a separate thread group) */
 @Slf4j
 @Component
 @RequiredArgsConstructor

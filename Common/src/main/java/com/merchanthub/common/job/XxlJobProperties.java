@@ -4,7 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * XXL-Job executor settings (E3). Each service is an "executor": on startup it registers its address with the admin,
+ * XXL-Job executor settings. Each service is an "executor": on startup it registers its address with the admin,
  * and the admin picks an executor per Cron trigger and calls its @XxlJob method over HTTP.
  */
 @Data

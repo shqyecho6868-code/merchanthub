@@ -1,6 +1,6 @@
-# 两个 AZ（ALB 和 RDS 子网组都要求至少两个 AZ），每个 AZ 一个公有子网 + 一个私有子网。
-#   公有子网：只放 ALB 和 NAT 网关
-#   私有子网：ECS task、RDS、ElastiCache、中间件 EC2 —— 都没有公网 IP，外网进不来
+# Two AZs (ALB and the RDS subnet group both require at least two), each with one public and one private subnet.
+#   Public subnets: only the ALB and the NAT gateway
+#   Private subnets: ECS tasks, RDS, ElastiCache, middleware EC2 -- no public IPs, unreachable from outside
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -12,14 +12,14 @@ locals {
 resource "aws_vpc" "main" {
   cidr_block           = "10.20.0.0/16"
   enable_dns_support   = true
-  enable_dns_hostnames = true # RDS / ElastiCache 的 endpoint 是 DNS 名，需要 VPC 内能解析
+  enable_dns_hostnames = true # RDS / ElastiCache endpoints are DNS names that must resolve inside the VPC
   tags                 = { Name = var.name }
 }
 
 resource "aws_subnet" "public" {
   count             = 2
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index) # 10.20.0.0/24、10.20.1.0/24
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index) # 10.20.0.0/24, 10.20.1.0/24
   availability_zone = local.azs[count.index]
   tags              = { Name = "${var.name}-public-${count.index}" }
 }
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   count             = 2
   vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 10) # 10.20.10.0/24、10.20.11.0/24
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, count.index + 10) # 10.20.10.0/24, 10.20.11.0/24
   availability_zone = local.azs[count.index]
   tags              = { Name = "${var.name}-private-${count.index}" }
 }
@@ -37,7 +37,7 @@ resource "aws_internet_gateway" "main" {
   tags   = { Name = var.name }
 }
 
-# 只建 1 个 NAT（放在第一个 AZ）省钱：约 $0.045/小时。代价是这个 AZ 故障时两个私有子网都出不了网；生产每个 AZ 各一个
+# A single NAT (in the first AZ) to save money: about $0.045/hour. Trade-off: if that AZ fails, both private subnets lose egress; production uses one per AZ
 resource "aws_eip" "nat" {
   domain = "vpc"
   tags   = { Name = "${var.name}-nat" }
@@ -80,8 +80,8 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-# S3 网关端点：免费。ECR 镜像层实际存在 S3 上，拉镜像的大头流量走这里，不经过 NAT（NAT 按流量 $0.045/GB 收费）；
-# 商品图片的 HeadObject 也走这里
+# S3 gateway endpoint: free. ECR image layers actually live in S3, so most image-pull traffic goes here instead of through NAT (NAT charges $0.045/GB);
+# product-image HeadObject calls go through it too
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${var.region}.s3"

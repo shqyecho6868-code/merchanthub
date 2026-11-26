@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Product listing approval (D1). Process definition = template, one for the whole platform; each product submission for review = one process instance (businessKey = listing:merchant:product:round).
-  Reject = instance ends (doesn't go back to first review): the product is edited in the product service and the engine can't know when editing is done; after editing, a new submission starts a new instance (D1 notes 2.2).
+  Product listing approval. Process definition = template, one for the whole platform; each product submission for review = one process instance (businessKey = listing:merchant:product:round).
+  Reject = instance ends (doesn't go back to first review): the product is edited in the product service and the engine can't know when editing is done; after editing, a new submission starts a new instance.
   On end, listingResultListener writes the approval record + local outbox table in the same transaction as "completing the last task" -> RocketMQ -> product writes back the status.
 -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"

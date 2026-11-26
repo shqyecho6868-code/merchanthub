@@ -1,5 +1,5 @@
 {
-  "title": "MerchantHub 压测",
+  "title": "MerchantHub Load Test",
   "uid": "merchanthub-perf",
   "schemaVersion": 39,
   "version": 1,
@@ -16,7 +16,7 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "各服务 QPS（按接口）",
+      "title": "QPS per service (by endpoint)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -44,7 +44,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "各服务 P99（按接口）",
+      "title": "P99 per service (by endpoint)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -72,7 +72,7 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "错误率（5xx + 429）",
+      "title": "Error rate (5xx + 429)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -100,7 +100,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "Hikari 连接池：活跃 / 等待 / 上限",
+      "title": "Hikari pool: active / pending / max",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -126,7 +126,7 @@
         {
           "refId": "B",
           "expr": "hikaricp_connections_pending",
-          "legendFormat": "{{service}} pending（>0 = 拿不到连接在排队）"
+          "legendFormat": "{{service}} pending (>0 = waiting for a connection)"
         },
         {
           "refId": "C",
@@ -138,7 +138,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "获取连接耗时 P99",
+      "title": "Connection acquire time P99",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -171,7 +171,7 @@
     {
       "id": 6,
       "type": "timeseries",
-      "title": "Tomcat 线程：忙碌 / 上限",
+      "title": "Tomcat threads: busy / max",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -204,7 +204,7 @@
     {
       "id": 7,
       "type": "timeseries",
-      "title": "JVM 堆使用",
+      "title": "JVM heap used",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -232,7 +232,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "GC 停顿（每秒）",
+      "title": "GC pause (per second)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

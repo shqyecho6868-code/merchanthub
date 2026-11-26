@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Payment succeeded -> order status CAS + status log (B3). Calls the consumer handler directly, covering "duplicate / late / concurrent" payment-success events.
+ * Payment succeeded -> order status CAS + status log. Calls the consumer handler directly, covering "duplicate / late / concurrent" payment-success events.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 class OrderPaidIT extends OrderItSupport {
@@ -87,7 +87,7 @@ class OrderPaidIT extends OrderItSupport {
         assertThat(service.handle(paid(orderNo, 9900))).isTrue();
         assertThat(service.handle(paid(orderNo, 9900))).isFalse();
         assertThat(status(orderNo)).isEqualTo(20);
-        // 🔍 Bug from the B3 code review: the log used to be inserted before the CAS check, so the second, failed transition also left a PAY_SUCCESS entry
+        // Bug caught in code review: the log used to be inserted before the CAS check, so the second, failed transition also left a PAY_SUCCESS entry
         assertThat(logs(orderNo, "PAY_SUCCESS")).isEqualTo(1);
     }
 
@@ -117,7 +117,7 @@ class OrderPaidIT extends OrderItSupport {
             PaySuccessEvent e = paid(orderNo, 9900);
             results.add(pool.submit(() -> {
                 start.await();
-                // Worker threads lack the test thread's context: set it from the message's merchant, like the real consumer (C1)
+                // Worker threads lack the test thread's context: set it from the message's merchant, like the real consumer
                 return TenantContext.callAs(TenantInfo.systemOf(TENANT), () -> service.handle(e));
             }));
         }

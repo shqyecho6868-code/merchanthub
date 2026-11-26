@@ -28,7 +28,7 @@ public class Payment {
     private LocalDateTime paidAt;
     /** Attempt ID of the callback that won the success CAS (used by the transaction check-back) */
     private String successAttempt;
-    /** E3: 0 not reconciled / 1 consistent / 3 re-sends exhausted, alerted */
+    /** 0 not reconciled / 1 consistent / 3 re-sends exhausted, alerted */
     private Integer reconStatus;
     private Integer reconRetry;
 

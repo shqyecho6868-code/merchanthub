@@ -23,11 +23,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Merchant back-office product APIs (C1). Role split:
+ * Merchant back-office product APIs. Role split:
  * <ul>
  *   <li>View: merchant admin, merchant staff, platform admin</li>
- *   <li>Submit for listing review (D1): both merchant admin and staff can submit; approval is a first review by the merchant admin + a second review by the platform admin</li>
- *   <li>Main image upload (G-上): merchant admin, merchant staff; first request an S3 direct-upload URL, then confirm the binding after uploading</li>
+ *   <li>Submit for listing review: both merchant admin and staff can submit; approval is a first review by the merchant admin + a second review by the platform admin</li>
+ *   <li>Main image upload: merchant admin, merchant staff; first request an S3 direct-upload URL, then confirm the binding after uploading</li>
  *   <li>Price change: merchant admin only — staff get 403 (the platform admin can't change prices for a merchant either: the platform governs rules, not a merchant's business decisions)</li>
  * </ul>
  */

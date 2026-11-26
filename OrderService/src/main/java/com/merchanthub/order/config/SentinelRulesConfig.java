@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * C2: load the config into Sentinel rules at startup.
+ * Load the config into Sentinel rules at startup.
  * <p>
  * Sentinel's rule managers are JVM-wide static singletons: rules pushed from the dashboard <b>replace wholesale</b> the same kind of rules loaded here, and a restart reverts to this config.
  */

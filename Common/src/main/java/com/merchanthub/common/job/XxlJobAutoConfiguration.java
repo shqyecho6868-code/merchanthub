@@ -10,7 +10,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * XXL-Job executor auto-configuration (E3): any service that declares the xxl-job-core dependency and turns on merchanthub.job.xxl.enabled
+ * XXL-Job executor auto-configuration: any service that declares the xxl-job-core dependency and turns on merchanthub.job.xxl.enabled
  * registers as an executor, and its @XxlJob methods become schedulable jobs.
  * <p>
  * Why job methods are separate from the executor switch: job classes (e.g. OrderJobs) are always plain Beans that tests call directly;

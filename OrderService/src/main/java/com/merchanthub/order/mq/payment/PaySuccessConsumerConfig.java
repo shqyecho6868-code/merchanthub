@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 
-/** Subscribes to payment's "payment succeeded" event. E3: when the last retry still fails (about to go to the DLQ), alert and record recon_exception */
+/** Subscribes to payment's "payment succeeded" event. When the last retry still fails (about to go to the DLQ), alert and record recon_exception */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(name = "merchanthub.order.pay-consumer.enabled", havingValue = "true", matchIfMissing = true)
@@ -49,7 +49,7 @@ public class PaySuccessConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1: restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
+                        // Restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
                         TenantMessages.consumeAs(m, () -> service.handle(event));
                     } catch (OrderNotVisibleException e) {
                         log.warn("Order not visible yet, will be redelivered eventId={} orderNo={} reconsumeTimes={}",

@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * Pricing: uses only unit prices fetched server-side. All amounts are long, in cents.
- * B1 has no discounts, so discount is always 0; but the fields and the "allocate to line items" structure are in place so adding discounts only touches this class.
+ * There are no discounts yet, so discount is always 0; but the fields and the "allocate to line items" structure are in place so adding discounts only touches this class.
  */
 public final class OrderPricing {
 

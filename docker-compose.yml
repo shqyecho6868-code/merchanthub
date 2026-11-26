@@ -1,5 +1,5 @@
-# MerchantHub 本地开发中间件
-# 版本说明与端口、账号见 docs/env-setup.md；密码等变量在 .env（不提交），模板见 .env.example
+# MerchantHub local development middleware
+# Host ports are in each service's ports mapping below; passwords come from .env (not committed), template in .env.example
 name: merchanthub
 
 services:
@@ -22,7 +22,7 @@ services:
     image: redis:7.4
     container_name: mh-redis
     restart: unless-stopped
-    # Redis 镜像没有密码环境变量，只能通过启动参数设置；appendonly 让重启后数据不丢
+    # The Redis image has no password env var, so it's set via command-line args; appendonly keeps data across restarts
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
     ports:
       - "6379:6379"
@@ -32,40 +32,40 @@ services:
       - mh-net
 
   nacos:
-    # 与 SCA 2025.0.0.0 自带的 nacos-client 3.0.3 对齐
+    # Matches nacos-client 3.0.3 bundled with SCA 2025.0.0.0
     image: nacos/nacos-server:v3.0.3
     container_name: mh-nacos
     restart: unless-stopped
     environment:
-      MODE: standalone                 # 单机模式，数据用内置存储，不依赖 MySQL
+      MODE: standalone                 # standalone mode with embedded storage, no MySQL dependency
       NACOS_AUTH_ENABLE: "true"
       NACOS_AUTH_TOKEN: ${NACOS_AUTH_TOKEN}
       NACOS_AUTH_IDENTITY_KEY: ${NACOS_AUTH_IDENTITY_KEY}
       NACOS_AUTH_IDENTITY_VALUE: ${NACOS_AUTH_IDENTITY_VALUE}
       TZ: America/Los_Angeles
     ports:
-      - "8080:8080"                    # 3.x 控制台
+      - "8080:8080"                    # 3.x console
       - "8848:8848"                    # HTTP API
-      - "9848:9848"                    # gRPC：客户端注册/订阅走这里，漏映射会导致服务注册超时
+      - "9848:9848"                    # gRPC: client registration/subscription goes here; missing it makes service registration time out
     volumes:
       - nacos-data:/home/nacos/data
     networks:
       - mh-net
 
   namesrv:
-    # 与 SCA 2025.0.0.0 推荐的 RocketMQ 5.3.1 对齐
+    # Matches RocketMQ 5.3.1 recommended by SCA 2025.0.0.0
     image: apache/rocketmq:5.3.1
     container_name: mh-namesrv
     restart: unless-stopped
     command: sh mqnamesrv
     environment:
-      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"   # 默认堆很大，本地开发调小
+      JAVA_OPT_EXT: "-Xms256m -Xmx256m -Xmn128m"   # the default heap is large; shrunk for local dev
     ports:
       - "9876:9876"
     networks:
       - mh-net
 
-  # 一次性任务：新建的命名卷属于 root，而 RocketMQ 镜像以 uid 3000 运行，Broker 写不进存储目录会启动失败
+  # One-shot job: new named volumes are owned by root but the RocketMQ image runs as uid 3000, so the broker can't write its store dir and fails to start
   broker-init:
     image: apache/rocketmq:5.3.1
     user: root
@@ -86,12 +86,12 @@ services:
     command: sh mqbroker -n namesrv:9876 -c /home/rocketmq/broker.conf
     environment:
       JAVA_OPT_EXT: "-Xms512m -Xmx512m -Xmn256m"
-    # 让容器（Dashboard 等）把 host.docker.internal 解析到宿主机；brokerIP1 的取舍见 broker.conf
+    # Let containers (Dashboard etc.) resolve host.docker.internal to the host; see broker.conf for the brokerIP1 trade-off
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "10911:10911"                  # 客户端收发消息
-      - "10909:10909"                  # VIP 通道（listenPort - 2）
+      - "10911:10911"                  # client send/receive
+      - "10909:10909"                  # VIP channel (listenPort - 2)
     volumes:
       - ./deploy/rocketmq/broker.conf:/home/rocketmq/broker.conf:ro
       - rocketmq-store:/home/rocketmq/store
@@ -109,13 +109,13 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8082:8082"                    # 2.1.0 版容器内默认监听 8082（不是 8080），正好避开 Nacos 控制台的 8080
+      - "8082:8082"                    # 2.1.0 listens on 8082 inside the container (not 8080), which conveniently avoids Nacos console's 8080
     networks:
       - mh-net
 
   sentinel:
-    # C2：Sentinel 控制台。官方没有发布 Docker 镜像（第三方镜像来源不可控），所以用官方 JRE 镜像跑官方 release 的 jar：
-    # 首次启动时下载到命名卷，之后直接用。版本与 SCA 2025.0.0.0 管理的 sentinel-core 1.8.9 一致
+    # Sentinel console. There's no official Docker image (third-party images are of unknown provenance), so the official release jar runs on the official JRE image:
+    # downloaded into a named volume on first start and reused afterwards. Version matches sentinel-core 1.8.9 managed by SCA 2025.0.0.0
     image: eclipse-temurin:17-jre
     container_name: mh-sentinel
     restart: unless-stopped
@@ -131,19 +131,19 @@ services:
         exec java -Xms128m -Xmx256m -Dserver.port=8858 \
           -Dsentinel.dashboard.auth.username=sentinel -Dsentinel.dashboard.auth.password=$$SENTINEL_PASSWORD \
           -jar "$$JAR"
-    # 控制台要主动回连各服务的 8719 拉监控、推规则；服务跑在宿主机上，用 host.docker.internal 找到它们
+    # The console connects back to each service's 8719 to pull metrics and push rules; services run on the host, reached via host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8858:8858"                    # 默认 8080 会和 Nacos 控制台冲突
+      - "8858:8858"                    # the default 8080 would clash with the Nacos console
     volumes:
       - sentinel-jar:/opt/sentinel
     networks:
       - mh-net
 
-  # E3：XXL-Job 调度中心（控制台 http://127.0.0.1:8090/xxl-job-admin，默认账号 admin / 123456）。
-  # 3.x 镜像默认 context-path 是 /，这里显式设成 /xxl-job-admin，和各服务配置的 admin-addresses 一致
-  # 表结构在 MySQL 的 xxl_job 库：已有的 mysql 卷不会再跑初始化脚本，首次用 deploy/e3/init-xxl-job.sh 导入
+  # XXL-Job admin (console http://127.0.0.1:8090/xxl-job-admin, default account admin / 123456).
+  # The 3.x image defaults context-path to /; set explicitly to /xxl-job-admin to match each service's admin-addresses
+  # Tables live in MySQL's xxl_job database: an existing mysql volume won't rerun init scripts, so import once with deploy/e3/init-xxl-job.sh
   xxl-job-admin:
     image: xuxueli/xxl-job-admin:3.4.2
     container_name: mh-xxl-job
@@ -151,7 +151,7 @@ services:
     depends_on:
       - mysql
     environment:
-      # 和 mysql 容器一致：控制台调度日志按浏览器本地时间筛选，设 UTC 时会"搜不到"刚执行的任务（P42）
+      # Same as the mysql container: the console filters dispatch logs by browser local time, and with UTC just-run jobs "can't be found"
       TZ: America/Los_Angeles
       PARAMS: >-
         --spring.datasource.url=jdbc:mysql://mysql:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=UTC
@@ -159,15 +159,15 @@ services:
         --spring.datasource.password=${MYSQL_ROOT_PASSWORD}
         --xxl.job.accessToken=${XXL_JOB_ACCESS_TOKEN}
         --server.servlet.context-path=/xxl-job-admin
-    # 执行器（各服务）跑在宿主机上，调度中心通过 host.docker.internal 回调它们
+    # Executors (the services) run on the host; the admin calls back to them via host.docker.internal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8090:8080"                    # 8080 已被 Nacos 控制台占用
+      - "8090:8080"                    # 8080 is taken by the Nacos console
     networks:
       - mh-net
 
-  # E2：订单搜索副本。单节点、关闭安全认证（只在本地演示），版本与 Spring Boot 管理的 Java Client 8.18 对齐
+  # Order search replica. Single node, security disabled (local demo only), version matches the Java Client 8.18 managed by Spring Boot
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.18.8
     container_name: mh-es
@@ -183,7 +183,7 @@ services:
     networks:
       - mh-net
 
-  # E2：Canal Server 伪装成 MySQL 从库读 binlog，只订阅 mh_order 的订单头 / 明细表；order 服务里的 Canal 客户端拉取后同步 ES
+  # Canal Server poses as a MySQL replica reading the binlog, subscribed only to mh_order's order header / item tables; the Canal client in the order service pulls and syncs to ES
   canal:
     image: canal/canal-server:v1.1.7
     container_name: mh-canal
@@ -197,15 +197,15 @@ services:
       canal.instance.dbPassword: ${MYSQL_ROOT_PASSWORD}
       canal.instance.connectionCharset: UTF-8
       canal.instance.filter.regex: mh_order\.(orders|order_item)
-      # 不需要表结构历史（tsdb），省掉它默认依赖的内嵌 H2
+      # No table-schema history (tsdb) needed, which drops its default embedded H2 dependency
       canal.instance.tsdb.enable: "false"
     ports:
       - "11111:11111"
     networks:
       - mh-net
 
-  # F1：压测监控，默认不启动（profiles），压测时 docker compose --profile perf up -d。
-  # Prometheus 抓宿主机上各服务的 /actuator/prometheus；Grafana 预置数据源和"MerchantHub 压测"看板（匿名只读即可看）
+  # Load-test monitoring, not started by default (profiles); for load tests: docker compose --profile perf up -d.
+  # Prometheus scrapes /actuator/prometheus of each service on the host; Grafana is provisioned with the datasource and the "MerchantHub load test" dashboard (anonymous read-only)
   prometheus:
     image: prom/prometheus:v3.5.0
     container_name: mh-prometheus
@@ -214,7 +214,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "9091:9090"                    # 宿主机 9090 常被 MinIO 控制台占用，换 9091
+      - "9091:9090"                    # host port 9090 is often taken by the MinIO console, so 9091
     volumes:
       - ./perf/monitor/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     networks:
@@ -228,7 +228,7 @@ services:
     depends_on:
       - prometheus
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"        # 本地看板免登录（只读）；改看板用 admin / .env 的 GRAFANA_PASSWORD
+      GF_AUTH_ANONYMOUS_ENABLED: "true"        # local dashboards without login (read-only); edit as admin / GRAFANA_PASSWORD from .env
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
     ports:

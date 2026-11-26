@@ -6,7 +6,7 @@ import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** user-tenant's XXL-Job job entry points (E3) */
+/** user-tenant's XXL-Job job entry points */
 @Component
 @RequiredArgsConstructor
 public class UserJobs {

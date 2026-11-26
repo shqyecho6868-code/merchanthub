@@ -1,11 +1,11 @@
-# MerchantHub CD（G-上）：CI 在 main 上全绿后，自动构建 6 个服务的镜像 → 推 ECR → 滚动更新 ECS。
+# MerchantHub CD: once CI is green on main, build images for all 6 services -> push to ECR -> rolling-update ECS.
 #
-# 和 CI 拆成两个 workflow（workflow_run 触发）而不是同一个 workflow 里加 job：
-#   - 云上环境平时是 destroy 掉的，CD 大部分时候会"跳过"；拆开后 CI 的红绿只代表代码，不受环境在不在影响
-#   - 手动触发（Actions 页 Run workflow，或 gh workflow run cd.yml）可以只部署、不重跑一遍十几分钟的测试
+# Kept as a separate workflow (triggered by workflow_run) rather than an extra job in CI:
+#   - the cloud environment is usually destroyed, so CD mostly "skips"; splitting keeps CI's red/green about the code only
+#   - manual runs (Run workflow in the Actions tab, or gh workflow run cd.yml) can deploy without re-running the 10+ minute test suite
 #
-# AWS 凭证：不存 Access Key。GitHub 给本次运行签一个 OIDC token，用它换 1 小时有效的临时凭证（infra/bootstrap 建的角色）。
-# 仓库 Secrets 里只有一个 AWS_DEPLOY_ROLE_ARN（角色 ARN 本身不是密钥，放 Secrets 只是不想写死在仓库里）
+# AWS credentials: no access keys stored. GitHub signs an OIDC token for this run, exchanged for 1-hour temporary credentials (role created by infra/bootstrap).
+# The only repo secret is AWS_DEPLOY_ROLE_ARN (a role ARN isn't a secret; it's in Secrets just to keep it out of the repo)
 name: CD
 
 on:
@@ -15,13 +15,13 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# 同一时间只跑一个部署；新的排队等旧的跑完，不取消（部署跑到一半被取消，服务会停在新旧混杂的状态）
+# One deployment at a time; new runs queue behind the old one instead of cancelling it (a half-cancelled deploy leaves services on mixed versions)
 concurrency:
   group: cd
   cancel-in-progress: false
 
 permissions:
-  id-token: write   # 换 OIDC token
+  id-token: write   # needed for the OIDC token
   contents: read
 
 env:
@@ -30,20 +30,20 @@ env:
 
 jobs:
   deploy:
-    # 只有 push 到 main 触发的 CI 成功才部署（PR 的 CI 不部署）；手动触发直接部署当前 main
+    # Deploy only after a successful CI run triggered by a push to main (PR CI never deploys); manual runs deploy current main
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
       ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-      # 部署的是"CI 测过的那个 commit"，不是此刻 main 的最新 commit（两者可能不同）
+      # Deploy the exact commit CI tested, not whatever main points to now (they may differ)
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Check deploy role
         id: gate
         run: |
           if [ -z "$ROLE_ARN" ]; then
-            echo "::notice::没有配置 Secret AWS_DEPLOY_ROLE_ARN，跳过部署"
+            echo "::notice::Secret AWS_DEPLOY_ROLE_ARN not configured, skipping deploy"
             echo "go=false" >> "$GITHUB_OUTPUT"
           else
             echo "go=true" >> "$GITHUB_OUTPUT"
@@ -55,7 +55,7 @@ jobs:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 环境当天建当天删：集群不在就跳过（绿色结束），而不是报错
+      # The environment is created and destroyed the same day: if the cluster is gone, skip (finish green) instead of failing
       - name: Check environment is up
         id: env
         if: steps.gate.outputs.go == 'true'
@@ -64,7 +64,7 @@ jobs:
           if [ "$status" = "ACTIVE" ]; then
             echo "up=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::云上环境未创建（ECS 集群 $CLUSTER 不存在），跳过部署"
+            echo "::notice::Cloud environment not up (ECS cluster $CLUSTER does not exist), skipping deploy"
             echo "up=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -80,11 +80,11 @@ jobs:
           java-version: '17'
           cache: maven
 
-      # 测试已经在 CI 里跑过（同一个 commit），这里只打包
+      # Tests already ran in CI for this same commit; only package here
       - name: Package jars
         if: steps.env.outputs.up == 'true'
         run: |
-          for i in 1 2 3; do ./mvnw -B -v > /dev/null && break; echo "下载 Maven 失败，重试"; sleep 20; done
+          for i in 1 2 3; do ./mvnw -B -v > /dev/null && break; echo "Maven download failed, retrying"; sleep 20; done
           ./mvnw -B -ntp package -DskipTests
 
       - name: Login to ECR
@@ -92,8 +92,8 @@ jobs:
         if: steps.env.outputs.up == 'true'
         uses: aws-actions/amazon-ecr-login@v2.2.0
 
-      # 每个服务：构建镜像（tag = git sha，仓库设了不可变 tag）→ 基于当前 task 定义换镜像注册新修订号 → 更新服务。
-      # Terraform 对 aws_ecs_service 设了 ignore_changes = [task_definition]，不会把版本改回去
+      # Per service: build the image (tag = git sha; the repo uses immutable tags) -> register a new task-definition revision with the new image -> update the service.
+      # Terraform sets ignore_changes = [task_definition] on aws_ecs_service, so it won't roll the version back
       - name: Build, push and deploy
         if: steps.env.outputs.up == 'true'
         env:
@@ -106,9 +106,9 @@ jobs:
           )
           for svc in "${!MODULES[@]}"; do
             img="$REGISTRY/merchanthub/$svc:$SHA"
-            # 重跑同一个 commit 时镜像已存在，不可变 tag 不允许重复推送，直接复用
+            # When re-running the same commit the image already exists and immutable tags forbid re-pushing, so reuse it
             if aws ecr describe-images --repository-name "merchanthub/$svc" --image-ids imageTag="$SHA" > /dev/null 2>&1; then
-              echo "$svc：镜像 $SHA 已存在，跳过构建"
+              echo "$svc: image $SHA already exists, skipping build"
             else
               docker build --build-arg MODULE="${MODULES[$svc]}" -t "$img" .
               docker push "$img"
@@ -122,16 +122,16 @@ jobs:
             echo "$svc → $arn"
           done
 
-      # 等所有服务滚动完成（新 task 通过健康检查、旧 task 下线）；起不来时熔断器会自动回滚，这一步会失败报红
+      # Wait until every service finishes rolling (new tasks pass health checks, old ones drain); if they can't start, the circuit breaker rolls back and this step fails
       - name: Wait for services stable
         if: steps.env.outputs.up == 'true'
         run: |
           aws ecs wait services-stable --cluster "$CLUSTER" \
             --services gateway user-tenant product-inventory order payment realtime
           {
-            echo "## 部署完成：\`$SHA\`"
+            echo "## Deployed: \`$SHA\`"
             aws ecs describe-services --cluster "$CLUSTER" \
               --services gateway user-tenant product-inventory order payment realtime \
               --query 'services[].[serviceName, runningCount, taskDefinition]' --output text \
-              | awk '{print "- " $1 "：running " $2 "，" $3}'
+              | awk '{print "- " $1 ": running " $2 ", " $3}'
           } >> "$GITHUB_STEP_SUMMARY"

@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
 
-/** JWT settings (D1). The secret comes only from config / environment variables, with no default in code: forgetting it fails startup instead of silently using a well-known secret */
+/** JWT settings. The secret comes only from config / environment variables, with no default in code: forgetting it fails startup instead of silently using a well-known secret */
 @Data
 @ConfigurationProperties(prefix = "merchanthub.jwt")
 public class JwtProperties {

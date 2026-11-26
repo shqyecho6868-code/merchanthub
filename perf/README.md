@@ -1,18 +1,38 @@
-# perf/：压测（F1）
+# perf/: load testing
 
-工具是 **k6**（脚本是 JS 代码、参数走环境变量、用 Docker 镜像跑不用安装，上云时同一个脚本只换 `BASE_URL`）。
-操作步骤见 [`docs/runbook.md` 3.8 节](../docs/runbook.md)，结果报告见 [`docs/perf-report.md`](../docs/perf-report.md)。
+The tool is **k6**: scenarios are JS code, parameters come from env vars, and it runs from the Docker image with nothing to install. In the cloud, the same scripts run with a different `BASE_URL`. Results are summarized in the [root README](../README.md).
 
-| 路径 | 作用 |
+## How to run (local)
+
+```bash
+docker compose up -d                                   # middleware
+docker compose --profile perf up -d                    # optional: Prometheus + Grafana dashboard
+./mvnw -q package -DskipTests
+./perf/start-services.sh                               # gateway, user-tenant, product-inventory, order, payment
+./perf/start-services.sh status                        # wait until all are UP
+./perf/data/seed.sh                                    # load-test merchants 901 / 902, 200 buyers, SKUs and stock
+./perf/run.sh perf/k6/smoke.js                         # smoke test: the whole chain works
+./perf/round.sh s1 perf/k6/scenarios/s1-rate-limit.js  # one full round: seed -> sample -> k6 -> data check -> hot SQL
+```
+
+Scenarios other than S1 need a higher rate limit for merchant 901, e.g.
+`ORDER_OPTS='--merchanthub.order.sentinel.rate-limit.tenant-overrides[901]=100000' ./perf/start-services.sh`.
+S2b also needs `HOT_STOCK=500` (see the scenario header). Each scenario file states its question, load, metrics and expected result.
+
+## Layout
+
+| Path | Purpose |
 |---|---|
-| `run.sh` | 一条命令跑压测：`./perf/run.sh <脚本> [-e VUS=.. -e DURATION=..]` |
-| `start-services.sh` | 后台起交易链路 5 个服务（`stop` / `status`） |
-| `k6/lib/` | 参数（`config.js`）、接口封装（`api.js`）、结果汇总成 Markdown 表（`summary.js`） |
-| `k6/smoke.js` | 冒烟：1 个用户跑几轮完整交易，验证框架 + 数据 + 服务是通的（不是压测场景） |
-| `k6/scenarios/` | 压测场景（🧑 设计），从 `_template.js` 复制 |
-| `data/seed.sh` | 每轮压测前：清掉压测商家 901 / 902 的历史订单等数据，重置库存、账号 |
-| `check/check.sh` | 压测后：库存无负数、扣减对账、订单 ↔ 预占一致、重复回调只生效一次 |
-| `monitor/sample.sh` | 压测中：MySQL 连接 / 行锁、MQ 消费堆积，每 5 秒采样成 CSV |
-| `monitor/top-sql.sh` | 压测前 `reset`、压测后 `report`：热点 SQL / 慢 SQL Top 10 |
-| `monitor/prometheus.yml`、`monitor/grafana/` | `docker compose --profile perf up -d` 起 Prometheus + Grafana 看板 |
-| `results/<RUN_ID>/` | 每次运行的产物（不提交） |
+| `run.sh` | Run a test with one command: `./perf/run.sh <script> [-e VUS=.. -e DURATION=..]` |
+| `round.sh` | One full round with data reset, sampling, data check and hot-SQL report |
+| `start-services.sh` | Start the 5 services on the trading path in the background (`stop` / `status`) |
+| `k6/lib/` | Parameters (`config.js`), API wrappers (`api.js`), result summary as a Markdown table (`summary.js`) |
+| `k6/smoke.js` | Smoke test: 1 user runs a few full transactions to verify framework + data + services (not a load scenario) |
+| `k6/scenarios/` | Load scenarios, copied from `_template.js` |
+| `data/seed.sh` | Before each round: delete old orders etc. of merchants 901 / 902, reset stock and accounts |
+| `check/check.sh` | After a round: no negative stock, deductions reconcile, orders match reservations, duplicate callbacks applied once |
+| `monitor/sample.sh` | During a round: MySQL connections / row locks and MQ consumer backlog, sampled to CSV every 5s |
+| `monitor/top-sql.sh` | `reset` before and `report` after: Top 10 hot / slow SQL |
+| `monitor/prometheus.yml`, `monitor/grafana/` | `docker compose --profile perf up -d` starts Prometheus + a Grafana dashboard |
+| `cloud/` | Running the same scenarios against the AWS environment (in-VPC k6, RDS data check, timeline slicing) |
+| `results/<RUN_ID>/` | Output of each run (not committed) |

@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Product image storage (G-上: S3 replaces MinIO).
+ * Product image storage (S3 replaces MinIO).
  * <p>
  * Images never pass through our service: the service only issues a "time-limited, key-scoped, type-scoped" upload URL, and the client PUTs directly to S3 with it.
  * This is the industry-standard approach — large files don't consume service bandwidth or threads, and the service never hands clients long-lived credentials that can write the whole bucket.

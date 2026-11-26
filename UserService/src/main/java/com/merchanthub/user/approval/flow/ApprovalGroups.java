@@ -4,13 +4,13 @@ import com.merchanthub.common.tenant.TenantInfo;
 import org.flowable.task.api.TaskQuery;
 
 /**
- * Approver = "candidate group" (D1): the engine stores no users or roles, just a group-name string; the naming rule is defined here in one place.
+ * Approver = "candidate group": the engine stores no users or roles, just a group-name string; the naming rule is defined here in one place.
  * <ul>
  *   <li>Platform admin -> {@code PLATFORM_ADMIN}</li>
  *   <li>Merchant 7's admin -> {@code MERCHANT_ADMIN:7} (the tenant is encoded in the group name; merchant 8's admin queries MERCHANT_ADMIN:8 and naturally can't find it)</li>
  *   <li>Onboarding applicant -> no group, assignee = their userId directly</li>
  * </ul>
- * Which group the current user belongs to is derived from C1's TenantContext (identity injected by the gateway that clients can't alter); <b>group names from the frontend are never accepted</b>.
+ * Which group the current user belongs to is derived from TenantContext (identity injected by the gateway that clients can't alter); <b>group names from the frontend are never accepted</b>.
  */
 public final class ApprovalGroups {
 

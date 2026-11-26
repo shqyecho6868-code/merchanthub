@@ -17,14 +17,14 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Listing approval compensation (D1): for products "under review" longer than older-than, query user-tenant for this round's approval:
+ * Listing approval compensation: for products "under review" longer than older-than, query user-tenant for this round's approval:
  * <ul>
  *   <li>APPROVED / REJECTED → the result message was lost (or went to the DLQ); write back from the query (same CAS as consumption, first one wins)</li>
  *   <li>NOT_FOUND → the original Feign start failed; start again (idempotent per (product, round))</li>
  *   <li>RUNNING → the approver hasn't acted yet; normal, leave it (backfill the instance ID if it's missing)</li>
  *   <li>Query failed → skip, check again next round: "can't look it up" ≠ "no result"</li>
  * </ul>
- * Safe with multiple instances scanning concurrently: write-back is a CAS and starting is idempotent. Scheduled by XXL-Job's listingCompensateJob since E3 (formerly @Scheduled).
+ * Safe with multiple instances scanning concurrently: write-back is a CAS and starting is idempotent. Scheduled by XXL-Job's listingCompensateJob.
  */
 @Slf4j
 @Component

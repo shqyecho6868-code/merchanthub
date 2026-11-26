@@ -34,8 +34,6 @@ flowchart LR
     RDS[(Redis)]
 ```
 
-更多时序图（下单预占、支付回调四层幂等、超时关单竞争、推送路由）见 [docs/architecture.md](docs/architecture.md)。
-
 ## 三个重点
 
 ### 1. 订单一致性
@@ -81,7 +79,7 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 ./mvnw verify                                    # 构建 + 单测 + Testcontainers 集成测试 + 覆盖率
 ```
 
-需要 Docker 和 JDK 17（Maven Toolchains 自动选用，见 [docs/env-setup.md](docs/env-setup.md)）。各服务启动、控制台地址、故障排查见 [docs/runbook.md](docs/runbook.md)。
+需要 Docker 和 JDK 17。构建通过 Maven Toolchains 固定 JDK 17，需在 `~/.m2/toolchains.xml` 登记一个（type `jdk`，version `17`）；PATH 上默认 `java` 版本更高也没关系。
 
 ## 测试策略
 
@@ -107,7 +105,7 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 
 ## 压测
 
-工具 k6，脚本与数据检查在 [`perf/`](perf/)，一条命令：`./perf/run.sh perf/k6/scenarios/<场景>.js -e VUS=50 -e DURATION=1m`（步骤见 runbook 3.8）。压完用 `perf/check/check.sh` 校验库存无负数、扣减对账、重复回调只生效一次。
+工具 k6，脚本与数据检查在 [`perf/`](perf/)，一条命令：`./perf/run.sh perf/k6/scenarios/<场景>.js -e VUS=50 -e DURATION=1m`（步骤见 [`perf/README.md`](perf/README.md)）。压完用 `perf/check/check.sh` 校验库存无负数、扣减对账、重复回调只生效一次。
 
 | 场景 | 压力 | 结果 | P99 | 数据检查 |
 |---|---|---|---|---|
@@ -119,11 +117,11 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 
 调优实验：把连接池从 10 调到 30，吞吐反而下降（COMMIT 6 → 16 ms，行锁等待 ×15），已回滚。瓶颈在数据库，连接池排队只是症状。
 
-单机本地压测（所有服务和中间件在一台笔记本上），数字只用于前后对比，详见 [docs/perf-report.md](docs/perf-report.md)。
+单机本地压测（所有服务和中间件在一台笔记本上），数字只用于前后对比。
 
 ### 云上（AWS us-east-1）
 
-每个服务 1 个 Fargate task（0.5 vCPU / 1 GB）、RDS db.t4g.micro；k6 在 VPC 内发压（RTT 4 ms），经 ALB → gateway → order。详见 [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md)。
+每个服务 1 个 Fargate task（0.5 vCPU / 1 GB）、RDS db.t4g.micro；k6 在 VPC 内发压（RTT 4 ms），经 ALB → gateway → order。
 
 | 场景 | 结果 | 瓶颈 / 现象 | 数据检查 |
 |---|---|---|---|
@@ -131,17 +129,5 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 | 热点 SKU 阶梯 | 81 单/秒，0 错误（本地 240） | 同上，云上热点行不再是瓶颈 | ✅ |
 | 扩容 order 1 → 3 | 约 110–118 单/秒，**约 1.4 倍** | 下单链路上的 product-inventory（88%）、gateway 仍是单实例；RDS 连接 58 / 60 到顶；下命令到新实例接流量约 **2 分钟**（Spring 在 0.5 vCPU 上启动 80+ 秒） | ✅ |
 | 超载 200 单/秒持续（无限流） | **拥塞崩溃**：完成数不降，但几乎全部 10 秒超时 | 请求无限排队，扩容后旧实例仍在处理已被放弃的请求 → 需要入口限流削峰 | ✅ 订单不丢（库里 ≥ k6 成功数） |
-| 压测中停 1 个 order（共 3 个） | 错误 2.67%，约 **40 秒**后恢复；ECS 约 1 分钟后补上新 task | 错误窗口 ≈ gateway 负载均衡缓存（35 s）里还留着旧实例 | ✅ 订单不丢、状态不乱；⚠️ 发现关单消息卡在本地消息表（云上没部署补偿扫描调度，P53） |
+| 压测中停 1 个 order（共 3 个） | 错误 2.67%，约 **40 秒**后恢复；ECS 约 1 分钟后补上新 task | 错误窗口 ≈ gateway 负载均衡缓存（35 s）里还留着旧实例 | ✅ 订单不丢、状态不乱；⚠️ 发现关单消息卡在本地消息表（云上没部署补偿扫描调度） |
 
-## 文档
-
-| 文档 | 内容 |
-|---|---|
-| [docs/architecture.md](docs/architecture.md) | 架构图与核心链路时序图 |
-| [docs/data-model.md](docs/data-model.md) | 表结构、ER 图、订单状态机 |
-| [docs/decisions.md](docs/decisions.md) | 技术决策记录（选了什么 / 没选什么 / 代价） |
-| [docs/pitfalls.md](docs/pitfalls.md) | 踩坑记录（现象 → 根因 → 解决） |
-| [docs/runbook.md](docs/runbook.md) | 启动、控制台、压测、故障排查 |
-| [docs/env-setup.md](docs/env-setup.md) | 版本、端口、账号 |
-| [docs/progress.md](docs/progress.md) | 进度与遗留问题 |
-| [docs/cloud-perf-plan.md](docs/cloud-perf-plan.md) | 云上压测、扩容、故障演练的执行清单与结果 |

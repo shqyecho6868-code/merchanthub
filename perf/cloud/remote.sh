@@ -1,6 +1,7 @@
 #!/bin/bash
-# G-下：在中间件 EC2 上执行一段 shell（经 SSM send-command，不需要 SSH）。RDS 在私有子网，本机连不上，查库都走这里。
-#   ./perf/cloud/remote.sh '<shell 命令>'      # 命令里可用 $MYSQL（已带 RDS 地址和密码的 mysql 客户端）
+# Run a shell snippet on the middleware EC2 (via SSM send-command, no SSH). RDS is in a private subnet and unreachable
+# from a laptop, so all DB queries go through here.
+#   ./perf/cloud/remote.sh '<shell command>'      # the command can use $MYSQL (a mysql client preconfigured with the RDS host and password)
 set -euo pipefail
 cd "$(dirname "$0")/../../infra/env"
 REGION=$(terraform output -raw region); IID=$(terraform output -raw middleware_instance_id); RDS=$(terraform output -raw rds_endpoint)

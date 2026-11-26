@@ -145,7 +145,7 @@ class AuthorizeFilterTest {
     }
 
     @Test
-    @DisplayName("C2: Redis error -> 401 system error, request not passed through; downstream errors are not rewritten to 401")
+    @DisplayName("Redis error -> 401 system error, request not passed through; downstream errors are not rewritten to 401")
     void redisError_unauthorized_downstreamErrorNotSwallowed() {
         String token = jwt.issue(7L, null, "BUYER", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.error(new IllegalStateException("redis down")));

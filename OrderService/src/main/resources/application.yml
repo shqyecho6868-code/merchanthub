@@ -1,6 +1,6 @@
 server:
   port: 8107
-  # F1: let Micrometer read Tomcat thread-pool metrics (busy / max), so load tests can tell whether the thread pool saturates first
+  # Let Micrometer read Tomcat thread-pool metrics (busy / max), so load tests can tell whether the thread pool saturates first
   tomcat:
     mbeanregistry:
       enabled: true
@@ -12,9 +12,9 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # Keep the pool at Hikari's default of 10; don't casually raise it (measured in F1, docs/perf-report.md section 5): at 30, COMMIT went 6ms -> 16ms,
+    # Keep the pool at Hikari's default of 10; don't casually raise it (measured under load testing): at 30, COMMIT went 6ms -> 16ms,
     # row-lock wait 59s -> 890s, and throughput actually dropped. The bottleneck is the DB (commit flush + inventory row locks); pool queueing is just a symptom, and a bigger pool only moves the queue into the DB
-  # Schema is managed by Flyway (db/migration/V*.sql). Databases created before B2 used spring.sql.init and have no Flyway history table:
+  # Schema is managed by Flyway (db/migration/V*.sql). Databases created before Flyway was introduced used spring.sql.init and have no Flyway history table:
   # baseline-on-migrate makes Flyway record such an existing DB as V1 and run only V2 onward; an empty DB runs from V1 as usual
   flyway:
     baseline-on-migrate: true
@@ -28,7 +28,7 @@ spring:
       client:
         config:
           # Cross-service calls must have timeouts (industry practice). Without this the default read timeout is 60s; one slow downstream and all order threads hang.
-          # C2 pitfall (P29): the key here is the @FeignClient contextId, not the service name. It used to be product-inventory,
+          # Pitfall: the key here is the @FeignClient contextId, not the service name. It used to be product-inventory,
           # so the config never took effect (actual read timeout 60s) until FeignResilienceIT caught it
           productInventoryClient:
             connect-timeout: 1000
@@ -37,7 +37,7 @@ spring:
           default:
             connect-timeout: 1000
             read-timeout: 3000
-    # C2: also disable LoadBalancer's built-in "retry on another instance" (only active with spring-retry, not on the classpath now; stated explicitly so it doesn't sneak in later).
+    # Also disable LoadBalancer's built-in "retry on another instance" (only active with spring-retry, not on the classpath now; stated explicitly so it doesn't sneak in later).
     # Why we don't retry: see ProductInventoryFeignConfig
     loadbalancer:
       retry:
@@ -51,7 +51,7 @@ spring:
 
 merchanthub:
   order:
-    # C2: rate-limit / circuit-breaker thresholds; see SentinelProperties and the C2 notes for meaning and how they were chosen
+    # Rate-limit / circuit-breaker thresholds; see SentinelProperties for meaning and how they were chosen
     sentinel:
       rate-limit:
         per-tenant-qps: 20
@@ -64,27 +64,27 @@ merchanthub:
         min-requests: 10
         stat-interval-ms: 10000
         open-seconds: 10
-    # Payment deadline for pending orders (Duration format): on expiry the ORDER_TIMEOUT scheduled message triggers timeout close (B3-下)
+    # Payment deadline for pending orders (Duration format): on expiry the ORDER_TIMEOUT scheduled message triggers timeout close
     pay-timeout: 15m
-    # How the "order created" event is sent, pick one: TX_MESSAGE (RocketMQ transactional message) / OUTBOX (local message table). See B2 notes Q1
+    # How the "order created" event is sent, pick one: TX_MESSAGE (RocketMQ transactional message) / OUTBOX (local message table)
     event-mode: OUTBOX
     tx:
-      # Minimum age before a half message is checked back; must exceed the 5s local transaction timeout (B2 notes Q2)
+      # Minimum age before a half message is checked back; must exceed the 5s local transaction timeout
       check-immunity-seconds: 30
-      # If the check-back can't find the order and the message is younger than this -> return UNKNOW to recheck later instead of rolling back (second line of defense, B2 notes Q2)
+      # If the check-back can't find the order and the message is younger than this -> return UNKNOW to recheck later instead of rolling back (second line of defense)
       rollback-min-age-seconds: 30
       debug:
         # The two settings below are for experiments/tests only; keep defaults in production
         pause-after-local-commit-ms: 0
         report-unknown: false
     debug:
-      # For 🧑 experiments only: pause N ms after inventory reservation and before persisting the order, to make "payment callback arrives before the order" happen (B3-下 experiment ①)
+      # For manual experiments only: pause N ms after inventory reservation and before persisting the order, to make "payment callback arrives before the order" happen
       pause-before-persist-ms: 0
     timeout-consumer:
       # Timeout-close consumer (subscribes to ORDER_TIMEOUT)
       enabled: true
     outbox:
-      # Max records per compensation scan batch. Since E3 the scan is triggered by the XXL-Job orderOutboxRelayJob; frequency is configured in the admin console
+      # Max records per compensation scan batch. The scan is triggered by the XXL-Job orderOutboxRelayJob; frequency is configured in the admin console
       batch-size: 100
       # Lease after claiming a record: other instances won't send it during the lease. Must exceed the longest send time (3s timeout x up to 3 attempts)
       lease-seconds: 30
@@ -93,14 +93,14 @@ merchanthub:
       max-backoff-seconds: 600
       max-retries: 10
 
-    # E3: XXL-Job task parameters (task entry point job/OrderJobs; frequency configured in the admin console)
+    # XXL-Job task parameters (task entry point job/OrderJobs; frequency configured in the admin console)
     jobs:
       # Timeout-order scan: close as a fallback only if still pending this long after the deadline (the scheduled message is most likely still in flight meanwhile)
       timeout-grace: 5m
       # How long to keep sent outbox records before archiving
       archive-retention: 7d
       batch-size: 200
-    # E2: Canal -> ES order sync, off by default (environments without Canal don't connect); turn on for demos
+    # Canal -> ES order sync, off by default (environments without Canal don't connect); turn on for demos
     canal:
       enabled: false
       host: 127.0.0.1
@@ -123,7 +123,7 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# F1: load-test monitoring. Only health and prometheus are exposed (no sensitive endpoints like env / heapdump);
+# Load-test monitoring. Only health and prometheus are exposed (no sensitive endpoints like env / heapdump);
 # service ports aren't exposed outside the gateway, and /actuator isn't routed by the gateway, so it's unreachable externally.
 # Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (by default there's only count / sum / max)
 management:

@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * Submit for listing review (D1): ① a local transaction moves the product to "under review" and opens a new round → ② after commit, Feign asks user-tenant to start the approval → ③ backfill the instance ID.
+ * Submit for listing review: ① a local transaction moves the product to "under review" and opens a new round → ② after commit, Feign asks user-tenant to start the approval → ③ backfill the instance ID.
  * <p>
  * What if ② fails (timeout / user-tenant down): <b>don't roll back ①</b>. The product stays "under review, no instance ID", and
  * {@code ListingAuditCompensator} queries it a bit later and restarts it if it was never started (the start API is idempotent per (product, round)).

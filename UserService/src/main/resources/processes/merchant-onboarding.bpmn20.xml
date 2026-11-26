@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Merchant onboarding approval (D1). A rejection doesn't end the process; the same instance waits for the applicant to revise: the application lives in user-tenant's own table,
+  Merchant onboarding approval. A rejection doesn't end the process; the same instance waits for the applicant to revise: the application lives in user-tenant's own table,
   so the whole "submit -> reject -> resubmit -> approve" history hangs off one instance. The applicant can also withdraw (without a withdraw exit, instances ignored after rejection would sit in the runtime tables forever).
   The business actions on approve / reject (create tenant, open account, update application status) happen in ServiceTasks, in the same DB transaction as completing the approval task.
 -->

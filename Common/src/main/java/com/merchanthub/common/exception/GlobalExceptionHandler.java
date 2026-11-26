@@ -36,7 +36,7 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     /**
-     * Business failures (insufficient stock, order not found...) are expected outcomes, not system faults: log at WARN without a stack trace (left over from C1, fixed in C2).
+     * Business failures (insufficient stock, order not found...) are expected outcomes, not system faults: log at WARN without a stack trace.
      * Logging them at ERROR would flood ERROR-count alerts with normal business failures and bury the real incidents
      */
     @ExceptionHandler(BusinessException.class)
@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Rate limited → HTTP 429 + Retry-After (C2). Must not fall through to the RuntimeException catch-all and become a 500:
+     * Rate limited → HTTP 429 + Retry-After. Must not fall through to the RuntimeException catch-all and become a 500:
      * monitoring counts 500 as a service fault, and clients can't tell "just retry later" from "the system is broken"
      */
     @ExceptionHandler(TooManyRequestsException.class)
@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Access denied → HTTP 403 (C1). Unlike other business errors, this uses a real HTTP status code:
+     * Access denied → HTTP 403. Unlike other business errors, this uses a real HTTP status code:
      * the gateway, monitoring and Sentinel all count by status code, so rejected unauthorized requests must be distinguishable from normal business failures.
      * Spring matches the closest exception type, so ForbiddenException lands here even though it extends BusinessException
      */
@@ -78,7 +78,7 @@ public class GlobalExceptionHandler {
 
     /**
      * Request body is not valid JSON / a field has the wrong type (e.g. quantity sent as "abc") → HTTP 400.
-     * Previously this fell through to the RuntimeException catch-all as a 500 "system error" (P23): a client mistake counted as a server fault, causing false alerts and leaving the caller no hint to fix the request
+     * Previously this fell through to the RuntimeException catch-all as a 500 "system error": a client mistake counted as a server fault, causing false alerts and leaving the caller no hint to fix the request
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

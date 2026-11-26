@@ -12,7 +12,7 @@ import java.util.List;
 @Mapper
 public interface PayAnomalyMapper extends BaseMapper<PayAnomaly> {
 
-    /** E3: pending payment anomalies (using index (handle_status, created_at)) */
+    /** Pending payment anomalies (using index (handle_status, created_at)) */
     @Select("SELECT * FROM pay_anomaly WHERE handle_status = 0 AND deleted = 0 ORDER BY created_at LIMIT #{limit}")
     List<PayAnomaly> selectPending(@Param("limit") int limit);
 

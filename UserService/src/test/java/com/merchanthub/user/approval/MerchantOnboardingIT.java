@@ -20,7 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Merchant onboarding approval (D1): submit -> platform admin review -> if approved, create tenant + open merchant admin account; reject -> applicant revises and resubmits (same instance) / withdraws.
+ * Merchant onboarding approval: submit -> platform admin review -> if approved, create tenant + open merchant admin account; reject -> applicant revises and resubmits (same instance) / withdraws.
  * Scenario: buyer 9001 applies to open "Shop Nine", reviewed by platform admin 1.
  */
 class MerchantOnboardingIT extends UserItSupport {

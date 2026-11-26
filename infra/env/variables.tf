@@ -4,25 +4,25 @@ variable "region" {
 }
 
 variable "name" {
-  description = "资源名前缀；ECS 集群、ECR 仓库、角色名都用它（CI 部署角色的权限按这个前缀授权）"
+  description = "Resource name prefix used by the ECS cluster, ECR repos and role names (the CI deploy role's permissions are scoped by this prefix)"
   type        = string
   default     = "merchanthub"
 }
 
 variable "allowed_cidrs" {
-  description = "允许访问 ALB 的来源。默认全网；建议 apply 时换成自己的公网 IP，如 [\"1.2.3.4/32\"]"
+  description = "Sources allowed to reach the ALB. Defaults to everywhere; better to set your own public IP at apply time, e.g. [\"1.2.3.4/32\"]"
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
 
 variable "middleware_instance_type" {
-  description = "跑 Nacos + RocketMQ + ES 的 EC2。8GB 是下限（ES 1G 堆 + Broker 1G 堆 + Nacos + NameServer + 系统）；m7i-flex.large 在 Free plan 允许的规格里"
+  description = "EC2 running Nacos + RocketMQ + ES. 8 GB is the minimum (ES 1G heap + Broker 1G heap + Nacos + NameServer + OS); m7i-flex.large is allowed on the Free plan"
   type        = string
   default     = "m7i-flex.large"
 }
 
 variable "image_tag" {
-  description = "首次创建 task 定义用的镜像 tag。之后由 CI/CD 注册新版本（git sha），Terraform 不再管"
+  description = "Image tag for the first task definition. After that CI/CD registers new revisions (git sha) and Terraform no longer manages it"
   type        = string
   default     = "initial"
 }

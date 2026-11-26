@@ -14,12 +14,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Order event -> messages to push (E1; shows what the "merchant new-order notice" demo consumer looks like after moving here from order).
+ * Order event -> messages to push (shows what the "merchant new-order notice" demo consumer looks like after moving here from order).
  * <ul>
  *   <li>ORDER_CREATED -> write a merchant notice (merchant_order_notice) + push to the merchant: new-order alert</li>
  *   <li>ORDER_PAID / ORDER_CLOSED -> push to the buyer: order status change</li>
  * </ul>
- * The dedup record and the notice are in the same local transaction (same consumer idempotency as B2); pushes are dispatched only after commit (by the caller),
+ * The dedup record and the notice are in the same local transaction (same consumer idempotency as order); pushes are dispatched only after commit (by the caller),
  * and duplicate events return an empty list -- no duplicate notices, no duplicate pushes.
  */
 @Slf4j
@@ -58,7 +58,7 @@ public class OrderNotifyService {
             case PushTopics.TAG_ORDER_PAID, PushTopics.TAG_ORDER_CLOSED -> {
                 JsonNode buyer = e.path("buyerId");
                 if (buyer.isMissingNode() || buyer.isNull()) {
-                    // Old events sent before E1 have no buyerId: we don't know whom to push to, so skip (order queries are the source of truth for status)
+                    // Old events sent before buyerId was added have none: we don't know whom to push to, so skip (order queries are the source of truth for status)
                     log.info("Order event has no buyerId, not pushing tag={} orderNo={}", tag, orderNo);
                     return List.of();
                 }

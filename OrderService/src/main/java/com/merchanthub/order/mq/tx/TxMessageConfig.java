@@ -34,7 +34,7 @@ public class TxMessageConfig {
         producer.setSendMsgTimeout(3000);
         // Prefetch ORDER_EVENT routes at startup: the producer only heartbeats to "brokers with known routes", and routes are fetched on the first send by default.
         // Without prefetching, a restarted instance is invisible to the broker until it places its first order, so check-backs fail with "channel is null",
-        // and after 15 check-backs the half message is discarded -- order created, message never sent (hit in the B2 kill experiment, pitfalls P18)
+        // and after 15 check-backs the half message is discarded -- order created, message never sent (hit in a manual kill experiment)
         producer.setTopics(List.of(OrderEventTopics.TOPIC));
         producer.setTransactionListener(listener);
         producer.setExecutorService(checkExecutor());

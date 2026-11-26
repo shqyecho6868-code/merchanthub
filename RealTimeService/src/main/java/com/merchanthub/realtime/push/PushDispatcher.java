@@ -13,7 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 /**
- * Dispatch one push (the core of E1): store as pending -> look up the route table -> write directly on this node / forward via MQ to other nodes / leave it in the table if offline.
+ * Dispatch one push (the core of realtime push): store as pending -> look up the route table -> write directly on this node / forward via MQ to other nodes / leave it in the table if offline.
  * <p>
  * Example: merchant 7 is connected to node A and node B consumes the order event: B looks up rt:route:merchant:7 and gets {A} -> sends a REALTIME_PUSH message with Tag = A
  * -> only A's dedicated consumer group subscribes to Tag A -> A writes to merchant 7's connection and marks it delivered.

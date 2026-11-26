@@ -31,7 +31,7 @@ public abstract class IntegrationTestBase {
         registry.add("spring.cloud.nacos.discovery.enabled", () -> "false");
         registry.add("spring.cloud.service-registry.auto-registration.enabled", () -> "false");
 
-        // E3: tests don't register an XXL-Job executor (no admin server; job methods are called directly by tests).
+        // Tests don't register an XXL-Job executor (no admin server; job methods are called directly by tests).
         // It must live here rather than in the test application.properties: tests also activate the dev profile,
         // and enabled=true in application-dev.yml takes precedence over non-profile config files and would override it
         registry.add("merchanthub.job.xxl.enabled", () -> "false");

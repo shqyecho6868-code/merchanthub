@@ -4,7 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageExt;
 
 /**
- * Dead-letter monitoring (E3): called when a consumer returns RECONSUME_LATER. If this was the last retry, the Broker will next move the message
+ * Dead-letter monitoring: called when a consumer returns RECONSUME_LATER. If this was the last retry, the Broker will next move the message
  * into %DLQ%{consumer group} and never redeliver it automatically, so this is the moment to alert and record it in the exception table.
  * <p>
  * Why check in the consumer instead of subscribing to the DLQ topic: RocketMQ creates DLQ topics as write-only (perm=2),

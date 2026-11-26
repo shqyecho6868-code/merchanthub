@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Product main image upload (G-上). Two steps:
+ * Product main image upload. Two steps:
  * <ol>
  *   <li>Request: the service generates a key as {@code products/{tenantId}/{productId}/{uuid}.ext} and signs a PUT URL; the client uploads directly to S3</li>
  *   <li>Confirm: the client passes the key back; the service checks "the key belongs to this merchant's product + the object really exists" and then writes it to product.main_image</li>

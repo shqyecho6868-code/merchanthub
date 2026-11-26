@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * C1 integration test: product tenant isolation + RBAC. Goes through the full Spring MVC chain (interceptor → Controller → tenant plugin → real MySQL).
+ * Integration test: product tenant isolation + RBAC. Goes through the full Spring MVC chain (interceptor → Controller → tenant plugin → real MySQL).
  * Scenario: merchant 7 has product P7 / SKU S7, merchant 8 has product P8 / SKU S8.
  */
 @SpringBootTest

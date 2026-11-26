@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Internal endpoint: only for product via Feign (the gateway doesn't forward /internal/**, C1) */
+/** Internal endpoint: only for product via Feign (the gateway doesn't forward /internal/**) */
 @RestController
 @RequestMapping("/internal/approvals/product-listings")
 @RequiredArgsConstructor

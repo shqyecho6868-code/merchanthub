@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 
 /**
  * Multi-SKU stock reservation: all SKUs of an order are reserved in one local transaction — all or nothing.
- * Approach and rationale: see docs/notes/B1-下单与库存预占.md section 7.
  */
 @Slf4j
 @Service
@@ -31,7 +30,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
 
     private final InventoryMapper inventoryMapper;
     private final InventoryReservationMapper reservationMapper;
-    /** Programmatic transaction: the outer layer must be able to catch the unique-key conflict that surfaces "after the transaction rolled back", see notes 7.3 */
+    /** Programmatic transaction: the outer layer must be able to catch the unique-key conflict that surfaces "after the transaction rolled back" */
     private final TransactionTemplate transactionTemplate;
 
     @Override
@@ -82,7 +81,7 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
             int rows = inventoryMapper.tryReserve(request.getTenantId(), item.getSkuId(), item.getQuantity());
             // 0 rows affected = the WHERE condition failed (insufficient stock / not this tenant's). MySQL doesn't raise an error, so we must throw ourselves:
             // otherwise this round's reservation record and the earlier SKUs' deductions would all be committed → partial reservation, with records and stock out of sync.
-            // (B1 code review exercise: this was deliberately written as rows < 0, which never holds; see interview-qa)
+            // (rows < 0 would never hold here, so the check must be rows == 0)
             if (rows == 0) {
                 throw new BusinessException(ErrorCode.INVENTORY_INSUFFICIENT, "Insufficient stock skuId=" + item.getSkuId());
             }

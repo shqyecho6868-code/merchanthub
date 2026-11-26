@@ -1,4 +1,4 @@
-# G-上: AWS cloud config. In ECS, SPRING_PROFILES_ACTIVE=prod,aws — prod provides shared config such as routes; this file only overrides "cloud addresses and credentials".
+# AWS cloud config. In ECS, SPRING_PROFILES_ACTIVE=prod,aws — prod provides shared config such as routes; this file only overrides "cloud addresses and credentials".
 # Addresses are written into the ECS task's environment variables by Terraform; passwords come from SSM Parameter Store (secrets in the task definition), never baked into the image or the repo
 
 spring:
@@ -13,7 +13,7 @@ spring:
       # ElastiCache has no AUTH enabled (passwords aren't supported without in-transit encryption); we rely on private subnets + a security group that only allows ECS. Empty string = don't send AUTH
       password: ""
   cloud:
-    # Besides the VPC NIC (10.20.x), a Fargate task has a 169.254.172.x link-local NIC (used internally by ECS, P50).
+    # Besides the VPC NIC (10.20.x), a Fargate task has a 169.254.172.x link-local NIC (used internally by ECS).
     # Spring picks "the first non-loopback address" by default and would register 169.254 with Nacos, which other services can't reach.
     # So restrict it to the VPC CIDR (10.20.0.0/16 from infra/env/network.tf)
     inetutils:
@@ -31,7 +31,7 @@ merchanthub:
     namesrv-addr: ${ROCKETMQ_NAMESRV}
   job:
     xxl:
-      # The XXL-Job admin isn't deployed in the cloud this time (G-上 only gets the order flow running), so compensation / reconciliation jobs aren't scheduled; timeout-close still works via RocketMQ scheduled messages
+      # The XXL-Job admin isn't deployed in the cloud this time (only the order flow runs there), so compensation / reconciliation jobs aren't scheduled; timeout-close still works via RocketMQ scheduled messages
       enabled: false
       access-token: ""
 

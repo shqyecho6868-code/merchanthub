@@ -46,7 +46,7 @@ public class ApprovalConfig {
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(3000);
-        producer.setTopics(List.of(ListingResultEvent.TOPIC));   // prefetch routes on startup (P18)
+        producer.setTopics(List.of(ListingResultEvent.TOPIC));   // prefetch routes on startup
         return producer;
     }
 

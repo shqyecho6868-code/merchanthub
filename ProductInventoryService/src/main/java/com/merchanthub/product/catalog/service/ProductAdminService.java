@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Product reads / writes for the merchant back office (C1). As with order's merchant queries, the code never writes tenant_id; the tenant plugin appends it automatically:
+ * Product reads / writes for the merchant back office. As with order's merchant queries, the code never writes tenant_id; the tenant plugin appends it automatically:
  * when merchant 7 changes the price of merchant 8's SKU, the UPDATE becomes {@code WHERE id = ? AND tenant_id = 7}, affects 0 rows → returns "not found".
  */
 @Slf4j
@@ -41,7 +41,7 @@ public class ProductAdminService {
                 p.getAuditRound() == null ? 0 : p.getAuditRound(), p.getRejectReason(), skus);
     }
 
-    /** Change a SKU's selling price. Existing orders are unaffected: orders store a transaction snapshot (B1) */
+    /** Change a SKU's selling price. Existing orders are unaffected: orders store a transaction snapshot */
     public void updatePrice(long skuId, long price) {
         int rows = skuMapper.update(null, new LambdaUpdateWrapper<Sku>().eq(Sku::getId, skuId).set(Sku::getPrice, price));
         if (rows != 1) {

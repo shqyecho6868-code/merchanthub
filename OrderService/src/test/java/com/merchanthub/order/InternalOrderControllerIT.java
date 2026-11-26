@@ -23,7 +23,7 @@ class InternalOrderControllerIT extends OrderItSupport {
         assertThat(controller.statuses(List.of()).getData()).isEmpty();
     }
 
-    /** E3: at most 500 per call, so callers can't slow order down by sending too many at once */
+    /** At most 500 per call, so callers can't slow order down by sending too many at once */
     @Test
     void batchTooLarge_rejected() {
         List<Long> many = java.util.stream.LongStream.range(0, 501).boxed().toList();

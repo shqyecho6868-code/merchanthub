@@ -23,7 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 /**
- * Register / login / refresh (rewritten in D1, replacing the old IM's SMS code + MD5 login).
+ * Register / login / refresh (rewritten, replacing the old IM's SMS code + MD5 login).
  * <p>
  * Issued tokens are also written to Redis (key = access:token:{userId}): besides verifying the signature, the gateway checks "is this the current one in Redis",
  * so re-login (kicking out the old token) and deleting the key on a ban both invalidate the old token immediately -- pure JWT can't revoke actively.

@@ -1,5 +1,5 @@
-# G-上 云上环境：所有收费资源都在这里。terraform apply 一条命令创建，terraform destroy 一条命令全删。
-# state 存本地（infra/env/terraform.tfstate，不提交）：单人学习项目、当天建当天删，不需要 S3 远程 state + 锁
+# Cloud environment: every billable resource lives here. terraform apply creates it with one command, terraform destroy removes it all with one command.
+# State is local (infra/env/terraform.tfstate, not committed): single-person project, created and destroyed the same day, so no S3 remote state + locking needed
 terraform {
   required_version = ">= 1.6"
   required_providers {
@@ -16,7 +16,7 @@ terraform {
 
 provider "aws" {
   region = var.region
-  # 所有资源自动带这几个标签：控制台 / 账单里按 Project=merchanthub 一筛就能确认有没有残留
+  # Every resource gets these tags: filtering by Project=merchanthub in the console / billing confirms nothing is left behind
   default_tags {
     tags = { Project = "merchanthub", Stack = "env", ManagedBy = "terraform" }
   }

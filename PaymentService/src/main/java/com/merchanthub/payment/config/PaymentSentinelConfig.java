@@ -16,8 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * E3 (C2 follow-up): circuit-breaker rules for payment calling order. Two rules per resource: slow-call ratio + exception ratio; either one trips the breaker.
- * Thresholds mean the same as in order (C2 notes Q3); rules live only in memory — in production they should be persisted in Nacos.
+ * Circuit-breaker rules for payment calling order. Two rules per resource: slow-call ratio + exception ratio; either one trips the breaker.
+ * Thresholds mean the same as in order; rules live only in memory — in production they should be persisted in Nacos.
  */
 @Slf4j
 @Configuration

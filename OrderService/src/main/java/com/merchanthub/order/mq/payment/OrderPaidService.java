@@ -26,8 +26,8 @@ import java.util.Objects;
  * On "payment succeeded", order itself marks the order as paid. payment never updates orders directly: order is the only writer of order status,
  * so every transition goes through the same state machine and CAS, and two services never update it independently.
  * <p>
- * Dedup record, status CAS, and status log are in the same local transaction (same consumer-side idempotency as B2).
- * B3-下: CAS wins -> write the ORDER_PAID event in the same transaction (confirm inventory deduction); CAS loses -> write pay_anomaly in the same transaction (money received but order not paid, left for reconciliation).
+ * Dedup record, status CAS, and status log are in the same local transaction (standard consumer-side idempotency).
+ * CAS wins -> write the ORDER_PAID event in the same transaction (confirm inventory deduction); CAS loses -> write pay_anomaly in the same transaction (money received but order not paid, left for reconciliation).
  */
 @Slf4j
 @Service
@@ -62,7 +62,7 @@ public class OrderPaidService {
         Orders order = ordersMapper.selectByOrderNoAcrossTenants(event.orderNo());
         if (order == null) {
             // Callback before the order: the order may commit any moment. Throw -> transaction rolls back (dedup record undone too) -> RocketMQ redelivers (10s, 30s, 1m...).
-            // If the order never appears: after 16 retries (about 4h46m total) it goes to the DLQ %DLQ%order-pay-success for E3 reconciliation
+            // If the order never appears: after 16 retries (about 4h46m total) it goes to the DLQ %DLQ%order-pay-success for reconciliation
             log.warn("[Callback before order] Order doesn't exist yet when payment-success event arrived, rolling back dedup record, will be redelivered payNo={} orderNo={} tenantId={}",
                     event.payNo(), event.orderNo(), event.tenantId());
             throw new OrderNotVisibleException(event.orderNo());
@@ -80,7 +80,7 @@ public class OrderPaidService {
                 "SYSTEM", 0L, "payNo=" + event.payNo() + " channelTradeNo=" + event.channelTradeNo());
         if (!ok) {
             // E.g. money arrives after the order was closed for timeout, or two payments for one order both succeeded. The order can't be "revived" and inventory isn't touched;
-            // just record a payment anomaly for reconciliation/refund (E3 / refunds out of scope)
+            // just record a payment anomaly for reconciliation/refund (refunds are out of scope)
             // Must be a current read: a plain SELECT sees this transaction's starting snapshot (still pending), see OrdersMapper#selectStatusForUpdate
             int status = ordersMapper.selectStatusForUpdate(event.orderNo());
             String type = status == OrderStatus.CLOSED.getCode() ? PayAnomaly.PAID_AFTER_CLOSED : PayAnomaly.DUPLICATE_PAYMENT;

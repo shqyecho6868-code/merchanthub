@@ -3,7 +3,7 @@ package com.merchanthub.common.constant;
 public class CommonConstant {
 
 
-    // D1: the JWT secret moved to config merchanthub.jwt.secret (see JwtCodec); token lifetimes are in JwtProperties
+    // The JWT secret moved to config merchanthub.jwt.secret (see JwtCodec); token lifetimes are in JwtProperties
 
     public static final String ACCESS_TOKEN_PREFIX = "access:token:";
 

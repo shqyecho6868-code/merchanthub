@@ -8,13 +8,13 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <!-- 目录和 artifactId 沿用旧名 UserService，服务名（Nacos 注册名）是 user-tenant（D1） -->
+    <!-- Directory and artifactId keep the legacy name UserService; the service name (Nacos registration) is user-tenant -->
     <artifactId>UserService</artifactId>
     <name>UserService</name>
-    <description>user-tenant：账号 / 登录 / 租户 / 商家入驻与商品上架审批（Flowable 引擎所在地）</description>
+    <description>user-tenant: accounts / login / tenants / merchant onboarding and product listing approvals (hosts the Flowable engine)</description>
 
     <dependencies>
-        <!-- G-上（补 F1 遗留）：ALB 目标组健康检查打 /actuator/health；prometheus 端点和其他服务保持一致 -->
+        <!-- The ALB target group health-checks /actuator/health; the prometheus endpoint matches the other services -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -48,7 +48,7 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-jsqlparser</artifactId>
         </dependency>
-        <!-- 业务表由 Flyway 管理；Flowable 的 ACT_* 表由引擎自己建（database-schema-update） -->
+        <!-- Business tables are managed by Flyway; Flowable's ACT_* tables are created by the engine itself (database-schema-update) -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -57,7 +57,7 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
-        <!-- token 存 Redis（网关核对"是不是当前有效的那个"）；雪花 ID 的 workerId 租约 -->
+        <!-- Tokens in Redis (the gateway checks it is the currently valid one); snowflake workerId lease -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
@@ -66,23 +66,23 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
-        <!-- 审批引擎：只要 BPMN 流程引擎这一个 starter，不要 REST / 设计器 / IDM（范围外） -->
+        <!-- Approval engine: only the BPMN process engine starter, no REST / modeler / IDM (out of scope) -->
         <dependency>
             <groupId>org.flowable</groupId>
             <artifactId>flowable-spring-boot-starter-process</artifactId>
         </dependency>
-        <!-- 上架审批结果经本地消息表发到 RocketMQ，和 order / payment 一样用原生客户端 -->
+        <!-- Listing-approval results go to RocketMQ via a local outbox table; plain client, same as order / payment -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-client</artifactId>
         </dependency>
-        <!-- 只要 BCrypt，不引入整个 Spring Security（鉴权在网关 + C1 拦截器里做） -->
+        <!-- Only BCrypt, not the whole of Spring Security (auth is done in the gateway + tenant interceptor) -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-        <!-- E3：XXL-Job 执行器（任务入口 job/UserJobs） -->
+        <!-- XXL-Job executor (job entry point: job/UserJobs) -->
         <dependency>
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>
@@ -101,10 +101,10 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
                     <!--
-                      P33：java -jar 启动时部署 BPMN 报 "Cannot resolve the name 'extension'"。
-                      Flowable 校验 BPMN 用的 XSD 在这个 jar 里，且 XSD 之间用相对路径互相引用；
-                      Boot 3.2+ 的嵌套 jar URL（jar:nested:...）解析不了相对引用。启动时把它解压成普通文件即可。
-                      测试 / IDE 里依赖本来就是普通 jar 文件，所以集成测试发现不了这个问题。
+                      Deploying BPMN under java -jar fails with "Cannot resolve the name 'extension'".
+                      The XSDs Flowable validates BPMN against live in this jar and reference each other by relative path;
+                      Boot 3.2+'s nested jar URLs (jar:nested:...) can't resolve relative references. Unpacking it to plain files at startup fixes it.
+                      In tests / the IDE the dependency is already a plain jar file, so integration tests can't catch this.
                     -->
                     <requiresUnpack>
                         <dependency>

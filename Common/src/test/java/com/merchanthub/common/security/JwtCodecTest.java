@@ -10,7 +10,7 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** D1: JWT secret from config + strict Base64 */
+/** JWT secret from config + strict Base64 */
 class JwtCodecTest {
 
     private static final String SECRET = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
@@ -41,7 +41,7 @@ class JwtCodecTest {
 
         assertThat(other.parse(token)).isNull();
         // Tamper with a character in the middle of the signature. Not the last one: in base64url of a 32-byte signature the last character has only 4 significant bits and 2 padding bits,
-        // so the old "replace the last two chars with xx" had no effect when the signature happened to end in an equivalent character (~1/1000), making CI flaky (P51)
+        // so the old "replace the last two chars with xx" had no effect when the signature happened to end in an equivalent character (~1/1000), making CI flaky
         int i = token.lastIndexOf('.') + 5;
         char tampered = token.charAt(i) == 'A' ? 'B' : 'A';
         assertThat(codec.parse(token.substring(0, i) + tampered + token.substring(i + 1))).isNull();
@@ -52,7 +52,7 @@ class JwtCodecTest {
     }
 
     @Test
-    @DisplayName("Old hard-coded secret (62 chars, no = padding) fails at startup -- root cause of P26")
+    @DisplayName("Old hard-coded secret (62 chars, no = padding) fails at startup")
     void rejectsUnpaddedLegacyKey() {
         String legacy = "shanyangcodebackendInfiniteChatshanyangcodebackendInfiniteChat";
         assertThatThrownBy(() -> new JwtCodec(legacy)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("multiple of 4");

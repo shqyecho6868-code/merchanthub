@@ -23,7 +23,7 @@ public class PaymentEventCodec {
             msg.setKeys(event.orderNo() + " " + event.payNo());
             msg.putUserProperty(PaymentEventTopics.PROP_EVENT_ID, String.valueOf(event.eventId()));
             msg.putUserProperty(PaymentEventTopics.PROP_ATTEMPT, attempt);
-            // C1: order restores the tenant context from this when consuming
+            // Order restores the tenant context from this when consuming
             return TenantMessages.stamp(msg, event.tenantId());
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);

@@ -10,12 +10,12 @@
 
     <artifactId>TestSupport</artifactId>
     <name>TestSupport</name>
-    <description>集成测试共享基础设施：单例 Testcontainers 容器 + 测试基类。各服务只以 test 范围依赖它</description>
+    <description>Shared integration-test infrastructure: singleton Testcontainers + test base classes. Services depend on it in test scope only</description>
 
     <!--
-      为什么单独建模块，而不是用 Common 的 test-jar：
-      test-jar 不会把 Common 的 test 范围依赖（Testcontainers 等）传递出去，每个服务还得自己再声明一遍；
-      独立模块里这些是 compile 依赖，服务以 test 范围引入 TestSupport 一次就全带上了。
+      Why a separate module instead of Common's test-jar:
+      a test-jar doesn't pass on Common's test-scoped dependencies (Testcontainers etc.), so every service would have to redeclare them;
+      in a standalone module they are compile dependencies, so a service pulls them all in with a single test-scoped TestSupport dependency.
     -->
     <dependencies>
         <dependency>
@@ -36,7 +36,7 @@
             <artifactId>awaitility</artifactId>
         </dependency>
 
-        <!-- 以下只给本模块的 MiddlewareContainersIT 用 -->
+        <!-- Below: only used by this module's MiddlewareContainersIT -->
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
