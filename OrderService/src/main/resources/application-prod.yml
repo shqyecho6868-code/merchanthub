@@ -1,6 +1,6 @@
 spring:
   datasource:
-    # 每个服务一个库（mh_order）：服务之间不能跨库 join、也不能共用本地事务，只能通过接口交互
+    # One database per service (mh_order): services can't join across databases or share local transactions; they interact only via APIs
     url: jdbc:mysql://mysql:3306/mh_order?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
     username: root
     password: ${MYSQL_ROOT_PASSWORD}

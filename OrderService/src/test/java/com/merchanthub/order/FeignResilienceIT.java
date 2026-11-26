@@ -29,12 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * C2：真实 Feign 客户端（不 mock）打到一个"很慢的假 product-inventory"上，验证两件事：
+ * C2: a real Feign client (not mocked) calls a "very slow fake product-inventory" to verify two things:
  * <ol>
- *   <li>读超时后<b>不自动重试</b>：假服务只被打到 1 次</li>
- *   <li>连续超时后<b>熔断</b>：后面的调用连请求都不发，几毫秒内直接降级成 DOWNSTREAM_UNAVAILABLE</li>
+ *   <li>No <b>automatic retry</b> after a read timeout: the fake service is hit only once</li>
+ *   <li><b>Circuit breaking</b> after consecutive timeouts: later calls don't even send a request and degrade to DOWNSTREAM_UNAVAILABLE within milliseconds</li>
  * </ol>
- * 为了测试快，阈值调小：读超时 300ms、慢调用 200ms、统计窗口内 3 次就判断、熔断 30 秒。
+ * Thresholds are lowered for speed: read timeout 300ms, slow call 200ms, judge after 3 calls in the window, break for 30s.
  */
 @SpringBootTest(properties = {
         "spring.cloud.openfeign.client.config.productInventoryClient.read-timeout=300",
@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 })
 class FeignResilienceIT extends IntegrationTestBase {
 
-    /** 假 product-inventory：每个请求睡 1 秒（超过读超时）再返回成功 */
+    /** Fake product-inventory: each request sleeps 1s (longer than the read timeout) before returning success */
     private static final HttpServer SLOW_INVENTORY;
     private static final AtomicInteger HITS = new AtomicInteger();
 
@@ -67,7 +67,7 @@ class FeignResilienceIT extends IntegrationTestBase {
                 ex.sendResponseHeaders(200, body.length);
                 ex.getResponseBody().write(body);
             } catch (IOException ignored) {
-                // 调用方超时后已经断开，写不回去是预期内的
+                // The caller already disconnected after its timeout, so failing to write back is expected
             }
             ex.close();
         });
@@ -75,7 +75,7 @@ class FeignResilienceIT extends IntegrationTestBase {
         SLOW_INVENTORY.start();
     }
 
-    /** 测试不连 Nacos，用 Spring Cloud 自带的"静态服务列表"把 product-inventory 指到假服务 */
+    /** Tests don't connect to Nacos; Spring Cloud's built-in "static service list" points product-inventory at the fake service */
     @DynamicPropertySource
     static void inventoryAddress(DynamicPropertyRegistry r) {
         r.add("spring.cloud.discovery.client.simple.instances.product-inventory[0].uri",
@@ -113,7 +113,7 @@ class FeignResilienceIT extends IntegrationTestBase {
     @Test
     void readTimeout_notRetried() throws Exception {
         assertDownstreamUnavailable();
-        Thread.sleep(800);   // 给"可能的重试"留出时间
+        Thread.sleep(800);   // leave time for any "possible retry"
         assertThat(HITS.get()).as("超时后不应自动重试").isEqualTo(1);
     }
 
@@ -125,9 +125,9 @@ class FeignResilienceIT extends IntegrationTestBase {
         int hitsBeforeOpen = HITS.get();
         long elapsedMs = timedUnavailableCall();
 
-        // G-上 CI 偶发（P47）：Sentinel 熔断统计是"按整 10 秒对齐的单个桶"（LeapArray(1, statIntervalMs)），
-        // 3 次调用恰好跨过 10 秒边界时被拆进两个窗口，凑不够 min-requests=3，熔断器还没打开。
-        // 这时这次调用仍然打到了下游；最多再补 3 次，直到某次调用没打到下游（= 熔断已打开）
+        // G-上 CI flake (P47): Sentinel breaker stats use "a single bucket aligned to whole 10s" (LeapArray(1, statIntervalMs)),
+        // so when 3 calls straddle a 10s boundary they split into two windows, min-requests=3 isn't met, and the breaker isn't open yet.
+        // In that case this call still hit the downstream; make up to 3 more calls until one doesn't hit the downstream (= breaker open)
         for (int extra = 0; extra < 3 && HITS.get() != hitsBeforeOpen; extra++) {
             hitsBeforeOpen = HITS.get();
             elapsedMs = timedUnavailableCall();

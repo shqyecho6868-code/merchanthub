@@ -32,7 +32,7 @@
     <serviceTask id="markRejected" name="标记驳回" flowable:expression="${onboardingDelegate.reject(execution)}"/>
     <sequenceFlow id="f6" sourceRef="markRejected" targetRef="applicantRevise"/>
 
-    <!-- 办理人是申请人本人（不是候选组）：别的买家看不到、也改不了这张申请 -->
+    <!-- The assignee is the applicant themself (not a candidate group): other buyers can neither see nor modify this application -->
     <userTask id="applicantRevise" name="申请人修改后重提" flowable:assignee="${applicantUserId}"/>
     <sequenceFlow id="f7" sourceRef="applicantRevise" targetRef="reviseDecision"/>
 

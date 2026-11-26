@@ -24,7 +24,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    /** 只有买家能"去支付"；买家 ID 取网关注入的身份，再由 PaymentService 校验订单确实是他的 */
+    /** Only buyers can "go pay"; the buyer ID comes from the gateway-injected identity, and PaymentService then verifies the order really belongs to them */
     @PostMapping
     @RequireRole(Role.BUYER)
     public BaseResponse<PaymentVO> create(@RequestBody @Valid CreatePaymentRequest request) {
@@ -36,13 +36,13 @@ public class PaymentController {
     }
 
     /**
-     * 模拟渠道异步通知。真实渠道：验签 → 处理 → 回固定字符串（如 "success"），回别的渠道就会按退避策略重试通知。
-     * 这里返回处理结果（PAID / DUPLICATE / IGNORED）便于观察；三者对渠道而言都是"已收到"。
+     * Simulated async channel notification. A real channel: verify signature → process → reply with a fixed string (e.g. "success"); any other reply makes the channel retry the notification with backoff.
+     * Here we return the processing result (PAID / DUPLICATE / IGNORED) for observability; to the channel all three mean "received".
      */
     @PostMapping("/callback/mock")
     public BaseResponse<String> mockCallback(@RequestBody @Valid MockCallbackRequest request) {
-        // 渠道通知没有用户身份（网关白名单放行），不属于任何"登录用户"：以 SYSTEM 身份按支付单号处理。
-        // 不设上下文的话，查 payment 表时租户插件会直接报错（fail-closed）
+        // Channel notifications carry no user identity (whitelisted at the gateway) and don't belong to any "logged-in user": process by payNo as SYSTEM.
+        // Without a context, the tenant plugin errors out when querying the payment table (fail-closed)
         return ResultUtils.success(TenantContext.callAsSystem(() -> paymentService.handleMockCallback(request)).name());
     }
 }

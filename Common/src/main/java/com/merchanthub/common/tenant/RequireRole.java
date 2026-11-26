@@ -7,10 +7,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 接口级权限（C1 RBAC）：只有列出的角色能调用，其余返回 HTTP 403；没有身份返回 401。
- * 可以标在类上（整个 Controller）或方法上（方法上的优先）。
+ * Endpoint-level permission (C1 RBAC): only the listed roles may call it, others get HTTP 403; no identity gets 401.
+ * Can be placed on a class (the whole Controller) or a method (the method wins).
  * <p>
- * 只管"这类人能不能调这个接口"；"能不能碰这一条数据"由租户插件（tenant_id）和 buyer_id 归属判断负责，两层缺一不可。
+ * It only answers "can this kind of user call this endpoint"; "can they touch this row" is handled by the tenant plugin (tenant_id) and buyer_id ownership checks. Both layers are required.
  */
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)

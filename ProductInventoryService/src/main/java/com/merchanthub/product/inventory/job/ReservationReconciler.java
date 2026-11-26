@@ -17,22 +17,22 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 库存预占对账（E3，由 B3-下的悬空预占扫描扩展而来）：预占记录超过 older-than 仍是 RESERVED，
- * 按订单的真实状态把它了结 —— 正常情况下 ORDER_PAID / ORDER_CLOSED 事件早就了结它了，还挂着说明事件丢了或进了死信。
+ * Inventory reservation reconciliation (E3, extended from B3-下's dangling-reservation scan): reservations still RESERVED after older-than
+ * are settled according to the order's real status — normally the ORDER_PAID / ORDER_CLOSED event would have settled them long ago; if one is still hanging, the event was lost or went to the DLQ.
  * <table>
- *   <tr><th>订单状态</th><th>处理</th><th>典型原因</th></tr>
- *   <tr><td>不存在</td><td>释放（DANGLING）</td><td>预占成功、下单失败（Feign 读超时 / 落单失败）</td></tr>
- *   <tr><td>已关闭 50</td><td>释放（RECON_CLOSED）</td><td>ORDER_CLOSED 事件丢失 / 进死信</td></tr>
- *   <tr><td>已支付 20 / 已发货 30 / 已完成 40</td><td>确认扣减</td><td>ORDER_PAID 事件丢失 / 进死信</td></tr>
- *   <tr><td>待支付 10</td><td>不动</td><td>订单生命周期还没结束</td></tr>
+ *   <tr><th>Order status</th><th>Action</th><th>Typical cause</th></tr>
+ *   <tr><td>Missing</td><td>Release (DANGLING)</td><td>Reservation succeeded, order placement failed (Feign read timeout / order insert failed)</td></tr>
+ *   <tr><td>Closed 50</td><td>Release (RECON_CLOSED)</td><td>ORDER_CLOSED event lost / in DLQ</td></tr>
+ *   <tr><td>Paid 20 / Shipped 30 / Completed 40</td><td>Confirm deduction</td><td>ORDER_PAID event lost / in DLQ</td></tr>
+ *   <tr><td>Pending payment 10</td><td>Leave it</td><td>Order lifecycle not over yet</td></tr>
  * </table>
- * 安全前提（B3-下笔记第 4 节）：
+ * Safety preconditions (B3-下 notes section 4):
  * <ol>
- *   <li>预占足够老（默认 30 分钟，远大于下单事务超时和 15 分钟支付时限）：查不到订单就是真没有</li>
- *   <li>查询失败 ≠ 不存在：order 超时 / 宕机就跳过整轮 —— 宁可晚还，不能错还</li>
- *   <li>确认 / 释放都走预占记录 CAS（WHERE status = 10）：和迟到的事件、另一个实例并发执行都只生效一次</li>
+ *   <li>The reservation is old enough (30 minutes by default, far beyond the order transaction timeout and the 15-minute payment window): if the order can't be found, it really doesn't exist</li>
+ *   <li>Query failure ≠ missing: if order times out / is down, skip the whole round — better to return stock late than wrongly</li>
+ *   <li>Both confirm and release go through the reservation CAS (WHERE status = 10): racing with a late event or another instance takes effect only once</li>
  * </ol>
- * 由 XXL-Job 的 reservationReconJob 调度（E3 前是 @Scheduled）。
+ * Scheduled by XXL-Job's reservationReconJob (it was @Scheduled before E3).
  */
 @Slf4j
 @Component
@@ -58,8 +58,8 @@ public class ReservationReconciler {
     }
 
     /**
-     * 扫描本身跨所有商家，用 SYSTEM 身份（Feign 查 order 时也带着 X-Role: SYSTEM）；
-     * 真正了结某一单时切到<b>那一单的商家</b>，SQL 带上 tenant_id，处理完自动回到 SYSTEM。
+     * The scan itself spans all merchants and runs as SYSTEM (Feign calls to order also carry X-Role: SYSTEM);
+     * when actually settling an order it switches to <b>that order's merchant</b>, so SQL carries tenant_id, and automatically returns to SYSTEM afterwards.
      */
     public Result reconcile() {
         return TenantContext.callAsSystem(this::reconcileOnce);
@@ -80,7 +80,7 @@ public class ReservationReconciler {
             }
             statuses = resp.getData();
         } catch (RuntimeException e) {
-            // 查不到 ≠ 不存在：order 超时 / 宕机时如果当成"不存在"释放，正在支付的订单库存就被还回去了 → 超卖
+            // "Can't look it up" ≠ "doesn't exist": if we treated an order timeout / outage as "doesn't exist" and released, stock of orders being paid would be returned → oversell
             log.warn("预占对账：查询订单失败，本轮跳过 候选数={}", orderNos.size(), e);
             return new Result(0, 0);
         }
@@ -90,7 +90,7 @@ public class ReservationReconciler {
         for (InventoryReservation r : stale) {
             Integer status = statuses.get(r.getOrderNo());
             if (status != null && status == PENDING) {
-                continue;   // 订单还在等支付：由支付 / 超时关单了结，这里不碰
+                continue;   // The order is still awaiting payment: settled by payment / timeout close, don't touch it here
             }
             TenantInfo tenant = TenantInfo.systemOf(r.getTenantId());
             if (status == null || status == CLOSED) {

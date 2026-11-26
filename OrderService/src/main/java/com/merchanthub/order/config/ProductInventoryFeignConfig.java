@@ -4,25 +4,25 @@ import feign.Retryer;
 import org.springframework.context.annotation.Bean;
 
 /**
- * product-inventory 这个 Feign 客户端专用配置（C2）。<b>故意不加 @Configuration</b>：
- * 加了会被组件扫描成全局配置，影响所有 Feign 客户端；只通过 @FeignClient(configuration = ...) 生效。
+ * Dedicated config for the product-inventory Feign client (C2). <b>Intentionally not annotated with @Configuration</b>:
+ * otherwise component scanning would pick it up as global config affecting all Feign clients; it only applies via @FeignClient(configuration = ...).
  */
 public class ProductInventoryFeignConfig {
 
     /**
-     * 明确不自动重试（Spring Cloud OpenFeign 默认也是 NEVER_RETRY，这里显式写出来，防止以后有人"顺手"打开）。
+     * Explicitly no automatic retry (Spring Cloud OpenFeign defaults to NEVER_RETRY too; stated explicitly so nobody "conveniently" turns it on later).
      * <p>
-     * 预占接口本身<b>是幂等的</b>（按 orderNo，重复请求直接返回成功），重试不会重复扣库存，但仍然不能自动重试：
+     * The reserve API itself <b>is idempotent</b> (keyed by orderNo; duplicate requests just return success), so retries won't double-deduct, but we still don't auto-retry:
      * <ol>
-     *   <li><b>读超时 ≠ 失败</b>：3 秒没返回，下游多半是慢，不是没做。这时再发一次，等于在下游最忙的时候给它加倍的活；
-     *       每个上游都这么干，流量变成 2 倍、3 倍（重试风暴），下游从"慢"变成"挂"</li>
-     *   <li><b>拖长用户等待</b>：单次读超时 3 秒，重试 2 次就是 9 秒。用户早就走了，下游还在白白处理</li>
-     *   <li><b>幂等只在 orderNo 不变时成立</b>：自动重试能保证同一个 orderNo；可一旦有人在 service 层"失败就重新下单"，
-     *       新 orderNo 就是一笔新的预占。所以"能不能重试"要在业务层看清楚再决定，不交给框架默默做</li>
+     *   <li><b>Read timeout != failure</b>: no response in 3s usually means the downstream is slow, not that it didn't do the work. Sending again doubles its load exactly when it's busiest;
+     *       if every upstream does that, traffic becomes 2x, 3x (retry storm), and the downstream goes from "slow" to "down"</li>
+     *   <li><b>Longer user wait</b>: a single read timeout is 3s; 2 retries make it 9s. The user is long gone while the downstream keeps doing wasted work</li>
+     *   <li><b>Idempotency holds only while orderNo stays the same</b>: automatic retry keeps the same orderNo, but if someone adds "re-place the order on failure" in the service layer,
+     *       the new orderNo is a brand-new reservation. So "can we retry" must be decided deliberately in the business layer, not silently by the framework</li>
      * </ol>
-     * 超时后的真实结果由 B3 的悬空预占扫描兜底（有预占、没订单 → 释放），用户看到"稍后重试"。
-     * 查 SKU 是只读调用，理论上可以重试，但同样受第 1、2 条约束；真要重试也应只重试"连接失败"（请求根本没发出去），
-     * 并带退避，这是将来的改进项。
+     * The real outcome after a timeout is covered by B3's dangling-reservation scan (reservation without an order -> release); the user sees "try again later".
+     * Fetching SKUs is a read-only call and could in theory be retried, but points 1 and 2 still apply; if we ever retry, it should be only on "connection failure" (request never sent),
+     * with backoff -- a future improvement.
      */
     @Bean
     public Retryer productInventoryRetryer() {

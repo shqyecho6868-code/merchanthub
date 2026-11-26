@@ -15,7 +15,7 @@ import java.util.concurrent.Executors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 跨服务的两种透传：Feign（请求头）和 RocketMQ（消息属性） */
+/** Two ways identity crosses services: Feign (request headers) and RocketMQ (message properties) */
 class TenantFeignAndMqTest {
 
     private final TenantFeignInterceptor feign = new TenantFeignInterceptor();
@@ -55,7 +55,7 @@ class TenantFeignAndMqTest {
         MessageExt m = new MessageExt();
         TenantMessages.stamp(m, 8L);
 
-        ExecutorService consumerThread = Executors.newSingleThreadExecutor();   // 模拟 RocketMQ 复用的消费线程
+        ExecutorService consumerThread = Executors.newSingleThreadExecutor();   // simulates RocketMQ's reused consumer thread
         try {
             Long seenInside = consumerThread.submit(() -> TenantMessages.consumeAs(m, TenantContext::tenantId)).get();
             assertThat(seenInside).isEqualTo(8L);

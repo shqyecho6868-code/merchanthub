@@ -14,7 +14,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
- * 订单状态流转的唯一入口：CAS 改状态 + 写状态流水。以后取消、超时关单、发货都走这里。
+ * The single entry point for order status transitions: CAS the status + write the status log. Cancel, timeout close, and shipping will all go through here.
  */
 @Slf4j
 @Service
@@ -26,10 +26,10 @@ public class OrderStatusTransitioner {
     private final Clock clock;
 
     /**
-     * MANDATORY：必须在调用方已开启的事务里执行，没有事务直接报错。
-     * 状态更新和流水要么一起提交、要么一起回滚；调用方（如消费去重）也要和它们在同一个事务里。
+     * MANDATORY: must run inside a transaction already opened by the caller; fails immediately without one.
+     * The status update and the log commit or roll back together; the caller (e.g. consumer dedup) must also be in the same transaction.
      *
-     * @return true 本次流转成功；false 订单当前不处于 event.from（已被别的事件改过），什么也没改
+     * @return true if this transition succeeded; false if the order isn't currently in event.from (already changed by another event), nothing changed
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean transit(long orderNo, long tenantId, OrderEvent event,
@@ -39,13 +39,13 @@ public class OrderStatusTransitioner {
 
         int rows = ordersMapper.casStatus(orderNo, tenantId, from, to, LocalDateTime.now(clock), event.name());
         if (rows != 1) {
-            // CAS 失败 = 订单没变，就不能写流水：流水必须和真实发生过的流转一一对应，否则对账时"流水说已支付、订单却是已关闭"
+            // CAS failed = order unchanged, so no log entry: the log must map one-to-one to transitions that actually happened, otherwise reconciliation sees "log says paid, order is closed"
             log.warn("订单状态 CAS 失败：订单当前不是 {}，{} 未生效 orderNo={} tenantId={}",
                     event.getFrom(), event, orderNo, tenantId);
             return false;
         }
 
-        // 只有真正流转了才写流水，且和状态更新在同一个事务里（MANDATORY 保证）
+        // Write the log only for a real transition, in the same transaction as the status update (guaranteed by MANDATORY)
         OrderStatusLog row = new OrderStatusLog();
         row.setTenantId(tenantId);
         row.setOrderNo(orderNo);

@@ -10,29 +10,29 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   data:
     redis:
-      # 和 user-tenant 同一个库：握手时要校验登录 token（access:token:{userId}）
+      # Same database as user-tenant: the handshake has to verify the login token (access:token:{userId})
       database: 2
       timeout: 3000
 
 merchanthub:
   realtime:
-    # 节点 ID：路由表里记的就是它，节点间转发的 Tag 也是它。默认 rt-{本机IP}-{Netty端口}；多实例部署时也可以显式配置
+    # Node ID: this is what the route table stores and the Tag used for inter-node forwarding. Defaults to rt-{host IP}-{Netty port}; can also be set explicitly for multi-instance deployments
     node-id: ${REALTIME_NODE_ID:}
-    # WebSocket 端口（Netty）。0 = 随机端口（测试里同一个 JVM 起两个节点用）
+    # WebSocket port (Netty). 0 = random port (used by tests that start two nodes in one JVM)
     netty-port: 9101
-    # 路由过期时间：客户端每 30 秒发一次 ping 续期；节点宕机没人续期，最多这么久路由自动消失
+    # Route TTL: clients send a ping every 30 seconds to renew; if a node crashes and nobody renews, the route disappears after at most this long
     route-ttl: 90s
-    # 读空闲超过这么久（客户端连 ping 都不发了）就断开连接
+    # Close the connection after this much read idle time (the client isn't even sending pings)
     idle-timeout: 90s
-    # 订单事件消费者（集群消费：任意一台节点消费到都行）
+    # Order event consumer (clustering mode: any node consuming it is fine)
     order-consumer:
       enabled: true
       consume-from: CONSUME_FROM_LAST_OFFSET
-  # 握手校验 token 的密钥，与网关 / user-tenant 一致
+  # Secret for verifying tokens on handshake; same as the gateway / user-tenant
   jwt:
     secret: ${JWT_SECRET}
 
-# G-上（补 F1 遗留）：只暴露 health 和 prometheus，和其他服务一致。ALB 目标组直接打容器的 /actuator/health 做健康检查
+# G-上 (closing an F1 leftover): only expose health and prometheus, same as other services. The ALB target group health-checks the container's /actuator/health directly
 management:
   endpoints:
     web:
@@ -42,7 +42,7 @@ management:
     tags:
       application: ${spring.application.name}
 
-# 本地 / 测试日志也带 traceId 和 tenantId（和 application-aws.yml 同一格式）：按 traceId 搜就能串起一张订单经过的 HTTP → Feign → MQ 消费
+# Local / test logs also carry traceId and tenantId (same format as application-aws.yml): searching by traceId ties together an order's HTTP -> Feign -> MQ consumption
 logging:
   pattern:
     level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

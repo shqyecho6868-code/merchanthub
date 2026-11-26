@@ -4,33 +4,33 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.common.message.MessageExt;
 
 /**
- * 死信监控（E3）：消费者返回 RECONSUME_LATER 时调用。如果这已经是最后一次重试，这条消息接下来会被 Broker
- * 转进 %DLQ%{消费组}，不会再自动投递 —— 在这一刻告警并记异常表。
+ * Dead-letter monitoring (E3): called when a consumer returns RECONSUME_LATER. If this was the last retry, the Broker will next move the message
+ * into %DLQ%{consumer group} and never redeliver it automatically, so this is the moment to alert and record it in the exception table.
  * <p>
- * 为什么在消费者里判断，而不是订阅死信 Topic：RocketMQ 自动创建的死信 Topic 权限是"只写"（perm=2），
- * 不改权限根本消费不到；而且死信 Topic 在第一条死信出现前不存在。消费者自己最清楚"这是最后一次"，判断最直接。
- * 代价：只能发现"重试耗尽"这一种进死信的路径（这也是唯一的路径）；告警写库失败（比如正是数据库挂了）时只剩日志。
+ * Why check in the consumer instead of subscribing to the DLQ topic: RocketMQ creates DLQ topics as write-only (perm=2),
+ * so they can't be consumed without changing permissions, and the DLQ topic doesn't even exist until the first dead letter. The consumer knows best that "this is the last attempt", so checking there is the most direct.
+ * Trade-off: it only catches the "retries exhausted" path into the DLQ (which is the only path anyway); if writing the alert to the DB fails (e.g. the DB is exactly what's down), only the log remains.
  */
 @Slf4j
 public final class DeadLetters {
 
-    /** RocketMQ 默认最大重试 16 次（getMaxReconsumeTimes 返回 -1 表示用默认值） */
+    /** RocketMQ retries up to 16 times by default (getMaxReconsumeTimes returns -1 for the default) */
     static final int DEFAULT_MAX_RECONSUME = 16;
 
     private DeadLetters() {
     }
 
-    /** 这次失败之后是否进死信：已重试次数达到上限 */
+    /** Whether this failure sends the message to the DLQ: the retry count has reached the limit */
     public static boolean isLastAttempt(MessageExt m, int maxReconsumeTimes) {
         int max = maxReconsumeTimes < 0 ? DEFAULT_MAX_RECONSUME : maxReconsumeTimes;
         return m.getReconsumeTimes() >= max;
     }
 
     /**
-     * 消费失败时调用：最后一次就告警 + 记异常表，否则什么也不做。
+     * Call on consume failure: on the last attempt, alert + record in the exception table; otherwise do nothing.
      *
-     * @param alarm 可为 null（没有数据源的服务），此时只打日志
-     * @return true 这条消息即将进死信
+     * @param alarm may be null (services without a data source); then only log
+     * @return true if this message is about to go to the DLQ
      */
     public static boolean onFailure(ReconAlarm alarm, String group, MessageExt m, int maxReconsumeTimes,
                                     Long tenantId, Throwable cause) {

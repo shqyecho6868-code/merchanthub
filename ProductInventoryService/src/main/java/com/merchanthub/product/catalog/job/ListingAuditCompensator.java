@@ -17,14 +17,14 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * 上架审批补偿（D1）："审核中"超过 older-than 的商品，去 user-tenant 反查这一轮的审批单：
+ * Listing approval compensation (D1): for products "under review" longer than older-than, query user-tenant for this round's approval:
  * <ul>
- *   <li>APPROVED / REJECTED → 结果消息丢了（或进了死信），按反查结果回写（和消费走同一个 CAS，先到的生效）</li>
- *   <li>NOT_FOUND → 当初 Feign 发起失败，重新发起（按 (商品, 轮次) 幂等）</li>
- *   <li>RUNNING → 审批人还没处理，正常情况，不动（实例 ID 没回填的顺手补上）</li>
- *   <li>反查失败 → 跳过，下一轮再查：查不到 ≠ 没结果</li>
+ *   <li>APPROVED / REJECTED → the result message was lost (or went to the DLQ); write back from the query (same CAS as consumption, first one wins)</li>
+ *   <li>NOT_FOUND → the original Feign start failed; start again (idempotent per (product, round))</li>
+ *   <li>RUNNING → the approver hasn't acted yet; normal, leave it (backfill the instance ID if it's missing)</li>
+ *   <li>Query failed → skip, check again next round: "can't look it up" ≠ "no result"</li>
  * </ul>
- * 多实例同时扫描安全：回写是 CAS，发起是幂等的。E3 起由 XXL-Job 的 listingCompensateJob 调度（原 @Scheduled）。
+ * Safe with multiple instances scanning concurrently: write-back is a CAS and starting is idempotent. Scheduled by XXL-Job's listingCompensateJob since E3 (formerly @Scheduled).
  */
 @Slf4j
 @Component
@@ -40,12 +40,12 @@ public class ListingAuditCompensator {
     @Value("${merchanthub.product.listing-compensate.batch-size:100}")
     private int batchSize;
 
-    /** @return 本轮修复（回写 + 重新发起 + 补实例 ID）的商品数 */
+    /** @return number of products fixed this round (written back + restarted + instance ID backfilled) */
     public int scan() {
         List<Product> stale = TenantContext.callAsSystem(() -> productMapper.selectStaleInReview(olderThan.toSeconds(), batchSize));
         int fixed = 0;
         for (Product p : stale) {
-            // 按商品所属商家调 Feign：user-tenant 从请求头取商家，只能查到这个商家自己的审批单
+            // Call Feign as the product's merchant: user-tenant takes the merchant from the request header and can only see that merchant's own approvals
             if (TenantContext.callAs(TenantInfo.systemOf(p.getTenantId()), () -> fix(p))) {
                 fixed++;
             }

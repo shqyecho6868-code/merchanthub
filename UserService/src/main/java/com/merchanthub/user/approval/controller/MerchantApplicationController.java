@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 商家入驻申请（对外 /api/merchant-applications/**）。申请人是已登录的平台账号（BUYER），驳回后靠它确认"是你本人在改" */
+/** Merchant onboarding applications (external /api/merchant-applications/**). The applicant is a logged-in platform account (BUYER); after rejection this confirms "it's you editing it" */
 @RestController
 @RequestMapping("/merchant-applications")
 @RequiredArgsConstructor

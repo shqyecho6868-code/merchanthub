@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 用真实 Redis 验证领号的三个关键行为：多实例错开、租约过期回收、不会误续/误删别人的号。
+ * Verifies three key behaviors of slot claiming against real Redis: instances get different slots, expired leases are reclaimed, and nobody renews/deletes someone else's slot by mistake.
  */
 class SnowflakeSlotAllocatorIT {
 
@@ -57,7 +57,7 @@ class SnowflakeSlotAllocatorIT {
     void crashedInstance_slotIsReclaimedAfterLeaseExpires() {
         props.setLeaseSeconds(1);
         assertThat(allocator.acquire("instance-A")).isEqualTo(0);
-        // A 宕机，不再续期；租约到期后 0 号应能被 B 拿到
+        // A crashes and stops renewing; once the lease expires, B should be able to take slot 0
         await().atMost(Duration.ofSeconds(5))
                 .until(() -> !Boolean.TRUE.equals(redis.hasKey(allocator.key(0))));
         assertThat(allocator.acquire("instance-B")).isEqualTo(0);
@@ -68,11 +68,11 @@ class SnowflakeSlotAllocatorIT {
         int slot = allocator.acquire("instance-A");
         assertThat(allocator.renew(slot, "instance-A")).isTrue();
 
-        // 模拟 A 的租约过期、号被 B 接手
+        // Simulate A's lease expiring and B taking over the slot
         redis.opsForValue().set(allocator.key(slot), "instance-B");
         assertThat(allocator.renew(slot, "instance-A")).isFalse();
 
-        // A 下线时也不能删掉 B 的号
+        // When A shuts down it must not delete B's slot either
         allocator.release(slot, "instance-A");
         assertThat(redis.opsForValue().get(allocator.key(slot))).isEqualTo("instance-B");
     }

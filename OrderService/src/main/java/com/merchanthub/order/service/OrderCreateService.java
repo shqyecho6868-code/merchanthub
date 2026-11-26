@@ -28,10 +28,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 下单编排：校验 SKU → 计价 → 生成订单号 → 预占库存（远程，事务 A）→ 落订单并发事件（本地，事务 B）。
+ * Order placement orchestration: validate SKUs -> price -> generate order number -> reserve inventory (remote, tx A) -> persist order and emit event (local, tx B).
  * <p>
- * 这个方法<b>故意不加 @Transactional</b>：中间有两次远程调用，加了事务就会在等待网络期间一直占着数据库连接；
- * 而且本地事务也回滚不了远程的预占。真正需要原子性的只有“落订单 + 事件”这一步，交给 {@link OrderPlacer}。
+ * This method is <b>intentionally not @Transactional</b>: it makes two remote calls, and a transaction would hold a DB connection while waiting on the network;
+ * besides, a local transaction can't roll back a remote reservation. Only "persist order + event" truly needs atomicity, and that is delegated to {@link OrderPlacer}.
  */
 @Slf4j
 @Service
@@ -43,50 +43,50 @@ public class OrderCreateService {
     private final OrderPlacer orderPlacer;
     private final Clock clock;
 
-    /** 支付时限，Duration 格式（15m / 30s），实验时可调短 */
+    /** Payment deadline, Duration format (15m / 30s); can be shortened for experiments */
     @Value("${merchanthub.order.pay-timeout:15m}")
     private Duration payTimeout;
 
-    /** 只给 🧑 实验用：库存预占后、订单落库前停顿，制造"支付回调早于订单"（B3-下实验 ①）。生产保持 0 */
+    /** For 🧑 experiments only: pause after inventory reservation and before persisting the order, to make "payment callback arrives before the order" happen (B3-下 experiment ①). Keep 0 in production */
     @Value("${merchanthub.order.debug.pause-before-persist-ms:0}")
     private long pauseBeforePersistMs;
 
     public CreateOrderVO createOrder(long buyerId, CreateOrderRequest request) {
-        // 1. 同一个 SKU 出现多次就合并数量；TreeMap 让后面的遍历顺序固定（按 skuId 升序）
+        // 1. Merge quantities for repeated SKUs; TreeMap fixes the later iteration order (ascending skuId)
         Map<Long, Integer> quantities = request.getItems().stream().collect(Collectors.toMap(
                 CreateOrderRequest.Item::getSkuId, CreateOrderRequest.Item::getQuantity, Integer::sum, TreeMap::new));
 
-        // 2. 查 SKU（价格以这里为准）
+        // 2. Fetch SKUs (prices here are authoritative)
         List<SkuSnapshot> found = RemoteResults.call(ProductInventoryClient.RES_QUERY_SKUS,
                 () -> productInventoryClient.querySkus(new SkuQueryRequest(new ArrayList<>(quantities.keySet()))));
         Map<Long, SkuSnapshot> skus = found.stream().collect(Collectors.toMap(SkuSnapshot::getSkuId, Function.identity()));
 
-        // 3. 校验：都存在、都能卖、属于同一个商家（一单一商家）
+        // 3. Validate: all exist, all sellable, all from the same merchant (one merchant per order)
         ThrowUtils.throwIf(!skus.keySet().containsAll(quantities.keySet()), ErrorCode.SKU_NOT_FOUND);
         ThrowUtils.throwIf(skus.values().stream().anyMatch(s -> !s.isSellable()), ErrorCode.SKU_NOT_ON_SALE);
         List<Long> tenants = skus.values().stream().map(SkuSnapshot::getTenantId).distinct().toList();
         ThrowUtils.throwIf(tenants.size() != 1, ErrorCode.ORDER_MULTI_TENANT);
         long tenantId = tenants.get(0);
-        // C2：入口限流是按请求里的 tenantId 算的，这里核对它和 SKU 的真实归属一致（防止填别家的 ID 绕开自家配额）
+        // C2: entry rate limiting uses the tenantId in the request; verify it matches the SKUs' real owner (prevents using another merchant's ID to dodge your own quota)
         ThrowUtils.throwIf(request.getTenantId() != null && request.getTenantId() != tenantId, ErrorCode.SKU_TENANT_MISMATCH);
 
         OrderPricing.Result pricing = OrderPricing.price(quantities, skus);
         if (request.getExpectedPayAmount() != null && request.getExpectedPayAmount() != pricing.payAmount()) {
-            // 价格变了：不按新价格悄悄下单，让买家重新确认（B1 笔记 5.1）
+            // Price changed: don't silently order at the new price; let the buyer reconfirm (B1 notes 5.1)
             throw new BusinessException(ErrorCode.PRICE_CHANGED);
         }
 
-        // 4. 订单号必须在预占之前生成：它是预占的幂等键（B1 笔记 5.2）
+        // 4. The order number must be generated before reserving: it's the reservation's idempotency key (B1 notes 5.2)
         long orderNo = idGenerator.nextId();
 
-        // 5. 预占库存（product-inventory 侧事务 A：全占或全不占）
+        // 5. Reserve inventory (product-inventory side tx A: reserve all or nothing)
         List<ReserveRequest.Item> reserveItems = quantities.entrySet().stream()
                 .map(e -> new ReserveRequest.Item(e.getKey(), e.getValue())).toList();
         RemoteResults.call(ProductInventoryClient.RES_RESERVE,
                 () -> productInventoryClient.reserve(new ReserveRequest(orderNo, tenantId, reserveItems)));
 
-        // 6. 落订单 + "订单已创建"事件（同生共死，具体方案见 OrderPlacer 的两种实现）。
-        // 已知缺口：如果这里失败，第 5 步占的库存不会自动释放 → B3 按预占记录补偿（B1 笔记第 2 节）
+        // 6. Persist order + "order created" event (succeed or fail together; see OrderPlacer's two implementations).
+        // Known gap: if this fails, the inventory reserved in step 5 isn't released automatically -> B3 compensates via reservation records (B1 notes section 2)
         if (pauseBeforePersistMs > 0) {
             log.warn("【实验】库存已预占，暂停 {} ms 后才落库 orderNo={} tenantId={} payAmount={}",
                     pauseBeforePersistMs, orderNo, tenantId, pricing.payAmount());

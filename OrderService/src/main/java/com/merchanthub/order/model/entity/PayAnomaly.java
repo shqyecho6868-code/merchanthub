@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 支付异常（表 pay_anomaly，V4）：支付成功但订单没能变成已支付，留给 E3 对账退款 */
+/** Payment anomaly (table pay_anomaly, V4): payment succeeded but the order couldn't become paid; left for E3 reconciliation/refund */
 @Data
 @TableName("pay_anomaly")
 public class PayAnomaly {

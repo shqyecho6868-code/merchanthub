@@ -13,9 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 商品上架审批的本地状态变更（D1）。每个方法一个短事务：状态 CAS + 状态流水一起提交。
- * <b>不在事务里调远程</b>：Feign 发起审批放在 {@link ProductListingService} 里、事务提交之后，
- * 否则 user-tenant 慢 3 秒，这行商品的行锁就被占 3 秒。
+ * Local status changes for product listing approval (D1). One short transaction per method: status CAS + status history committed together.
+ * <b>No remote calls inside the transaction</b>: the Feign call that starts the approval lives in {@link ProductListingService}, after the commit;
+ * otherwise if user-tenant is 3 seconds slow, this product row's lock is held for 3 seconds.
  */
 @Slf4j
 @Service
@@ -29,18 +29,18 @@ public class ListingStateService {
     private final ProductMapper productMapper;
     private final ProductStatusLogMapper logMapper;
 
-    /** 草稿 / 已驳回 → 审核中，开新一轮。返回提交后的商品（带新的 audit_round） */
+    /** Draft / rejected → under review, starting a new round. Returns the product after submission (with the new audit_round) */
     @Transactional
     public Product submit(long productId) {
         Product p = productMapper.selectById(productId);
         if (p == null) {
-            // 租户插件拼了 tenant_id：别的商家的商品在这里就是"不存在"
+            // The tenant plugin appended tenant_id: another merchant's product simply "doesn't exist" here
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "商品不存在");
         }
         if (!ProductStatus.submittable(p.getStatus())) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_SUBMITTABLE);
         }
-        // CAS 带上刚读到的旧状态：两个员工同时点"提交"，只有一个能成功，另一个不会再开出第二轮
+        // CAS with the old status just read: if two staff click "submit" at once, only one succeeds and the other can't open a second round
         if (productMapper.markSubmitted(productId, p.getStatus()) != 1) {
             throw new BusinessException(ErrorCode.PRODUCT_NOT_SUBMITTABLE);
         }
@@ -55,8 +55,8 @@ public class ListingStateService {
     }
 
     /**
-     * 回写审批结果（消息消费和补偿扫描共用这一个入口）。返回 false = 重复 / 过期的结果，什么都没改。
-     * 只有 CAS 成功才写流水：重复消息不会多出一条"已上架"流水。
+     * Write back the approval result (the single entry point shared by message consumption and the compensation scan). Returns false = duplicate / stale result, nothing changed.
+     * History is written only if the CAS succeeds: a duplicate message won't add an extra "listed" history row.
      */
     @Transactional
     public boolean applyResult(long productId, int round, boolean approved, String reason, String processInstanceId,

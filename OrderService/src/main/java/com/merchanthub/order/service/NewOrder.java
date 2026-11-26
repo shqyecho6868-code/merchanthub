@@ -3,8 +3,8 @@ package com.merchanthub.order.service;
 import java.time.LocalDateTime;
 
 /**
- * 一笔待落库的新订单（校验、计价、预占都已完成）。
- * 订单号在预占前就生成了，是预占和"订单已创建"事件共用的业务键。
+ * A new order ready to persist (validation, pricing, and reservation all done).
+ * The order number is generated before reservation and is the business key shared by the reservation and the "order created" event.
  */
 public record NewOrder(long orderNo, long tenantId, long buyerId, OrderPricing.Result pricing,
                        LocalDateTime createdAt, LocalDateTime expireAt) {

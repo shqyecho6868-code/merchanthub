@@ -1,9 +1,9 @@
 package com.merchanthub.order.model.vo;
 
 /**
- * @param orderStatus 订单当前状态；订单不存在为 null
- * @param processed   order 是否已经消费过这张支付单的"支付成功"事件（consumed_event 里有 eventId = payNo 的记录）。
- *                    处理过 = 订单已改成已支付，或已记进 pay_anomaly；没处理过 = 事件丢了，payment 需要补发
+ * @param orderStatus current order status; null if the order doesn't exist
+ * @param processed   whether order has already consumed this payment's "payment succeeded" event (consumed_event has a record with eventId = payNo).
+ *                    processed = order marked paid, or recorded in pay_anomaly; not processed = event lost, payment needs to re-send it
  */
 public record PayCheckResult(long payNo, long orderNo, Integer orderStatus, boolean processed) {
 }

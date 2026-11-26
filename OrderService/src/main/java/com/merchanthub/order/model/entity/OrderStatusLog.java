@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 订单状态流水（只插入不更新）（表 order_status_log）
+ * Order status log (insert-only, never updated) (table order_status_log)
  */
 @Data
 @TableName("order_status_log")
@@ -19,7 +19,7 @@ public class OrderStatusLog {
     private Long id;
 
     private Long orderNo;
-    /** 创建时为 null */
+    /** null on creation */
     private Integer fromStatus;
     private Integer toStatus;
     private String event;
@@ -28,7 +28,7 @@ public class OrderStatusLog {
     private String remark;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the DB default; null on insert, so MyBatis-Plus skips it */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

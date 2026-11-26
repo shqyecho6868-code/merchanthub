@@ -37,7 +37,7 @@ class OrderTxListenerTest {
         ReflectionTestUtils.setField(listener, "rollbackMinAgeSeconds", 30L);
     }
 
-    /** 默认消息已出生 60 秒 */
+    /** By default the message was born 60 seconds ago */
     private MessageExt checkMsg() {
         return checkMsg(60_000);
     }
@@ -81,14 +81,14 @@ class OrderTxListenerTest {
         assertThat(listener.checkLocalTransaction(checkMsg())).isEqualTo(LocalTransactionState.ROLLBACK_MESSAGE);
     }
 
-    /** 订单暂时查不到、但消息还很新：本地事务可能还没结束，不能判回滚 */
+    /** Order not found yet but the message is still fresh: the local transaction may not be done, so don't roll back */
     @Test
     void check_orderMissing_butMessageYoung_unknown() {
         when(mapper.exists(any())).thenReturn(false);
         assertThat(listener.checkLocalTransaction(checkMsg(5_000))).isEqualTo(LocalTransactionState.UNKNOW);
     }
 
-    /** 查库失败不能当成"订单不存在"去回滚，否则可能删掉一个已建好订单的消息 */
+    /** A DB query failure must not be treated as "order doesn't exist" and rolled back, or we might delete the message of an order that already exists */
     @Test
     void check_dbError_unknown_letBrokerRetry() {
         when(mapper.exists(any())).thenThrow(new QueryTimeoutException("db down"));

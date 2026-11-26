@@ -13,12 +13,12 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 下单请求。只收“买什么、买几个”；价格、金额、时间、商家全部由服务端决定（B1 笔记 5.1）。
- * buyerId 不在这里：从网关注入的 X-User-Id 请求头取，防止冒充。
+ * Order placement request. Only accepts "what and how many"; price, amounts, time, and merchant are all decided server-side (B1 notes 5.1).
+ * buyerId isn't here: it comes from the gateway-injected X-User-Id header, preventing impersonation.
  * <p>
- * tenantId（C2）：买家在哪个商家的店里下单。店铺页 / 确认页本来就知道是哪个店，所以前端一定能带上。
- * 它只用来<b>在入口按商家限流</b>（被限的请求不消耗任何下游资源）；真正落库的商家仍以 SKU 归属为准，
- * 两者不一致直接拒绝（SKU_TENANT_MISMATCH），不能靠改这个字段把订单记到别的商家名下。
+ * tenantId (C2): which merchant's store the buyer is ordering from. The store / checkout page already knows the store, so the frontend can always send it.
+ * It's used only for <b>per-merchant rate limiting at the entry</b> (throttled requests consume no downstream resources); the persisted merchant is still determined by SKU ownership,
+ * and a mismatch is rejected outright (SKU_TENANT_MISMATCH), so changing this field can't book an order under another merchant.
  */
 @Data
 @NoArgsConstructor
@@ -30,10 +30,10 @@ public class CreateOrderRequest {
     @Valid
     private List<Item> items;
 
-    /** 买家确认页看到的应付金额（分），可选；只用于比对，不参与计价 */
+    /** Amount payable (cents) shown to the buyer on the checkout page, optional; only used for comparison, not for pricing */
     private Long expectedPayAmount;
 
-    /** 下单的商家（C2，限流用的热点参数），必须和 SKU 归属一致 */
+    /** Merchant being ordered from (C2, the hot parameter for rate limiting); must match SKU ownership */
     @NotNull
     private Long tenantId;
 

@@ -10,7 +10,7 @@ import com.merchanthub.payment.client.OrderClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 冒烟：Flyway 在真实 MySQL 8 上建出 payment 表，幂等依赖的两个唯一键存在 */
+/** Smoke test: Flyway creates the payment tables on a real MySQL 8, and the two unique keys idempotency relies on exist */
 @SpringBootTest
 class SchemaIT extends IntegrationTestBase {
 

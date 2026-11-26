@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 
-/** 事件 ⇄ RocketMQ 消息。两种发送方案、消费者、事务回查都用这一套，保证格式一致 */
+/** Event <-> RocketMQ message. Both send strategies, the consumers, and transaction check-back all use this one codec to keep the format consistent */
 @Component
 @RequiredArgsConstructor
 public class OrderEventCodec {
@@ -43,10 +43,10 @@ public class OrderEventCodec {
     public Message toMessage(long eventId, long orderNo, long tenantId, String json) {
         Message msg = new Message(OrderEventTopics.TOPIC, OrderEventTopics.TAG_ORDER_CREATED,
                 json.getBytes(StandardCharsets.UTF_8));
-        // keys 建索引：控制台 / mqadmin 能按订单号或事件 ID 查到这条消息，排查问题时最常用
+        // Index the keys: the dashboard / mqadmin can find this message by order number or event ID, the most common lookup when troubleshooting
         msg.setKeys(orderNo + " " + eventId);
         msg.putUserProperty(OrderEventTopics.PROP_EVENT_ID, String.valueOf(eventId));
-        // C1：消息属于哪个商家，消费端据此恢复租户上下文
+        // C1: which merchant the message belongs to; consumers restore the tenant context from it
         return TenantMessages.stamp(msg, tenantId);
     }
 

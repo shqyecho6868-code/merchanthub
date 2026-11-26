@@ -1,5 +1,5 @@
 package com.merchanthub.order.model.vo;
 
-/** 内部接口返回的订单摘要（给 payment 建支付单用） */
+/** Order summary returned by the internal API (used by payment to create payments) */
 public record OrderBriefVO(long orderNo, long tenantId, long buyerId, int status, long payAmount) {
 }

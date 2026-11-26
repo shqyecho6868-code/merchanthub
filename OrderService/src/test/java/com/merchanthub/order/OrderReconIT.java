@@ -16,12 +16,12 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * E3：order 侧的 XXL-Job 任务。直接调任务入口（OrderJobs）/ 业务类，不起调度中心。
+ * E3: order-side XXL-Job tasks. Calls the task entry points (OrderJobs) / business classes directly, without an admin server.
  * <ul>
- *   <li>超时订单扫描：定时关单消息没来，过了截止时间 + 宽限期仍是待支付 → 兜底关单，并写 ORDER_CLOSED（库存据此释放）</li>
- *   <li>pay_anomaly：PAID_AFTER_CLOSED 等标记待退款 + 告警，<b>订单状态不动</b></li>
- *   <li>outbox 投递失败（status=2）告警；已发送记录归档</li>
- *   <li>对账用的内部查询接口：pay-check（支付成功事件处理过没有）、statuses（批量状态）</li>
+ *   <li>Timeout-order scan: the scheduled close message never came and the order is still pending past deadline + grace period -> fallback close, writing ORDER_CLOSED (inventory released from it)</li>
+ *   <li>pay_anomaly: PAID_AFTER_CLOSED etc. marked pending refund + alert, <b>order status untouched</b></li>
+ *   <li>outbox delivery failures (status=2) alerted; sent records archived</li>
+ *   <li>Internal query APIs for reconciliation: pay-check (was the payment-success event processed), statuses (batch status)</li>
  * </ul>
  */
 @SpringBootTest
@@ -48,8 +48,8 @@ class OrderReconIT extends OrderItSupport {
     }
 
     /**
-     * 场景：ORDER_TIMEOUT 定时消息丢了（outbox 标失败 / 进了死信），订单过期 1 小时仍是待支付、库存一直被占着。
-     * 结论：扫描兜底关单 + 写 ORDER_CLOSED 事件；宽限期内的订单不碰；重复执行不会重复关单（CAS 幂等）
+     * Scenario: the ORDER_TIMEOUT scheduled message was lost (outbox marked failed / sent to the DLQ); the order is still pending 1 hour past expiry with inventory held.
+     * Conclusion: the scan closes it as a fallback + writes the ORDER_CLOSED event; orders within the grace period are untouched; reruns don't close twice (CAS is idempotent)
      */
     @Test
     void timeoutScan_closesExpiredPendingOrders_once() {
@@ -61,21 +61,21 @@ class OrderReconIT extends OrderItSupport {
         jobs.timeoutScan();
 
         assertThat(status(expired)).isEqualTo(50);
-        assertThat(status(inGrace)).isEqualTo(10);   // 宽限期 5 分钟内：定时消息可能还在路上
+        assertThat(status(inGrace)).isEqualTo(10);   // within the 5-minute grace period: the scheduled message may still be in flight
         Map<String, Object> closed = jdbc.queryForMap(
                 "SELECT payload FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", String.valueOf(expired));
         assertThat((String) closed.get("payload")).contains("\"buyerId\": " + BUYER).contains("PAY_TIMEOUT");
         assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ? AND remark LIKE '%扫描兜底%'", expired))
                 .isEqualTo(1);
 
-        jobs.timeoutScan();   // 再跑一轮：订单已不是待支付，什么也不做
+        jobs.timeoutScan();   // another round: the order is no longer pending, nothing happens
         assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", String.valueOf(expired)))
                 .isEqualTo(1);
     }
 
     /**
-     * 场景：订单超时关闭后，钱才到（PAID_AFTER_CLOSED），消费端已记 pay_anomaly。
-     * 结论：对账把它标成"待退款"（handle_status=2）并告警；订单仍是已关闭 —— 不能复活，库存早已释放
+     * Scenario: money arrives after the order was closed for timeout (PAID_AFTER_CLOSED); the consumer already recorded pay_anomaly.
+     * Conclusion: reconciliation marks it "pending refund" (handle_status=2) and alerts; the order stays closed -- it can't be revived, inventory was released long ago
      */
     @Test
     void payAnomaly_markedRefundPending_orderUntouched() {
@@ -96,12 +96,12 @@ class OrderReconIT extends OrderItSupport {
                 .containsExactly("PAID_AFTER_CLOSED", "DUPLICATE_PAYMENT", "PAY_MISMATCH");
         assertThat(status(orderNo)).isEqualTo(50);
 
-        // 再跑一轮：已处理的不再告警
+        // Another round: already-handled ones aren't alerted again
         assertThat(reconciler.reconcile().anomaliesMarked()).isZero();
         assertThat(count("SELECT COUNT(*) FROM recon_exception")).isEqualTo(3);
     }
 
-    /** outbox 重试满上限（status=2）：告警一次，不重复刷屏 */
+    /** outbox retries hit the limit (status=2): alert once, without flooding */
     @Test
     void failedOutbox_alertedOnce() {
         jdbc.update("INSERT INTO order_outbox (tenant_id, event_id, biz_key, topic, tag, payload, status, retry_count, next_retry_at, last_error)"
@@ -111,14 +111,14 @@ class OrderReconIT extends OrderItSupport {
         assertThat(reconciler.reconcile().outboxFailedAlerted()).isZero();
     }
 
-    /** 归档：只搬"已发送且超过保留期"的；待发送（0）即使很老也必须留在主表 */
+    /** Archiving: only moves "sent and past retention"; pending (0) must stay in the main table even if very old */
     @Test
     void archive_movesOnlyOldSentRows() {
         String sql = "INSERT INTO order_outbox (tenant_id, event_id, biz_key, topic, tag, payload, status, retry_count, next_retry_at, sent_at)"
                 + " VALUES (?, ?, 'k', 'ORDER_EVENT', 'ORDER_PAID', '{}', ?, 0, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3) - INTERVAL ? DAY)";
-        jdbc.update(sql, TENANT, 11, 1, 10);   // 已发送 10 天 → 归档
-        jdbc.update(sql, TENANT, 12, 1, 1);    // 已发送 1 天 → 保留
-        jdbc.update(sql, TENANT, 13, 0, 10);   // 待发送 → 保留
+        jdbc.update(sql, TENANT, 11, 1, 10);   // sent 10 days ago -> archived
+        jdbc.update(sql, TENANT, 12, 1, 1);    // sent 1 day ago -> kept
+        jdbc.update(sql, TENANT, 13, 0, 10);   // pending -> kept
 
         jobs.outboxArchive();
 
@@ -126,7 +126,7 @@ class OrderReconIT extends OrderItSupport {
         assertThat(jdbc.queryForList("SELECT event_id FROM order_outbox_archive", Long.class)).containsExactly(11L);
     }
 
-    /** pay-check 按消费去重表回答"这张支付单的事件 order 处理过没有"；statuses 批量回状态 */
+    /** pay-check answers "has order processed this payment's event" from the consumer dedup table; statuses returns statuses in batch */
     @Test
     void internalQueries_forReconciliation() {
         long orderNo = newOrder();
@@ -147,6 +147,6 @@ class OrderReconIT extends OrderItSupport {
 
     @Test
     void outboxRelayJob_runs() {
-        jobs.outboxRelay();   // 没有到期记录也能正常结束
+        jobs.outboxRelay();   // finishes normally even with no due records
     }
 }

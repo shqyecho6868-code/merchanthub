@@ -11,10 +11,10 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 消息发送权限校验响应
+ * Message send permission check response
  *
- * 用于返回消息发送权限校验结果
- * 供 UserService、RealTimeService共用
+ * Carries the result of the message send permission check
+ * Shared by UserService and RealTimeService
  */
 @Data
 @Builder
@@ -26,28 +26,28 @@ public class MessageValidateResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 是否允许发送
+     * Whether sending is allowed
      */
     private boolean allowed;
 
     /**
-     * 拒绝原因（可选）
-     * 如：NOT_FRIEND, BLOCKED_BY_RECEIVER, FRIEND_DELETED 等
-     * 使用 ValidationError.name() 获取
+     * Reject reason (optional)
+     * e.g. NOT_FRIEND, BLOCKED_BY_RECEIVER, FRIEND_DELETED
+     * Obtained via ValidationError.name()
      * @see ValidationError
      */
     private String rejectReason;
 
     /**
-     * 错误码（可选）
-     * 91001-91008 范围
-     * 使用 ValidationError.getCode() 获取
+     * Error code (optional)
+     * Range 91001-91008
+     * Obtained via ValidationError.getCode()
      * @see ValidationError
      */
     private Integer errorCode;
 
     /**
-     * 创建允许响应
+     * Create an "allowed" response
      */
     public static MessageValidateResponse allow() {
         return MessageValidateResponse.builder()
@@ -56,11 +56,11 @@ public class MessageValidateResponse implements Serializable {
     }
 
     /**
-     * 创建拒绝响应
+     * Create a "rejected" response
      *
-     * @param errorCode    错误码（使用 ValidationError.getCode()）
-     * @param rejectReason 拒绝原因（使用 ValidationError.name()）
-     * @return 拒绝响应
+     * @param errorCode    error code (use ValidationError.getCode())
+     * @param rejectReason reject reason (use ValidationError.name())
+     * @return the rejected response
      */
     public static MessageValidateResponse reject(Integer errorCode, String rejectReason) {
         return MessageValidateResponse.builder()

@@ -6,11 +6,11 @@ import org.springframework.data.redis.serializer.RedisSerializer;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Redis key 自动加租户前缀（C1）："cart:sku:101" → "t:7:cart:sku:101"。读回 key（如 scan / keys）时去掉前缀。
+ * Automatically adds the tenant prefix to Redis keys (C1): "cart:sku:101" → "t:7:cart:sku:101". Strips the prefix when keys are read back (e.g. scan / keys).
  * <p>
- * 为什么做在序列化器里而不是让每个调用方自己拼：拼 key 是散落在各处的字符串操作，漏一处就串租户；
- * 序列化器是所有命令的必经之路，用了 {@link TenantRedis} 就不可能忘。
- * 没有商家上下文时直接报错（同 SQL 的 fail-closed）。
+ * Why in the serializer instead of each caller building keys: key building is string concatenation scattered everywhere, and missing one spot leaks across tenants;
+ * the serializer sits on every command's path, so with {@link TenantRedis} it's impossible to forget.
+ * Fails immediately when there is no merchant context (same fail-closed rule as SQL).
  */
 public class TenantKeySerializer implements RedisSerializer<String> {
 

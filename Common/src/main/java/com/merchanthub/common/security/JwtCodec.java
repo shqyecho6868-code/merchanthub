@@ -15,25 +15,25 @@ import java.util.Base64;
 import java.util.Date;
 
 /**
- * JWT 签发与校验（D1：替换旧的静态 JwtUtil）。
+ * JWT issuing and verification (D1: replaces the old static JwtUtil).
  * <p>
- * 和旧代码的两处区别：
+ * Two differences from the old code:
  * <ol>
- *   <li><b>密钥来自配置</b>（{@code merchanthub.jwt.secret}），不再写死在 CommonConstant：
- *       写死在代码里 = 所有能看到仓库的人都能签发任意身份的 token；而且开发 / 生产无法用不同密钥</li>
- *   <li><b>只接受补齐的标准 Base64</b>：旧密钥 62 个字符、没补 "="，jjwt 的宽松解码器会多解出一个字节，
- *       openssl / base64 命令会丢掉那个字节，两边算出的签名对不上（P26）。这里长度不是 4 的倍数直接启动失败</li>
+ *   <li><b>The secret comes from config</b> ({@code merchanthub.jwt.secret}) instead of being hard-coded in CommonConstant:
+ *       hard-coded = anyone who can see the repo can mint a token for any identity, and dev / prod can't use different secrets</li>
+ *   <li><b>Only padded standard Base64 is accepted</b>: the old secret had 62 characters with no "=" padding; jjwt's lenient decoder yields one extra byte,
+ *       while openssl / base64 drop it, so the two sides computed different signatures (P26). Here a length that isn't a multiple of 4 fails at startup</li>
  * </ol>
- * 网关只调 {@link #parse}，只有 user-tenant 调 {@link #issue}。
+ * The gateway only calls {@link #parse}; only user-tenant calls {@link #issue}.
  */
 @Slf4j
 public final class JwtCodec {
 
-    /** JWT 里的身份字段名（C1）。网关解析后转成 X-Tenant-Id / X-Role 请求头 */
+    /** Identity claim names in the JWT (C1). The gateway turns them into X-Tenant-Id / X-Role headers after parsing */
     public static final String CLAIM_TENANT_ID = "tenantId";
     public static final String CLAIM_ROLE = "role";
 
-    /** HS256 的密钥至少 256 位，短了 jjwt 会拒绝；这里提前给出看得懂的报错 */
+    /** HS256 needs a key of at least 256 bits, otherwise jjwt rejects it; fail early here with a readable message */
     static final int MIN_KEY_BYTES = 32;
 
     private final Key key;
@@ -64,10 +64,10 @@ public final class JwtCodec {
     }
 
     /**
-     * 签发带身份的 token：subject = userId，另带 role，商家角色再带 tenantId。
-     * 身份放进签名过的 token 里，客户端改不了；网关只信 token，不信客户端自己带的请求头。
+     * Issue a token carrying identity: subject = userId, plus role, plus tenantId for merchant roles.
+     * Identity lives inside a signed token so the client can't alter it; the gateway trusts only the token, never headers the client sends itself.
      *
-     * @param tenantId 商家角色必填；买家 / 平台管理员传 null
+     * @param tenantId required for merchant roles; null for buyers / platform admins
      */
     public String issue(long userId, Long tenantId, String role, Duration ttl) {
         Date now = new Date();
@@ -83,7 +83,7 @@ public final class JwtCodec {
         return builder.compact();
     }
 
-    /** 签名对、没过期 → claims；否则 null（调用方只需要"能不能信"，不需要区分原因，原因记在日志里） */
+    /** Valid signature and not expired → claims; otherwise null (callers only need "can I trust it", not why; the reason goes to the log) */
     public Claims parse(String token) {
         if (token == null || token.isBlank()) {
             return null;

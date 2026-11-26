@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 
-/** 有 Redis 的服务才装配（同 SnowflakeAutoConfiguration 的理由：要等 Redis 自动装配之后再判断） */
+/** Only wired in services with Redis (same reason as SnowflakeAutoConfiguration: the check must run after Redis auto-configuration) */
 @AutoConfiguration(after = RedisAutoConfiguration.class)
 @ConditionalOnClass(RedisConnectionFactory.class)
 @ConditionalOnBean(RedisConnectionFactory.class)

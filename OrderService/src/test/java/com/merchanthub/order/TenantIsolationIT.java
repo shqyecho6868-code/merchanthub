@@ -24,11 +24,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * C1 集成测试：订单的租户隔离 + RBAC（MockMvc → 拦截器 → Controller → 租户插件 → 真实 MySQL）。
- * 场景：买家 1001 在商家 7 下了订单 O7，在商家 8 下了订单 O8。
+ * C1 integration test: order tenant isolation + RBAC (MockMvc -> interceptor -> Controller -> tenant plugin -> real MySQL).
+ * Scenario: buyer 1001 placed order O7 at merchant 7 and order O8 at merchant 8.
  * <p>
- * 结论：商家 7 的员工拿 O8 的订单号来查，返回"订单不存在"—— Controller 和 Service 里都没写 tenant_id，
- * 是租户插件把 SQL 改成了 {@code WHERE order_no = O8 AND tenant_id = 7}。
+ * Conclusion: when merchant 7's staff queries O8's order number, it returns "Order not found" -- neither Controller nor Service writes tenant_id;
+ * the tenant plugin rewrote the SQL to {@code WHERE order_no = O8 AND tenant_id = 7}.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 @AutoConfigureMockMvc
@@ -46,7 +46,7 @@ class TenantIsolationIT extends OrderItSupport {
 
     @Override
     protected boolean defaultSystemContext() {
-        return false;   // 用例要测"没带身份"的请求，测试线程上不能预置身份
+        return false;   // the cases test requests "without identity", so no identity may be preset on the test thread
     }
 
     @BeforeEach
@@ -73,12 +73,12 @@ class TenantIsolationIT extends OrderItSupport {
         mvc.perform(as(get("/orders/" + o8), TENANT, 2002, "MERCHANT_STAFF"))
                 .andExpect(jsonPath("$.code").value(40400))
                 .andExpect(jsonPath("$.data").doesNotExist());
-        // 反过来也一样
+        // And vice versa
         mvc.perform(as(get("/orders/" + o7), OTHER_TENANT, 3001, "MERCHANT_ADMIN"))
                 .andExpect(jsonPath("$.code").value(40400));
     }
 
-    /** 请求头里伪造 tenantId 能不能绕过？—— 下游信任请求头，所以必须靠网关清洗（见 AuthorizeFilterTest）。这里证明的是"头说了算" */
+    /** Can a forged tenantId request header bypass it? -- downstreams trust the header, so the gateway must sanitize it (see AuthorizeFilterTest). This proves "the header decides" */
     @Test
     void contextComesFromHeaders() throws Exception {
         mvc.perform(as(get("/orders/" + o8), OTHER_TENANT, 3001, "MERCHANT_ADMIN"))
@@ -95,20 +95,20 @@ class TenantIsolationIT extends OrderItSupport {
     void buyer_seesOwnOrdersAcrossTenants_butNotOthers() throws Exception {
         mvc.perform(as(get("/orders/mine/" + o7), null, BUYER, "BUYER")).andExpect(jsonPath("$.data.tenantId").value(TENANT));
         mvc.perform(as(get("/orders/mine/" + o8), null, BUYER, "BUYER")).andExpect(jsonPath("$.data.tenantId").value(OTHER_TENANT));
-        // 另一个买家拿 O7 的订单号来查：按 buyer_id 过滤，查不到
+        // Another buyer queries O7's order number: filtered by buyer_id, not found
         mvc.perform(as(get("/orders/mine/" + o7), null, 1002, "BUYER")).andExpect(jsonPath("$.code").value(40400));
     }
 
     @Test
     void rbac() throws Exception {
-        // 买家调商家后台接口 → 403
+        // Buyer calls a merchant back-office API -> 403
         mvc.perform(as(get("/orders/" + o7), null, BUYER, "BUYER")).andExpect(status().isForbidden());
-        // 商家员工调下单接口（买家专用）→ 403
+        // Merchant staff calls the order placement API (buyers only) -> 403
         mvc.perform(as(post("/orders"), TENANT, 2002, "MERCHANT_STAFF").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"tenantId\":7,\"items\":[{\"skuId\":101,\"quantity\":1}]}")).andExpect(status().isForbidden());
-        // 没有身份 → 401
+        // No identity -> 401
         mvc.perform(get("/orders/" + o7)).andExpect(status().isUnauthorized());
-        // 身份头自相矛盾（商家角色没有 tenantId）→ 401
+        // Contradictory identity headers (merchant role without tenantId) -> 401
         mvc.perform(as(get("/orders/" + o7), null, 2002, "MERCHANT_STAFF")).andExpect(status().isUnauthorized());
     }
 
@@ -121,7 +121,7 @@ class TenantIsolationIT extends OrderItSupport {
                 .andExpect(status().isBadRequest());
     }
 
-    /** fail-closed：一个没有任何上下文的线程（比如忘了设置的线程池）去查订单 → 报错，而不是返回全部商家的订单 */
+    /** fail-closed: a thread with no context at all (e.g. a thread pool someone forgot to set up) querying orders -> error, rather than returning every merchant's orders */
     @Test
     void noContextThread_failsClosed() {
         CompletableFuture<Long> f = CompletableFuture.supplyAsync(() -> ordersMapper.selectCount(null));

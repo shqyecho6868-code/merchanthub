@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
 
-/** 订阅 payment 的"支付成功"事件。E3：最后一次重试仍失败时（即将进死信）告警并记 recon_exception */
+/** Subscribes to payment's "payment succeeded" event. E3: when the last retry still fails (about to go to the DLQ), alert and record recon_exception */
 @Slf4j
 @Configuration
 @ConditionalOnProperty(name = "merchanthub.order.pay-consumer.enabled", havingValue = "true", matchIfMissing = true)
@@ -39,7 +39,7 @@ public class PaySuccessConsumerConfig {
         consumer.subscribe(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                // traceId: restore the sender's trace ID so every log for this message (including the redelivery warn below) carries it; restored afterwards since consumer threads are reused
                 try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
                     PaySuccessEvent event;
                     try {
@@ -49,17 +49,17 @@ public class PaySuccessConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1：按消息里的商家恢复租户上下文再处理，处理完还原（消费线程是复用的）
+                        // C1: restore the tenant context from the merchant in the message before processing, and restore afterwards (consumer threads are reused)
                         TenantMessages.consumeAs(m, () -> service.handle(event));
                     } catch (OrderNotVisibleException e) {
                         log.warn("订单尚不可见，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                                 event.eventId(), event.orderNo(), m.getReconsumeTimes());
-                        // 订单始终不出现（重试 16 次约 4 小时 46 分）：进死信前告警，交给对账
+                        // Order never appears (16 retries, about 4h46m): alert before it goes to the DLQ and hand it to reconciliation
                         DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,
                                 consumer.getMaxReconsumeTimes(), event.tenantId(), e);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;
                     } catch (RuntimeException e) {
-                        // 数据库不可用等：整个事务（含去重记录）已回滚，让 RocketMQ 稍后重投
+                        // DB unavailable etc.: the whole transaction (including the dedup record) has rolled back; let RocketMQ redeliver later
                         log.warn("处理支付成功事件失败，稍后重投 eventId={} orderNo={} reconsumeTimes={}",
                                 event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
                         DeadLetters.onFailure(alarm.getIfAvailable(), OrderPaidService.CONSUMER_GROUP, m,

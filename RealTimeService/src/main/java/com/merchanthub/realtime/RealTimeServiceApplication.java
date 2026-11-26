@@ -6,9 +6,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 /**
- * realtime：订单事件实时推送（E1）。商家收到新订单提醒，买家收到订单状态变化。
- * 多节点部署：用户连在哪台节点记在 Redis 路由表，订单事件由任意节点消费后按路由表转发到用户所在节点；
- * 每条推送先落库（offline_message）再投递，送达才标记，没送达的上线后补发。
+ * realtime: real-time push of order events (E1). Merchants get new-order alerts, buyers get order status changes.
+ * Multi-node deployment: which node a user is connected to is recorded in a Redis route table; any node consumes an order event and forwards it to the user's node via the route table;
+ * every push is persisted first (offline_message) and then delivered, marked only once delivered; undelivered ones are redelivered when the user comes online.
  */
 @SpringBootApplication(scanBasePackages = {"com.merchanthub.realtime", "com.merchanthub.common"})
 @EnableConfigurationProperties(RealtimeProperties.class)

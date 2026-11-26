@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 订单（表 orders）
+ * Order (table orders)
  */
 @Data
 @TableName("orders")
@@ -20,9 +20,9 @@ public class Orders {
 
     private Long orderNo;
     private Long buyerId;
-    /** 见 OrderStatus */
+    /** See OrderStatus */
     private Integer status;
-    /** 金额单位一律为分 */
+    /** All amounts are in cents */
     private Long totalAmount;
     private Long discountAmount;
     private Long payAmount;
@@ -34,7 +34,7 @@ public class Orders {
     private String closeReason;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the DB default; null on insert, so MyBatis-Plus skips it */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

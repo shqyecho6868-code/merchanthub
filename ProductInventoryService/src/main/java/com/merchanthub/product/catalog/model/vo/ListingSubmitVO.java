@@ -1,5 +1,5 @@
 package com.merchanthub.product.catalog.model.vo;
 
-/** @param processInstanceId 为空表示审批还在发起中（user-tenant 暂时不可用），系统会自动重试，商家不需要重新提交 */
+/** @param processInstanceId null means the approval is still being started (user-tenant temporarily unavailable); the system retries automatically and the merchant doesn't need to resubmit */
 public record ListingSubmitVO(long productId, int auditRound, int status, String processInstanceId) {
 }

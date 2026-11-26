@@ -28,8 +28,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * order 集成测试公共夹具：真实 MySQL / Redis / RocketMQ，product-inventory 用 Mockito 替身。
- * 每个用例前清空订单相关表，商品目录重置为两个 SKU。
+ * Shared fixture for order integration tests: real MySQL / Redis / RocketMQ, with a Mockito stand-in for product-inventory.
+ * Before each case the order tables are cleared and the product catalog is reset to two SKUs.
  */
 abstract class OrderItSupport extends IntegrationTestBase {
 
@@ -59,13 +59,13 @@ abstract class OrderItSupport extends IntegrationTestBase {
     private TenantContext.Scope tenantScope;
 
     /**
-     * C1：租户插件 fail-closed，没有上下文的线程碰业务表会报错。这些用例直接在测试线程上调 service（相当于绕过了
-     * Web / MQ 入口），默认给测试线程一个跨租户的 SYSTEM 身份；租户隔离本身由 TenantIsolationIT 专门验证。
-     * 走真实 MQ 的用例，消费线程上的上下文仍然要靠消息里的 tenantId 恢复，不受这里影响。
+     * C1: the tenant plugin is fail-closed; a thread without context touching business tables throws. These cases call services directly on the test thread (bypassing
+     * the Web / MQ entry points), so by default the test thread gets a cross-tenant SYSTEM identity; tenant isolation itself is verified by TenantIsolationIT.
+     * For cases going through real MQ, the consumer thread's context is still restored from the tenantId in the message, unaffected by this.
      */
     /**
-     * 走 MockMvc 的用例覆盖成 false：MockMvc 在测试线程上执行请求，测试线程上已有的 SYSTEM 身份会让
-     * "没带身份头的请求"看起来像有身份，401 / 403 的用例就测不准了
+     * MockMvc cases override this to false: MockMvc runs requests on the test thread, and an existing SYSTEM identity there would make
+     * "requests without identity headers" look authenticated, breaking the 401 / 403 cases
      */
     protected boolean defaultSystemContext() {
         return true;
@@ -83,7 +83,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
         }
     }
 
-    /** C2：Sentinel 规则 / 熔断状态是 JVM 全局的，每个用例按本上下文的配置重置，避免别的测试类留下的"已熔断"影响这里 */
+    /** C2: Sentinel rules / breaker state are JVM-global; reset per case from this context's config so an "open breaker" left by another test class doesn't leak in */
     @BeforeEach
     void resetSentinel() {
         sentinelRules.reload();
@@ -122,7 +122,7 @@ abstract class OrderItSupport extends IntegrationTestBase {
         return s;
     }
 
-    /** 下单请求；tenantId 取第一个 SKU 的商家（SKU 不在目录里时用 TENANT），和真实前端"在哪个店下单"一致 */
+    /** Order request; tenantId is the first SKU's merchant (TENANT if the SKU isn't in the catalog), matching a real frontend's "which store you're ordering in" */
     protected CreateOrderRequest req(Long expected, long... skuQty) {
         List<CreateOrderRequest.Item> items = new ArrayList<>();
         for (int i = 0; i < skuQty.length; i += 2) {

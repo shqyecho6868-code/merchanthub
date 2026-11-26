@@ -1,6 +1,6 @@
 server:
   port: 8106
-  # F1：让 Micrometer 能读到 Tomcat 线程池指标（busy / max），压测时判断是不是线程池先满
+  # F1: let Micrometer read Tomcat thread pool metrics (busy / max) to tell during load tests whether the thread pool saturates first
   tomcat:
     mbeanregistry:
       enabled: true
@@ -12,20 +12,20 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 连接池保持 Hikari 默认 10，不要随手调大（F1 实测，docs/perf-report.md 第 5 节）：调到 30 后 COMMIT 6ms → 16ms、
-    # 行锁等待 59s → 890s，吞吐反而下降。瓶颈在数据库（提交刷盘 + 库存行锁），池子排队只是症状；池子变大等于把排队挪进数据库
-  # 表结构由 Flyway 管理（db/migration/V*.sql），与 order 服务一致（D26）。B3 之前 spring.sql.init 建的库没有 Flyway 历史表：
-  # baseline-on-migrate 把这种已有库记为 V1，只执行 V2 起的脚本；空库则从 V1 正常执行
+    # Keep the Hikari pool at its default of 10; don't casually enlarge it (measured in F1, docs/perf-report.md section 5): at 30, COMMIT went 6ms → 16ms,
+    # row-lock wait 59s → 890s, and throughput dropped. The bottleneck is the database (commit flush + inventory row locks); pool queuing is only a symptom, and a bigger pool just moves the queue into the database
+  # Schema is managed by Flyway (db/migration/V*.sql), same as the order service (D26). Databases created by spring.sql.init before B3 have no Flyway history table:
+  # baseline-on-migrate records such an existing database as V1 and only runs scripts from V2 on; an empty database runs from V1 as usual
   cloud:
     openfeign:
       client:
         config:
-          # 跨服务调用必须有超时：悬空扫描查订单，order 慢了这一批就跳过，下一轮再查
-          # key 是 @FeignClient 的 contextId（inventoryOrderClient），不是服务名（C2 修，P29）
+          # Cross-service calls must have timeouts: the dangling scan queries orders; if order is slow, skip this batch and check again next round
+          # The key is the @FeignClient contextId (inventoryOrderClient), not the service name (fixed in C2, P29)
           inventoryOrderClient:
             connect-timeout: 1000
             read-timeout: 3000
-          # D1：发起 / 反查上架审批。超时后不重试，交给补偿扫描（发起接口幂等，补偿重发安全）
+          # D1: start / query listing approvals. No retry after a timeout — left to the compensation scan (the start API is idempotent, so re-sending is safe)
           productListingApprovalClient:
             connect-timeout: 1000
             read-timeout: 3000
@@ -49,23 +49,23 @@ mybatis-plus:
 merchanthub:
   inventory:
     settle-consumer:
-      # 订阅订单的 ORDER_PAID / ORDER_CLOSED，做确认扣减 / 释放（B3-下）
+      # Subscribe to order's ORDER_PAID / ORDER_CLOSED to confirm-deduct / release (B3-下)
       enabled: true
     reservation-recon:
-      # 预占对账（E3，原 B3-下悬空预占扫描）：预占超过 older-than 仍是 RESERVED → 按订单真实状态释放 / 确认。
-      # 由 XXL-Job 的 reservationReconJob 触发，频率在调度中心配。
-      # 必须远大于下单事务超时（5 秒）：过了这么久还查不到订单，才能确定它以后也不会出现。
-      # 还要大于订单支付时限（15m）+ 余量：正常的待支付订单本来就占着库存，不该每轮都被捞出来问一遍
+      # Reservation reconciliation (E3, formerly B3-下's dangling-reservation scan): reservations still RESERVED after older-than → release / confirm based on the order's real status.
+      # Triggered by XXL-Job's reservationReconJob; the frequency is configured in the admin.
+      # Must be much larger than the order-placement transaction timeout (5 s): only after this long can a missing order be considered never coming.
+      # Must also exceed the order payment window (15m) plus margin: normal pending-payment orders legitimately hold stock and shouldn't be fetched and queried every round
       older-than: 30m
       batch-size: 100
   product:
     listing-result-consumer:
-      # 订阅 user-tenant 的上架审批结果，回写商品状态（D1）
+      # Subscribe to user-tenant's listing approval results and write back the product status (D1)
       enabled: true
     listing-compensate:
-      # "审核中"超过 older-than 还没结果 → 反查 user-tenant：消息丢了就按反查回写，没发起成功就重新发起（D1）。
-      # E3 起由 XXL-Job 的 listingCompensateJob 触发
-      # 远大于"审批结束 → 消息到达"的正常耗时（秒级），避免和正常消费抢；又不能太长，否则消息丢了商家要等很久
+      # "Under review" with no result after older-than → query user-tenant: if the message was lost, write back from the query; if the start never succeeded, start it again (D1).
+      # Triggered by XXL-Job's listingCompensateJob since E3
+      # Much longer than the normal "approval finished → message arrives" latency (seconds), to avoid racing normal consumption; but not too long, or merchants wait ages when a message is lost
       older-than: 2m
       batch-size: 100
   job:
@@ -74,9 +74,9 @@ merchanthub:
       appname: product-inventory
       port: 9203
 
-# F1：压测监控。只暴露 health 和 prometheus（不暴露 env / heapdump 等敏感端点）；
-# 服务端口不经网关对外，/actuator 不在网关路由里，外部访问不到。
-# http.server.requests 开直方图桶，Prometheus 才能用 histogram_quantile 算 P99（默认只有 count / sum / max）
+# F1: load-test monitoring. Only health and prometheus are exposed (not sensitive endpoints like env / heapdump);
+# service ports aren't exposed through the gateway and /actuator isn't in the gateway routes, so it's unreachable from outside.
+# Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (by default there's only count / sum / max)
 management:
   endpoints:
     web:
@@ -89,7 +89,7 @@ management:
       percentiles-histogram:
         http.server.requests: true
 
-# 本地 / 测试日志也带 traceId 和 tenantId（和 application-aws.yml 同一格式）：按 traceId 搜就能串起一张订单经过的 HTTP → Feign → MQ 消费
+# Local / test logs also carry traceId and tenantId (same format as application-aws.yml): searching by traceId stitches together one order's HTTP → Feign → MQ consumption
 logging:
   pattern:
     level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

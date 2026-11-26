@@ -1,9 +1,9 @@
 package com.merchanthub.order.mq.payment;
 
 /**
- * 支付成功事件到了，订单却还查不到（回调早于订单落库 / 提交）。
- * 抛它是为了让整个消费事务回滚 —— 包括刚插入的 consumed_event 去重记录 —— 再由 RocketMQ 稍后重投。
- * 只 return RECONSUME_LATER 而让事务提交的话，重投时会被去重记录挡住当成"处理过了"，事件照样丢。
+ * A payment-success event arrived but the order can't be found yet (callback before the order was persisted / committed).
+ * It's thrown to roll back the whole consumer transaction -- including the just-inserted consumed_event dedup record -- so RocketMQ redelivers later.
+ * Just returning RECONSUME_LATER while committing the transaction would let the dedup record block the redelivery as "already processed", losing the event anyway.
  */
 public class OrderNotVisibleException extends RuntimeException {
 

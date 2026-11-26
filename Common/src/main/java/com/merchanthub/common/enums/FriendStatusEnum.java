@@ -1,36 +1,36 @@
 package com.merchanthub.common.enums;
 
 /**
- * 好友状态枚举
+ * Friend status enum
  *
- * 用于消息校验时判断好友关系状态
- * 统一 UserService、RealTimeService 的好友状态定义
+ * Used during message validation to check the friend relationship
+ * Shared friend status definition for UserService and RealTimeService
  *
- * 数据库存储值说明：
- * - 0: 正常好友关系
- * - 1: 已拉黑
- * - 2: 已删除
+ * Stored database values:
+ * - 0: normal friendship
+ * - 1: blocked
+ * - 2: deleted
  */
 public enum FriendStatusEnum {
 
     /**
-     * 好友状态：非好友关系
-     * 特殊值，用于缓存标记"查询不到好友记录"的情况
+     * Friend status: not friends
+     * Special value used to cache "no friend record found"
      */
     NON_FRIEND(-1, "非好友"),
 
     /**
-     * 好友状态：正常好友关系
+     * Friend status: normal friendship
      */
     NORMAL(0, "好友"),
 
     /**
-     * 好友状态：已拉黑
+     * Friend status: blocked
      */
     BLOCKED(1, "拉黑"),
 
     /**
-     * 好友状态：已删除
+     * Friend status: deleted
      */
     DELETED(2, "删除");
 

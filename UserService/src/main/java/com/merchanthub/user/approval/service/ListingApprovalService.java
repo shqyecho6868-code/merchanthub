@@ -19,8 +19,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 商品上架审批的发起与结果查询（product 经 Feign 调用的内部接口）。
- * 商家 ID 一律取自请求头身份（TenantContext），不信请求体：商家 7 的 product 请求发起不了商家 8 的审批。
+ * Starting product listing approvals and querying results (internal endpoints called by product via Feign).
+ * The merchant ID always comes from the identity headers (TenantContext), never the request body: a product request from merchant 7 can't start an approval for merchant 8.
  */
 @Slf4j
 @Service
@@ -31,11 +31,11 @@ public class ListingApprovalService {
     private final RuntimeService runtimeService;
 
     /**
-     * 发起（幂等）：同一个 (商家, 商品, 轮次) 已经发起过就直接返回原来的实例。
-     * product 的 Feign 超时重试、补偿扫描都会重复调这里 —— 超时不代表没发起成功。
+     * Start (idempotent): if the same (merchant, product, round) was already started, return the existing instance.
+     * product's Feign timeout retries and compensation scans both call this repeatedly -- a timeout doesn't mean the start failed.
      * <p>
-     * 并发的两次重复调用都查不到 → 都启动实例 → 插审批单时唯一键冲突，后一个整个事务回滚（连同它启动的实例），
-     * 调用方（Controller）捕获后再查一次，拿到先成功那个的实例 ID。
+     * Two concurrent duplicate calls both find nothing -> both start an instance -> the unique key conflicts when inserting the approval record, and the later whole transaction rolls back (including the instance it started);
+     * the caller (Controller) catches it and queries again to get the instance ID of the one that succeeded first.
      */
     @Transactional
     public String start(long productId, int round, String productName) {
@@ -68,13 +68,13 @@ public class ListingApprovalService {
         return pi.getId();
     }
 
-    /** 只读查询，单独一个事务外的方法：start 冲突回滚后，Controller 用它查先成功的那一个 */
+    /** Read-only query, a separate method outside the transaction: after start rolls back on conflict, the Controller uses it to find the one that succeeded first */
     public String existingInstance(long productId, int round) {
         ListingApproval row = find(TenantContext.requireTenantId(), productId, round);
         return row == null ? null : row.getProcessInstanceId();
     }
 
-    /** product 补偿扫描反查：消息丢了 / 一直没回写时，以这里为准 */
+    /** Lookup for product's compensation scan: when the message is lost / never written back, this is the source of truth */
     public ListingResultVO result(long productId, int round) {
         ListingApproval row = find(TenantContext.requireTenantId(), productId, round);
         if (row == null) {
@@ -89,7 +89,7 @@ public class ListingApprovalService {
     }
 
     private ListingApproval find(long tenantId, long productId, int round) {
-        // 租户插件还会再拼一次 tenant_id = 当前商家；这里显式写出来是为了读代码的人一眼看懂唯一键
+        // The tenant plugin appends tenant_id = current merchant again anyway; it's written explicitly so readers see the unique key at a glance
         return approvalMapper.selectOne(new LambdaQueryWrapper<ListingApproval>()
                 .eq(ListingApproval::getTenantId, tenantId)
                 .eq(ListingApproval::getProductId, productId)

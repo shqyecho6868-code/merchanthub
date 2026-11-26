@@ -1,5 +1,5 @@
-# G-上：AWS 云上配置。ECS 里 SPRING_PROFILES_ACTIVE=prod,aws —— prod 提供路由等通用配置，本文件只覆盖"云上地址和凭证"。
-# 地址由 Terraform 写进 ECS task 的环境变量；密码类走 SSM Parameter Store（task 定义里的 secrets），不进镜像、不进仓库
+# G-上: AWS cloud config. In ECS, SPRING_PROFILES_ACTIVE=prod,aws -- prod provides common config like routes; this file only overrides "cloud addresses and credentials".
+# Addresses are written into ECS task env vars by Terraform; secrets come from SSM Parameter Store (task definition secrets), never baked into the image or repo
 
 spring:
   datasource:
@@ -10,17 +10,17 @@ spring:
     redis:
       host: ${REDIS_HOST}
       port: 6379
-      # ElastiCache 没开 AUTH（未开传输加密时不支持密码），靠私有子网 + 安全组只放行 ECS 访问。空字符串 = 不发 AUTH
+      # ElastiCache has no AUTH (passwords unsupported without in-transit encryption); protected by private subnets + a security group allowing only ECS. Empty string = don't send AUTH
       password: ""
   cloud:
-    # Fargate task 里除了 VPC 网卡（10.20.x）还有一块 169.254.172.x 的链路本地网卡（ECS 内部用，P50）。
-    # Spring 默认取"第一个非回环地址"，会把 169.254 注册进 Nacos，别的服务按这个地址连不上。
-    # 这里指定只用 VPC 网段（infra/env/network.tf 的 10.20.0.0/16）
+    # Besides the VPC NIC (10.20.x), a Fargate task has a 169.254.172.x link-local NIC (used internally by ECS, P50).
+    # Spring picks the "first non-loopback address" by default and would register 169.254 in Nacos, which other services can't reach.
+    # So restrict to the VPC CIDR (10.20.0.0/16 in infra/env/network.tf)
     inetutils:
       preferred-networks:
         - 10.20.
     nacos:
-      # 云上 Nacos 关了鉴权（只在私有子网、安全组只放行 ECS），客户端不带账号 = 不发登录请求
+      # Cloud Nacos has auth disabled (private subnets only, security group allows only ECS); no credentials on the client = no login request
       username: ""
       password: ""
       discovery:
@@ -33,19 +33,19 @@ merchanthub:
     namesrv-addr: ${ROCKETMQ_NAMESRV}
   job:
     xxl:
-      # 云上本次不部署 XXL-Job 调度中心（G-上只跑通下单链路），补偿 / 对账任务不调度；超时关单靠 RocketMQ 定时消息照常工作
+      # The XXL-Job admin isn't deployed in the cloud this time (G-上 only runs the order-placement path), so compensation / reconciliation jobs aren't scheduled; timeout close still works via RocketMQ scheduled messages
       enabled: false
       access-token: ""
 
-# ALB 健康检查用 readiness 探针：只反映"本进程能不能接流量"，不聚合 MySQL / Redis 等依赖的健康。
-# 否则 Redis 抖一下，所有实例同时被 ALB 判成不健康，局部故障被放大成整站 503
+# ALB health checks use the readiness probe: it only reflects "can this process take traffic", not aggregated health of dependencies like MySQL / Redis.
+# Otherwise a Redis blip would mark every instance unhealthy at once in the ALB, amplifying a partial failure into a site-wide 503
 management:
   endpoint:
     health:
       probes:
         enabled: true
 
-# CloudWatch 里按链路 / 租户搜日志：TraceIdFilter 放进 MDC 的 traceId、TenantContext 放进 MDC 的 tenantId 打在每行日志级别后面
+# Search logs by trace / tenant in CloudWatch: the traceId put into MDC by TraceIdFilter and the tenantId put into MDC by TenantContext appear after the level on every line
 logging:
   pattern:
     level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

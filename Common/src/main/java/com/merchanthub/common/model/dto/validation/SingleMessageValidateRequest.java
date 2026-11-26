@@ -6,10 +6,10 @@ import java.io.Serializable;
 import lombok.Data;
 
 /**
- * 单聊消息发送权限校验请求
+ * Send permission check request for a one-to-one message
  *
- * 用于校验单聊消息发送前的好友关系验证
- * 供 UserService、RealTimeService共用
+ * Verifies the friend relationship before a one-to-one message is sent
+ * Shared by UserService and RealTimeService
  */
 @Data
 public class SingleMessageValidateRequest implements Serializable {
@@ -18,27 +18,27 @@ public class SingleMessageValidateRequest implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 发送者 ID
+     * Sender ID
      */
     private Long senderId;
 
     /**
-     * 接收者 ID
+     * Receiver ID
      */
     private Long receiverId;
 
     /**
-     * 会话 ID
+     * Session ID
      */
     private Long sessionId;
 
     /**
-     * 创建校验请求
+     * Create a validation request
      *
-     * @param senderId   发送者 ID
-     * @param receiverId 接收者 ID
-     * @param sessionId  会话 ID
-     * @return 校验请求对象
+     * @param senderId   sender ID
+     * @param receiverId receiver ID
+     * @param sessionId  session ID
+     * @return the validation request
      */
     public static SingleMessageValidateRequest of(Long senderId, Long receiverId, Long sessionId) {
         SingleMessageValidateRequest request = new SingleMessageValidateRequest();

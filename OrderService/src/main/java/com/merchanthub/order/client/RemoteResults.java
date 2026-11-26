@@ -15,17 +15,17 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.function.Supplier;
 
 /**
- * 统一处理远程调用结果：
- * - 业务失败（body.code != 200）：原样透传下游的错误码和信息，比如“库存不足”
- * - 超时 / 连不上 / 5xx：转成 DOWNSTREAM_UNAVAILABLE（降级：快速失败，给用户明确提示，而不是抛一堆堆栈）
+ * Unified handling of remote call results:
+ * - Business failure (body.code != 200): pass through the downstream error code and message as-is, e.g. "insufficient stock"
+ * - Timeout / connection failure / 5xx: convert to DOWNSTREAM_UNAVAILABLE (degrade: fail fast with a clear message instead of dumping stack traces)
  * <p>
- * C2：每次调用包一层 Sentinel 资源（名字见 ProductInventoryClient.RES_*），熔断规则见 SentinelRulesConfig。
- * 下游连续慢 / 连续报错 → 熔断打开，接下来 N 秒<b>不再发请求</b>，直接降级返回。
- * 好处：order 的线程不会一个个卡在 3 秒超时上（否则下游一慢，order 也被拖垮），下游也有喘息时间恢复。
+ * C2: each call is wrapped in a Sentinel resource (names in ProductInventoryClient.RES_*); circuit-breaker rules in SentinelRulesConfig.
+ * Downstream keeps being slow / failing -> breaker opens, and for the next N seconds <b>no requests are sent</b>; we degrade immediately.
+ * Benefit: order threads don't pile up on 3s timeouts one by one (otherwise a slow downstream drags order down too), and the downstream gets breathing room to recover.
  * <p>
- * 没用 Spring Cloud Alibaba 的 feign.sentinel.enabled 自动集成：它会把<b>所有</b>异常（包括"库存不足"这类业务失败的
- * 解码异常）交给 fallback，资源名还是 "POST:http://product-inventory/internal/..." 这种长串；
- * 手写一层能精确控制"什么算下游故障"。
+ * We don't use Spring Cloud Alibaba's feign.sentinel.enabled auto-integration: it routes <b>all</b> exceptions (including decode exceptions from
+ * business failures like "insufficient stock") to the fallback, and resource names are long strings like "POST:http://product-inventory/internal/...";
+ * a hand-written layer controls precisely "what counts as a downstream failure".
  */
 @Slf4j
 public final class RemoteResults {
@@ -40,7 +40,7 @@ public final class RemoteResults {
         try {
             entry = SphU.entry(resource, EntryType.OUT);
         } catch (BlockException e) {
-            // 熔断中：连请求都不发，立刻降级
+            // Breaker open: don't even send the request, degrade immediately
             log.warn("【熔断】{} 熔断中，快速失败", resource);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
@@ -48,26 +48,26 @@ public final class RemoteResults {
         try {
             resp = call.get();
         } catch (RetryableException e) {
-            // 超时或连接失败：对方到底执行了没有，我们不知道（见 B1 笔记第 2 节“已知缺口”）
+            // Timeout or connection failure: we don't know whether the other side executed it (see "known gap" in B1 notes section 2)
             Tracer.traceEntry(e, entry);
             log.warn("远程调用超时或连接失败: {}", resource, e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         } catch (FeignException e) {
-            // 只有 5xx / 没有状态码才算"下游故障"计入熔断统计；4xx 是我们自己的请求有问题，熔断下游没用
+            // Only 5xx / no status code counts as a "downstream failure" for breaker stats; 4xx means our own request is wrong, and breaking the downstream won't help
             if (e.status() < 0 || e.status() >= 500) {
                 Tracer.traceEntry(e, entry);
             }
             log.warn("远程调用异常: {} status={}", resource, e.status(), e);
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         } finally {
-            // exit 时 Sentinel 记下这次调用的耗时，慢调用比例熔断靠它
+            // On exit Sentinel records this call's latency; the slow-call-ratio breaker relies on it
             entry.exit();
         }
         if (resp == null) {
             throw new BusinessException(ErrorCode.DOWNSTREAM_UNAVAILABLE);
         }
         if (resp.getCode() != SUCCESS) {
-            // 业务失败（库存不足等）说明下游是健康的，不计入熔断统计
+            // A business failure (insufficient stock, etc.) means the downstream is healthy; don't count it toward breaker stats
             throw new BusinessException(resp.getCode(), resp.getMessage());
         }
         return resp.getData();

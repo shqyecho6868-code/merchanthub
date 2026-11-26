@@ -10,8 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 端到端：下单 → outbox 里的定时消息交给 Broker → 到期投递 → 超时关单 → 写 ORDER_CLOSED 事件。
- * 同时验证 RocketMQ 5.3.1 的任意时长定时消息（setDeliverTimeMs）在默认 Broker 配置下可用、且不会提前投递。
+ * End-to-end: place order -> scheduled message in outbox handed to the broker -> delivered when due -> timeout close -> ORDER_CLOSED event written.
+ * Also verifies that RocketMQ 5.3.1's arbitrary-delay scheduled messages (setDeliverTimeMs) work with default broker config and aren't delivered early.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
@@ -28,13 +28,13 @@ class PayTimeoutIT extends OrderItSupport {
         long start = System.currentTimeMillis();
         long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
 
-        // 超时消息和订单同事务写入 outbox，带投递时间 = expire_at
+        // The timeout message is written to outbox in the same transaction as the order, with delivery time = expire_at
         Map<String, Object> timeoutRow = jdbc.queryForMap(
                 "SELECT o.deliver_at, r.expire_at FROM order_outbox o JOIN orders r ON r.order_no = o.biz_key "
                         + "WHERE o.topic = 'ORDER_TIMEOUT' AND o.biz_key = ?", String.valueOf(orderNo));
         assertThat(timeoutRow.get("deliver_at")).isEqualTo(timeoutRow.get("expire_at"));
 
-        // 不能提前投递：3 秒时还应是待支付
+        // Must not be delivered early: still pending at 3s
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(4)).until(() -> true);
         assertThat(status(orderNo)).isEqualTo(10);
 

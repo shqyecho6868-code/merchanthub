@@ -5,14 +5,14 @@ import com.xxl.job.core.handler.annotation.XxlJob;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** payment 的 XXL-Job 任务入口（E3），逻辑在 {@link PaymentReconciler} */
+/** XXL-Job entry point for payment (E3); the logic lives in {@link PaymentReconciler} */
 @Component
 @RequiredArgsConstructor
 public class PaymentJobs {
 
     private final PaymentReconciler reconciler;
 
-    /** 支付单 ↔ 订单对账（建议每 5 分钟） */
+    /** Payment ↔ order reconciliation (suggested every 5 minutes) */
     @XxlJob("paymentReconJob")
     public void recon() {
         PaymentReconciler.Result r = reconciler.reconcile();

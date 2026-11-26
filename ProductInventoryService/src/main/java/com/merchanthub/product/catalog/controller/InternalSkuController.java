@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 内部接口（/internal/**）：只给其他服务通过 Feign 调用，网关不转发这个前缀（gateway 改造时配置）。
- * 用 POST 是因为要传一组 ID，放请求体比拼 URL 参数更稳。
+ * Internal API (/internal/**): only for other services via Feign; the gateway doesn't forward this prefix (configured during the gateway rework).
+ * POST because we pass a list of IDs, which is more robust in the request body than in URL parameters.
  */
 @RestController
 @RequestMapping("/internal/skus")

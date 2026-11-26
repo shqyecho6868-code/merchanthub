@@ -3,8 +3,8 @@ package com.merchanthub.payment.mq;
 import java.util.function.BooleanSupplier;
 
 /**
- * 交给事务消息执行的本地事务：返回 true 表示"这次回调赢得了 待支付→成功 的 CAS"。
- * 执行结果留在对象里，发送方法返回后调用方据此决定打什么日志、回什么。
+ * The local transaction handed to the transactional message: returning true means "this callback won the pending→succeeded CAS".
+ * The result stays on the object; after the send method returns, the caller uses it to decide what to log and what to reply.
  */
 public final class CasTx {
 
@@ -16,7 +16,7 @@ public final class CasTx {
         this.body = body;
     }
 
-    /** 由 PaymentTxListener 在发送线程里调用，只调一次 */
+    /** Called by PaymentTxListener on the sending thread, exactly once */
     boolean run() {
         try {
             won = body.getAsBoolean();

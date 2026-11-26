@@ -7,16 +7,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 
 /**
- * product-inventory 集成测试基类（C1）：租户插件 fail-closed，测试线程直接调 service 时默认用 SYSTEM 身份。
- * 自己开线程的用例（并发预占）要在子线程里自己设置上下文 —— ThreadLocal 不会跟着传过去，这正是生产里线程池要注意的事。
+ * Base class for product-inventory integration tests (C1): the tenant plugin is fail-closed, so when the test thread calls a service directly it uses a SYSTEM identity by default.
+ * Tests that start their own threads (concurrent reservation) must set the context in each child thread — ThreadLocal doesn't propagate, which is exactly what thread pools in production must watch out for.
  */
 public abstract class ProductItSupport extends IntegrationTestBase {
 
     private TenantContext.Scope tenantScope;
 
     /**
-     * 走 MockMvc 的用例覆盖成 false：MockMvc 在测试线程上执行请求，测试线程上已有的 SYSTEM 身份会让
-     * "没带身份头的请求"看起来像有身份，401 / 403 的用例就测不准了
+     * Tests that go through MockMvc override this to false: MockMvc runs the request on the test thread, and the SYSTEM identity already on it would make
+     * "a request without identity headers" look authenticated, so the 401 / 403 cases wouldn't be tested accurately
      */
     protected boolean defaultSystemContext() {
         return true;

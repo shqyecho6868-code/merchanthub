@@ -4,8 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 预占记录状态。CONFIRMED、RELEASED 都是终态且互斥：
- * B2/B3 用 {@code UPDATE ... WHERE status = RESERVED} 做 CAS，支付确认和超时释放同时到达时只有一个能成功。
+ * Reservation record status. CONFIRMED and RELEASED are both terminal and mutually exclusive:
+ * B2/B3 use {@code UPDATE ... WHERE status = RESERVED} as a CAS, so when payment confirmation and timeout release arrive together only one succeeds.
  */
 @Getter
 @AllArgsConstructor

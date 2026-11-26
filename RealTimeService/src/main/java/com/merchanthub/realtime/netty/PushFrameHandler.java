@@ -11,14 +11,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 握手完成后的连接生命周期：
+ * Connection lifecycle after the handshake:
  * <ul>
- *   <li>握手完成 → 记进本节点连接表 → 注册路由 → 补发离线消息（先注册路由再补发：补发期间新来的消息也能直接推到）</li>
- *   <li>收到 "ping" → 回 "pong" + 路由续期（客户端每 30 秒一次，路由 TTL 90 秒，丢两次心跳也不会误判下线）</li>
- *   <li>读空闲超时 → 断开（客户端没了却没发 FIN，比如断网）</li>
- *   <li>连接断开 → 本节点上这个接收方没有连接了 → 注销自己的路由</li>
+ *   <li>Handshake complete -> add to this node's connection table -> register route -> redeliver offline messages (route first, then redelivery, so messages arriving during redelivery are pushed directly too)</li>
+ *   <li>Receive "ping" -> reply "pong" + renew route (client pings every 30 seconds, route TTL is 90 seconds, so missing two heartbeats won't wrongly mark it offline)</li>
+ *   <li>Read idle timeout -> disconnect (the client is gone without sending FIN, e.g. network loss)</li>
+ *   <li>Connection closed -> this receiver has no connections left on this node -> unregister our own route</li>
  * </ul>
- * 这个处理器挂在独立的业务线程组上（见 NettyServer）：这里会访问 Redis / MySQL，不能阻塞 Netty 的 IO 线程。
+ * This handler runs on a separate business thread group (see NettyServer): it accesses Redis / MySQL and must not block Netty's IO threads.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -57,7 +57,7 @@ public class PushFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
             }
             ctx.writeAndFlush(new TextWebSocketFrame(PONG));
         }
-        // 推送是单向的：客户端发来的其他内容一律忽略
+        // Push is one-way: anything else sent by the client is ignored
     }
 
     @Override
@@ -67,7 +67,7 @@ public class PushFrameHandler extends SimpleChannelInboundHandler<TextWebSocketF
             try {
                 routes.unregister(lastOnThisNode);
             } catch (RuntimeException e) {
-                // Redis 不可用：不要紧，路由 TTL 到了会自己消失
+                // Redis unavailable: no big deal, the route disappears on its own when the TTL expires
                 log.warn("注销路由失败，等 TTL 过期 receiverKey={}", lastOnThisNode, e);
             }
         }

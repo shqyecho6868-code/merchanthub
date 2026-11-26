@@ -4,8 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
- * 订单状态机的事件：每个事件只对应一条"从哪到哪"的边（data-model 第 4 节）。
- * 流转的旧状态由事件决定，而不是"读出订单当前是什么状态" —— 否则 CAS 的条件就失去意义了。
+ * Order state machine events: each event maps to exactly one "from -> to" edge (data-model section 4).
+ * The old status of a transition is determined by the event, not by "reading the order's current status" -- otherwise the CAS condition would be meaningless.
  */
 @Getter
 @AllArgsConstructor

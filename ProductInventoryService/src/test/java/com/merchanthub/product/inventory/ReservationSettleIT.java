@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 确认扣减 / 释放：预占记录 CAS 是库存侧的幂等闸门。
- * 这里验证的都是"重复 / 并发也只改一次库存"，对应 B3-下笔记第 2 节。
+ * Confirm deduction / release: the reservation record CAS is the inventory side's idempotency gate.
+ * Everything here verifies "duplicates / concurrency still change stock only once", per B3-下 notes section 2.
  */
 @SpringBootTest
 class ReservationSettleIT extends ProductItSupport {
@@ -63,7 +63,7 @@ class ReservationSettleIT extends ProductItSupport {
         long orderNo = reserve(2, 3);
 
         assertThat(settleService.release(orderNo, TENANT, "PAY_TIMEOUT")).isEqualTo(2);
-        // 同一条 ORDER_CLOSED 被重复投递：记录已是 RELEASED，CAS 影响 0 行，库存不再加
+        // The same ORDER_CLOSED delivered again: the record is already RELEASED, the CAS affects 0 rows, stock isn't added back again
         assertThat(settleService.release(orderNo, TENANT, "PAY_TIMEOUT")).isZero();
 
         assertThat(stock(101)).containsExactly(10, 0);
@@ -78,12 +78,12 @@ class ReservationSettleIT extends ProductItSupport {
         assertThat(settleService.confirm(orderNo, TENANT)).isEqualTo(2);
         assertThat(settleService.confirm(orderNo, TENANT)).isZero();
 
-        assertThat(stock(101)).containsExactly(8, 0);   // 8 件可售，2 件已卖出（不再出现在 reserved）
+        assertThat(stock(101)).containsExactly(8, 0);   // 8 available, 2 sold (no longer in reserved)
         assertThat(stock(102)).containsExactly(7, 0);
         assertThat(statuses(orderNo)).containsOnly(20);
     }
 
-    /** 终态互斥：已确认（钱收了、货卖了）的预占，迟到的释放消息不能把库存再还回去 */
+    /** Terminal states are mutually exclusive: for a confirmed reservation (paid, goods sold), a late release message can't return the stock */
     @Test
     void releaseAfterConfirm_noop() {
         long orderNo = reserve(2, 3);
@@ -103,8 +103,8 @@ class ReservationSettleIT extends ProductItSupport {
     }
 
     /**
-     * 并发：10 个线程同时释放、10 个线程同时确认同一个订单（模拟消息重复 + 上游出错同时发了两种结局）。
-     * 每条预占记录只有一个线程 CAS 成功，库存只改一次，且两个 SKU 结局一致或各自唯一 —— 不会"既还了又扣了"。
+     * Concurrency: 10 threads release and 10 threads confirm the same order at once (simulating duplicate messages + an upstream bug sending both outcomes).
+     * Only one thread's CAS succeeds per reservation record, stock changes only once, and the two SKUs' outcomes are each unique — never "both returned and deducted".
      */
     @Test
     void concurrentReleaseAndConfirm_eachRecordSettledOnce() throws Exception {
@@ -117,11 +117,11 @@ class ReservationSettleIT extends ProductItSupport {
         });
 
         assertThat(errors).isEmpty();
-        assertThat(changed.stream().mapToInt(Integer::intValue).sum()).isEqualTo(2);   // 两条记录，各被处理一次
+        assertThat(changed.stream().mapToInt(Integer::intValue).sum()).isEqualTo(2);   // two records, each processed once
         for (long sku : new long[]{101, 102}) {
             int[] s = stock(sku);
-            assertThat(s[1]).isZero();                                    // 预占全部了结
-            assertThat(s[0]).isIn(10, sku == 101 ? 8 : 7);                // 要么还回去，要么卖出去，不会多还
+            assertThat(s[1]).isZero();                                    // all reservations settled
+            assertThat(s[0]).isIn(10, sku == 101 ? 8 : 7);                // either returned or sold, never over-returned
         }
     }
 }

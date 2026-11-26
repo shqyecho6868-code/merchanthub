@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 本地消息表（表 order_outbox），见 V2__order_outbox.sql */
+/** Local message table (table order_outbox), see V2__order_outbox.sql */
 @Data
 @TableName("order_outbox")
 public class OrderOutbox {
@@ -26,14 +26,14 @@ public class OrderOutbox {
     private String topic;
     private String tag;
     private String payload;
-    /** 定时投递时间（UTC）；NULL = 立即投递。超时关单消息用（V4） */
+    /** Scheduled delivery time (UTC); NULL = deliver immediately. Used by timeout-close messages (V4) */
     private LocalDateTime deliverAt;
     private Integer status;
     private Integer retryCount;
     private LocalDateTime nextRetryAt;
     private String lastError;
     private LocalDateTime sentAt;
-    /** 写入这行时请求的 traceId（V6）；投递时放回消息属性，链路从下单请求延续到消费者 */
+    /** traceId of the request that wrote this row (V6); put back into message properties on delivery so the trace continues from the order request to the consumer */
     private String traceId;
 
     private LocalDateTime createdAt;

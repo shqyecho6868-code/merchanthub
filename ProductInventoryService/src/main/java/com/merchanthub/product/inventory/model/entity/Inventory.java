@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 库存（表 inventory）
+ * Inventory (table inventory)
  */
 @Data
 @TableName("inventory")
@@ -19,13 +19,13 @@ public class Inventory {
     private Long id;
 
     private Long skuId;
-    /** 可售数量 */
+    /** Available quantity */
     private Integer available;
-    /** 预占数量（已下单未支付） */
+    /** Reserved quantity (ordered but unpaid) */
     private Integer reserved;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the database default; a null on insert is skipped by MyBatis-Plus */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

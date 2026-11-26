@@ -3,13 +3,13 @@ package com.merchanthub.common.exception;
 import com.merchanthub.common.common.ErrorCode;
 
 /**
- * 自定义异常类
+ * Custom business exception
  *
  */
 public class BusinessException extends RuntimeException {
 
     /**
-     * 错误码
+     * Error code
      */
     private final int code;
 

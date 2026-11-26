@@ -38,8 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商品上架审批（D1，product 侧）：提交 → Feign 发起（user-tenant 用替身）→ 结果回写（幂等、防乱序）→ 补偿扫描。
- * 场景：商家 7 的商品"旗舰手机"（草稿），员工 2002 提交；商家 8 的员工 3002 想动它。
+ * Product listing approval (D1, product side): submit → Feign start (user-tenant stubbed) → result write-back (idempotent, out-of-order safe) → compensation scan.
+ * Scenario: merchant 7's product "Flagship Phone" (draft) is submitted by staff 2002; merchant 8's staff 3002 tries to touch it.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -95,7 +95,7 @@ class ProductListingIT extends ProductItSupport {
                 Integer.class, productId, event);
     }
 
-    /** 模拟消费者 / 补偿以"商家 7"身份回写（生产里由 TenantMessages.consumeAs 恢复上下文） */
+    /** Simulates the consumer / compensation writing back as "merchant 7" (in production TenantMessages.consumeAs restores the context) */
     private boolean apply(int round, boolean approved, String pid) {
         return TenantContext.callAs(TenantInfo.systemOf(M7),
                 () -> stateService.applyResult(productId, round, approved, approved ? null : "主图不清晰", pid, "MQ"));
@@ -110,7 +110,7 @@ class ProductListingIT extends ProductItSupport {
     void submit_startsApproval() throws Exception {
         AtomicReference<TenantInfo> seenByFeign = new AtomicReference<>();
         when(approvalClient.start(any())).thenAnswer(inv -> {
-            seenByFeign.set(TenantContext.get());   // TenantFeignInterceptor 据此写请求头
+            seenByFeign.set(TenantContext.get());   // TenantFeignInterceptor writes the request headers from this
             return ResultUtils.success("pid-1");
         });
 
@@ -137,7 +137,7 @@ class ProductListingIT extends ProductItSupport {
         jdbc.update("UPDATE product SET status = 0 WHERE id = ?", productId);
         mvc.perform(as(post("/products/" + productId + "/listing"), 8, 3002, "MERCHANT_STAFF"))
                 .andExpect(jsonPath("$.code").value(40400));
-        // 平台管理员不替商家提交
+        // The platform admin doesn't submit on a merchant's behalf
         mvc.perform(post("/products/" + productId + "/listing").header("X-User-Id", 1).header("X-Role", "PLATFORM_ADMIN"))
                 .andExpect(status().isForbidden());
         verify(approvalClient, times(1)).start(any());
@@ -187,7 +187,7 @@ class ProductListingIT extends ProductItSupport {
         assertThat(productStatus()).isEqualTo(1);
         assertThat(instance()).isNull();
 
-        // 还没到 older-than：补偿不碰（正常审批中的商品不该每轮都去问）
+        // Not past older-than yet: compensation leaves it alone (products in normal review shouldn't be queried every round)
         assertThat(compensator.scan()).isZero();
         verify(approvalClient, never()).result(anyLong(), anyInt());
 
@@ -238,7 +238,7 @@ class ProductListingIT extends ProductItSupport {
         assertThat(compensator.scan()).isEqualTo(1);
         assertThat(productStatus()).isEqualTo(1);
         assertThat(instance()).isEqualTo("pid-1");
-        // 再扫一次：实例 ID 已有，RUNNING 什么都不做
+        // Scan again: instance ID already present, RUNNING does nothing
         assertThat(compensator.scan()).isZero();
     }
 }

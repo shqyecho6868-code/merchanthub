@@ -15,9 +15,9 @@ import java.util.UUID;
 public class RealtimeConfig {
 
     /**
-     * 节点 ID：显式配置优先；否则 rt-{本机 IP}-{Netty 端口}（同一台机器起多个节点时端口不同，ID 也不同）。
-     * 端口配成 0（随机）又没配 ID 时拼一个随机后缀 —— 只在测试里出现。
-     * 生产建议固定 ID（如 K8s StatefulSet 的 Pod 名）：节点重启后沿用同一个消费组，宕机期间转给它的消息不会被扔掉
+     * Node ID: explicit config wins; otherwise rt-{host IP}-{Netty port} (multiple nodes on one machine have different ports, hence different IDs).
+     * If the port is 0 (random) and no ID is configured, append a random suffix -- this only happens in tests.
+     * In production prefer a fixed ID (e.g. the Pod name of a K8s StatefulSet): a restarted node reuses the same consumer group, so messages forwarded to it while it was down aren't dropped
      */
     @Bean
     public NodeId nodeId(RealtimeProperties props) {
@@ -34,7 +34,7 @@ public class RealtimeConfig {
         return new NodeId("rt-" + host + "-" + suffix);
     }
 
-    /** 节点间转发用的普通生产者 */
+    /** Plain producer for inter-node forwarding */
     @Bean(initMethod = "start", destroyMethod = "shutdown")
     public DefaultMQProducer realtimePushProducer(@Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr,
                                                   NodeId nodeId) {
@@ -42,7 +42,7 @@ public class RealtimeConfig {
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(3000);
-        // 同一个 JVM 里起两个节点（测试）时，生产者实例名必须不同，否则共用一个客户端实例
+        // When two nodes run in one JVM (tests), producer instance names must differ, otherwise they share one client instance
         producer.setInstanceName("realtime-" + nodeId.value());
         producer.setTopics(List.of(PushTopics.PUSH_TOPIC));
         return producer;

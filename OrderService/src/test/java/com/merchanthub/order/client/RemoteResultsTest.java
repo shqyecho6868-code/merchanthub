@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** C2：什么算"下游故障"、会让熔断打开（不起 Spring、不连中间件） */
+/** C2: what counts as a "downstream failure" that opens the breaker (no Spring, no middleware) */
 class RemoteResultsTest {
 
     private static final String RES = "test:downstream";

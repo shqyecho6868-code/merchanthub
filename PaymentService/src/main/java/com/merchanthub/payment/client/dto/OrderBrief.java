@@ -2,7 +2,7 @@ package com.merchanthub.payment.client.dto;
 
 import lombok.Data;
 
-/** order 内部接口返回的订单摘要（只取建支付单需要的字段） */
+/** Order summary returned by order's internal API (only the fields needed to create a payment) */
 @Data
 public class OrderBrief {
     public static final int PENDING_PAYMENT = 10;

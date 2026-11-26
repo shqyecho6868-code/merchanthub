@@ -10,7 +10,7 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** D1：JWT 密钥配置化 + 严格 Base64 */
+/** D1: JWT secret from config + strict Base64 */
 class JwtCodecTest {
 
     private static final String SECRET = Base64.getEncoder().encodeToString("0123456789abcdef0123456789abcdef".getBytes());
@@ -40,8 +40,8 @@ class JwtCodecTest {
         String token = codec.issue(1L, null, "BUYER", Duration.ofMinutes(5));
 
         assertThat(other.parse(token)).isNull();
-        // 篡改签名中间的一个字符。不能改末尾：32 字节签名的 base64url 最后一个字符只有 4 位有效、2 位是填充位，
-        // 原来"末两位换成 xx"在签名恰好以等价字符结尾时（约 1/1000）篡改无效，CI 偶发失败（P51）
+        // Tamper with a character in the middle of the signature. Not the last one: in base64url of a 32-byte signature the last character has only 4 significant bits and 2 padding bits,
+        // so the old "replace the last two chars with xx" had no effect when the signature happened to end in an equivalent character (~1/1000), making CI flaky (P51)
         int i = token.lastIndexOf('.') + 5;
         char tampered = token.charAt(i) == 'A' ? 'B' : 'A';
         assertThat(codec.parse(token.substring(0, i) + tampered + token.substring(i + 1))).isNull();

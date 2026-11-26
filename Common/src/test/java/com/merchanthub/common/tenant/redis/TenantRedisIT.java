@@ -14,7 +14,7 @@ import org.testcontainers.containers.GenericContainer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 真实 Redis：两个商家写同一个业务 key 互不覆盖，各自只读得到自己的 */
+/** Real Redis: two merchants writing the same business key don't overwrite each other, and each only reads its own */
 class TenantRedisIT {
 
     private static final GenericContainer<?> REDIS = SharedContainers.redis();
@@ -44,7 +44,7 @@ class TenantRedisIT {
         assertThat(TenantContext.callAs(a, () -> redis.ops().opsForValue().get(key))).isEqualTo("商家7的数据");
         assertThat(TenantContext.callAs(b, () -> redis.ops().opsForValue().get(key))).isEqualTo("商家8的数据");
 
-        // 底层真实 key 带着前缀
+        // The real underlying key carries the prefix
         StringRedisTemplate raw = new StringRedisTemplate(factory);
         raw.afterPropertiesSet();
         assertThat(raw.opsForValue().get("t:7:" + key)).isEqualTo("商家7的数据");

@@ -14,13 +14,13 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.function.Supplier;
 
 /**
- * payment → order 的调用包一层 Sentinel 熔断（E3，补 C2 遗留）。做法与 order 的 RemoteResults 一致：
+ * Wraps payment → order calls in a Sentinel circuit breaker (E3, C2 follow-up). Same approach as order's RemoteResults:
  * <ul>
- *   <li>熔断打开：连请求都不发，立刻抛 DOWNSTREAM_UNAVAILABLE —— payment 的线程不会一个个卡在 3 秒超时上</li>
- *   <li>超时 / 连不上 / 5xx 才计入熔断统计；4xx、业务失败（订单不存在）说明下游是健康的，不计入</li>
- *   <li>业务失败原样透传下游的错误码</li>
+ *   <li>Circuit open: no request is sent at all, DOWNSTREAM_UNAVAILABLE is thrown immediately — payment threads don't pile up on 3-second timeouts one by one</li>
+ *   <li>Only timeouts / connection failures / 5xx count toward breaker stats; 4xx and business failures (order not found) show the downstream is healthy and don't count</li>
+ *   <li>Business failures pass the downstream error code through as-is</li>
  * </ul>
- * 熔断规则见 {@link com.merchanthub.payment.config.PaymentSentinelConfig}。
+ * See {@link com.merchanthub.payment.config.PaymentSentinelConfig} for the breaker rules.
  */
 @Slf4j
 public final class OrderRemote {
@@ -42,7 +42,7 @@ public final class OrderRemote {
         try {
             resp = call.get();
         } catch (FeignException e) {
-            // RetryableException（超时 / 连接失败）的 status 是 -1，也走这里
+            // RetryableException (timeout / connection failure) has status -1 and also lands here
             if (e.status() < 0 || e.status() >= 500) {
                 Tracer.traceEntry(e, entry);
             }

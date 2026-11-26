@@ -6,10 +6,10 @@ import java.io.Serial;
 import java.io.Serializable;
 
 /**
- * 群成员资格响应
+ * Group membership response
  *
- * 供内部校验接口返回群成员资格信息
- * 供 UserService 等服务共用
+ * Returned by the internal validation API with group membership info
+ * Shared by UserService and other services
  */
 @Data
 public class GroupMembershipResponse implements Serializable {
@@ -18,52 +18,52 @@ public class GroupMembershipResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 用户 ID
+     * User ID
      */
     private Long userId;
 
     /**
-     * 会话 ID（群聊 ID）
+     * Session ID (group chat ID)
      */
     private Long sessionId;
 
     /**
-     * 是否为群成员
+     * Whether the user is a group member
      */
     private Boolean isMember;
 
     /**
-     * 成员角色
-     * 0: 群主
-     * 1: 管理员
-     * 2: 普通成员
-     * null: 非成员
+     * Member role
+     * 0: owner
+     * 1: admin
+     * 2: regular member
+     * null: not a member
      */
     private Integer role;
 
     /**
-     * 群成员角色常量：群主
+     * Group member role constant: owner
      */
     public static final int ROLE_OWNER = 0;
 
     /**
-     * 群成员角色常量：管理员
+     * Group member role constant: admin
      */
     public static final int ROLE_ADMIN = 1;
 
     /**
-     * 群成员角色常量：普通成员
+     * Group member role constant: regular member
      */
     public static final int ROLE_MEMBER = 2;
 
     /**
-     * 创建成员响应
+     * Create a membership response
      *
-     * @param userId    用户 ID
-     * @param sessionId 会话 ID
-     * @param isMember  是否为成员
-     * @param role      角色
-     * @return 响应对象
+     * @param userId    user ID
+     * @param sessionId session ID
+     * @param isMember  whether the user is a member
+     * @param role      role
+     * @return the response
      */
     public static GroupMembershipResponse of(Long userId, Long sessionId, Boolean isMember, Integer role) {
         GroupMembershipResponse response = new GroupMembershipResponse();

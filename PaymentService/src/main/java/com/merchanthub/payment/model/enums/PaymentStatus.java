@@ -3,7 +3,7 @@ package com.merchanthub.payment.model.enums;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-/** 支付单状态（data-model 3.6）。只允许 待支付 → 成功 / 失败 / 已关闭，三个都是终态 */
+/** Payment status (data-model 3.6). Only pending → succeeded / failed / closed is allowed; all three are terminal */
 @Getter
 @AllArgsConstructor
 public enum PaymentStatus {

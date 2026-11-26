@@ -20,8 +20,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商家入驻审批（D1）：提交 → 平台管理员审核 → 通过则建租户 + 开商家管理员账号；驳回 → 申请人修改重提（同一个实例）/ 撤回。
- * 场景：买家 9001 申请开店"九号小铺"，平台管理员 1 审核。
+ * Merchant onboarding approval (D1): submit -> platform admin review -> if approved, create tenant + open merchant admin account; reject -> applicant revises and resubmits (same instance) / withdraws.
+ * Scenario: buyer 9001 applies to open "Shop Nine", reviewed by platform admin 1.
  */
 class MerchantOnboardingIT extends UserItSupport {
 
@@ -53,7 +53,7 @@ class MerchantOnboardingIT extends UserItSupport {
         return call(as(json(post("/merchant-applications"), form(shop, admin)), null, applicant, "BUYER"));
     }
 
-    /** 平台管理员待办里属于这个流程实例的任务 ID；没有返回 null */
+    /** ID of the task in the platform admin's queue belonging to this process instance; null if none */
     private String platformTaskOf(String pid) throws Exception {
         for (JsonNode t : call(platformAdmin(get("/approvals/tasks"))).at("/data")) {
             if (t.at("/processInstanceId").asText().equals(pid)) {
@@ -103,7 +103,7 @@ class MerchantOnboardingIT extends UserItSupport {
         String pid = app.at("/processInstanceId").asText();
 
         String review1 = platformTaskOf(pid);
-        // 驳回必须写原因
+        // Rejecting requires a reason
         assertThat(call(platformAdmin(json(post("/approvals/tasks/" + review1 + "/reject"), Map.of()))).at("/code").asInt())
                 .isEqualTo(40000);
         call(platformAdmin(json(post("/approvals/tasks/" + review1 + "/reject"), Map.of("comment", "营业执照不清晰"))));
@@ -111,13 +111,13 @@ class MerchantOnboardingIT extends UserItSupport {
         JsonNode rejected = call(as(get("/merchant-applications/" + appId), null, APPLICANT, "BUYER")).at("/data");
         assertThat(rejected.at("/status").asInt()).isEqualTo(20);
         assertThat(rejected.at("/rejectReason").asText()).isEqualTo("营业执照不清晰");
-        // 现在轮到申请人：平台管理员的待办里没有它，申请人自己的待办里有"修改后重提"
+        // Now it's the applicant's turn: not in the platform admin's queue, but "revise and resubmit" is in the applicant's own queue
         assertThat(platformTaskOf(pid)).isNull();
         JsonNode mine = call(as(get("/approvals/tasks"), null, APPLICANT, "BUYER")).at("/data");
         assertThat(mine).hasSize(1);
         assertThat(mine.get(0).at("/taskKey").asText()).isEqualTo("applicantRevise");
 
-        // 别的买家改不了这张申请（当作不存在）
+        // Other buyers can't modify this application (treated as nonexistent)
         assertThat(call(as(json(put("/merchant-applications/" + appId), form("抢走", "thief_admin")), null, 9002, "BUYER"))
                 .at("/code").asInt()).isEqualTo(40400);
 
@@ -147,14 +147,14 @@ class MerchantOnboardingIT extends UserItSupport {
         String pid = app.at("/processInstanceId").asText();
         call(platformAdmin(json(post("/approvals/tasks/" + platformTaskOf(pid) + "/reject"), Map.of("comment", "类目不符"))));
 
-        // 进行中（审核中 / 已驳回）不能再开第二张
+        // While one is in progress (in review / rejected), a second can't be opened
         assertThat(submit(APPLICANT, "第二家", "shop9_b").at("/code").asInt()).isEqualTo(63005);
 
         assertThat(call(as(post("/merchant-applications/" + appId + "/withdraw"), null, APPLICANT, "BUYER"))
                 .at("/data/status").asInt()).isEqualTo(40);
         assertThat(runtimeTasks(pid)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ACT_RU_EXECUTION WHERE PROC_INST_ID_ = ?", Integer.class, pid)).isZero();
-        // 已撤回不能再重提
+        // A withdrawn application can't be resubmitted
         assertThat(call(as(json(put("/merchant-applications/" + appId), form("x", "shop9_x")), null, APPLICANT, "BUYER"))
                 .at("/code").asInt()).isEqualTo(63003);
         assertThat(submit(APPLICANT, "第二家", "shop9_b").at("/code").asInt()).isEqualTo(200);

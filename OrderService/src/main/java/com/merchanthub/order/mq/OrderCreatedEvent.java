@@ -5,10 +5,10 @@ import com.merchanthub.order.service.NewOrder;
 import java.time.LocalDateTime;
 
 /**
- * "订单已创建"事件。只放下游普遍需要的关键字段，不放整张订单（B2 笔记 Q3）：
- * 下游要明细就按 orderNo 来查，订单表结构变了也不会连累所有消费者。
+ * "Order created" event. Carries only the key fields downstreams commonly need, not the whole order (B2 notes Q3):
+ * downstreams that need items query by orderNo, so order table changes don't ripple to every consumer.
  *
- * @param eventId 事件唯一 ID（雪花），重发多少次都不变，消费端按它去重
+ * @param eventId unique event ID (snowflake), unchanged across resends; consumers deduplicate by it
  */
 public record OrderCreatedEvent(long eventId, long orderNo, long tenantId, long buyerId,
                                 long payAmount, LocalDateTime createdAt) {

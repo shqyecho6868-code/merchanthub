@@ -13,18 +13,18 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 统一分页响应结构
+ * Common pagination response
  * <p>
- * 响应格式:
+ * Response format:
  * <pre>
  * {
- *   "list": [...],         // 当前页数据
- *   "total": 100,          // 总记录数
- *   "pageSize": 20,        // 每页大小
- *   "pageNum": 1,          // 当前页码
- *   "pages": 5,            // 总页数
- *   "hasNext": true,       // 是否有下一页
- *   "hasPrevious": false   // 是否有上一页
+ *   "list": [...],         // data on the current page
+ *   "total": 100,          // total records
+ *   "pageSize": 20,        // page size
+ *   "pageNum": 1,          // current page number
+ *   "pages": 5,            // total pages
+ *   "hasNext": true,       // whether there is a next page
+ *   "hasPrevious": false   // whether there is a previous page
  * }
  * </pre>
  */
@@ -37,46 +37,46 @@ public class PageResponse<T> implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 当前页数据列表
+     * Data on the current page
      */
     private List<T> list;
 
     /**
-     * 总记录数
+     * Total records
      */
     private Long total;
 
     /**
-     * 每页大小
+     * Page size
      */
     private Long pageSize;
 
     /**
-     * 当前页码
+     * Current page number
      */
     private Long pageNum;
 
     /**
-     * 总页数
+     * Total pages
      */
     private Long pages;
 
     /**
-     * 是否有下一页
+     * Whether there is a next page
      */
     private Boolean hasNext;
 
     /**
-     * 是否有上一页
+     * Whether there is a previous page
      */
     private Boolean hasPrevious;
 
     /**
-     * 从 MyBatis-Plus IPage 转换
+     * Convert from a MyBatis-Plus IPage
      *
-     * @param page MyBatis-Plus 分页结果
-     * @param <T>  数据类型
-     * @return 统一分页响应
+     * @param page MyBatis-Plus page result
+     * @param <T>  data type
+     * @return common pagination response
      */
     public static <T> PageResponse<T> of(IPage<T> page) {
         return PageResponse.<T>builder()
@@ -91,13 +91,13 @@ public class PageResponse<T> implements Serializable {
     }
 
     /**
-     * 从 MyBatis-Plus IPage 转换（带数据转换）
+     * Convert from a MyBatis-Plus IPage (with element conversion)
      *
-     * @param page      MyBatis-Plus 分页结果
-     * @param converter 数据转换函数
-     * @param <T>       源数据类型
-     * @param <R>       目标数据类型
-     * @return 统一分页响应
+     * @param page      MyBatis-Plus page result
+     * @param converter element conversion function
+     * @param <T>       source type
+     * @param <R>       target type
+     * @return common pagination response
      */
     public static <T, R> PageResponse<R> of(IPage<T> page, Function<T, R> converter) {
         List<R> convertedList = page.getRecords().stream()
@@ -116,13 +116,13 @@ public class PageResponse<T> implements Serializable {
     }
 
     /**
-     * 手动构建分页响应（适用于内存分页场景）
+     * Build a pagination response manually (for in-memory pagination)
      *
-     * @param allData  全部数据列表
-     * @param pageNum  当前页码
-     * @param pageSize 每页大小
-     * @param <T>      数据类型
-     * @return 统一分页响应
+     * @param allData  all data
+     * @param pageNum  current page number
+     * @param pageSize page size
+     * @param <T>      data type
+     * @return common pagination response
      */
     public static <T> PageResponse<T> of(List<T> allData, int pageNum, int pageSize) {
         if (allData == null || allData.isEmpty()) {
@@ -159,12 +159,12 @@ public class PageResponse<T> implements Serializable {
     }
 
     /**
-     * 构建空的分页响应
+     * Build an empty pagination response
      *
-     * @param pageNum  当前页码
-     * @param pageSize 每页大小
-     * @param <T>      数据类型
-     * @return 空的分页响应
+     * @param pageNum  current page number
+     * @param pageSize page size
+     * @param <T>      data type
+     * @return empty pagination response
      */
     public static <T> PageResponse<T> empty(int pageNum, int pageSize) {
         return PageResponse.<T>builder()

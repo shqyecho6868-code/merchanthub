@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 计价：只用服务端查到的单价。金额全部 long、单位分。
- * B1 没有优惠，discount 全为 0；但字段和“分摊到明细行”的结构先留好，以后加优惠只改这里。
+ * Pricing: uses only unit prices fetched server-side. All amounts are long, in cents.
+ * B1 has no discounts, so discount is always 0; but the fields and the "allocate to line items" structure are in place so adding discounts only touches this class.
  */
 public final class OrderPricing {
 
@@ -21,13 +21,13 @@ public final class OrderPricing {
     public record Result(List<Line> lines, long totalAmount, long discountAmount, long payAmount) {
     }
 
-    /** @param quantities skuId → 数量（已合并重复 SKU） */
+    /** @param quantities skuId -> quantity (duplicate SKUs already merged) */
     public static Result price(Map<Long, Integer> quantities, Map<Long, SkuSnapshot> skus) {
         List<Line> lines = new ArrayList<>();
         long total = 0;
         for (Map.Entry<Long, Integer> e : quantities.entrySet()) {
             SkuSnapshot sku = skus.get(e.getKey());
-            // Math.multiplyExact：溢出时抛异常，而不是悄悄变成负数金额
+            // Math.multiplyExact: throws on overflow instead of silently producing a negative amount
             long lineTotal = Math.multiplyExact(sku.getPrice(), (long) e.getValue());
             long lineDiscount = 0;
             lines.add(new Line(sku, e.getValue(), lineTotal, lineDiscount, lineTotal - lineDiscount));

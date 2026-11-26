@@ -8,11 +8,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
 
-/** 调 order 的只读内部接口（/internal/** 不经网关对外暴露）。超时见 application.yml */
+/** Calls order's read-only internal API (/internal/** is not exposed through the gateway). Timeouts are in application.yml */
 @FeignClient(name = "order", contextId = "inventoryOrderClient", path = "/internal/orders")
 public interface OrderClient {
 
-    /** E3：传入一批订单号，返回其中<b>存在</b>的订单的状态（订单号 → 状态码）。批量，一轮对账只调一次 */
+    /** E3: pass in a batch of order numbers, returns the status of those that <b>exist</b> (order number → status code). Batched: one call per reconciliation round */
     @PostMapping("/statuses")
     BaseResponse<Map<Long, Integer>> statuses(@RequestBody List<Long> orderNos);
 }

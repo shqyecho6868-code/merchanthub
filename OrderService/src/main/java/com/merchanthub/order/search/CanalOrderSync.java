@@ -19,14 +19,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Canal → ES 订单同步（E2，只演示）。Canal 伪装成 MySQL 从库读 binlog，这里拉取 mh_order.orders / order_item 的行变更，
- * 取出订单号交给 {@link OrderSearchIndexer} 回查并覆盖。
+ * Canal -> ES order sync (E2, demo only). Canal poses as a MySQL replica reading the binlog; here we pull row changes of mh_order.orders / order_item,
+ * extract the order numbers, and hand them to {@link OrderSearchIndexer} to look up and overwrite.
  * <p>
- * 失败重试：一批处理中任何一单失败 → rollback，Canal 下次把<b>整批</b>重新给我们（位点没前进），隔几秒重试；
- * 因为同步是"回查 + 整篇覆盖"，同一批重复处理没有副作用。一直失败（如 ES 挂了）位点就一直不动，
- * 恢复后从断点继续，不丢变更 —— 代价是这期间 ES 越来越旧（延迟），详见 E2 笔记。
+ * Retry on failure: if any order in a batch fails -> rollback, Canal hands us the <b>whole batch</b> again next time (position not advanced), retried a few seconds later;
+ * since sync is "look up + full overwrite", reprocessing a batch has no side effects. If it keeps failing (e.g. ES down) the position stays put,
+ * and after recovery it resumes from the checkpoint without losing changes -- the cost is ES growing staler (lag) meanwhile; see E2 notes.
  * <p>
- * 默认关闭（测试和没起 Canal 的环境不连）；本地演示用 deploy/e2/start-order-canal.sh 打开。
+ * Off by default (tests and environments without Canal don't connect); enable for local demos with deploy/e2/start-order-canal.sh.
  */
 @Slf4j
 @Component
@@ -72,7 +72,7 @@ public class CanalOrderSync {
             try {
                 connector.connect();
                 connector.subscribe("mh_order\\.(orders|order_item)");
-                connector.rollback();   // 从上次 ack 的位点开始
+                connector.rollback();   // start from the last acked position
                 log.info("Canal 已连接 {}:{} destination={}", host, port, destination);
                 while (running) {
                     Message batch = connector.getWithoutAck(batchSize);
@@ -87,7 +87,7 @@ public class CanalOrderSync {
                         }
                         connector.ack(batchId);
                     } catch (Exception e) {
-                        // 不 ack，回滚到这一批开头：下次整批重来（同步幂等）
+                        // Don't ack; roll back to the start of this batch so the whole batch is redone next time (sync is idempotent)
                         log.warn("ES 同步失败，回滚批次 {} 稍后重试", batchId, e);
                         connector.rollback(batchId);
                         Thread.sleep(3000);
@@ -103,15 +103,15 @@ public class CanalOrderSync {
                 try {
                     connector.disconnect();
                 } catch (RuntimeException ignored) {
-                    // 断开失败不影响重连
+                    // A failed disconnect doesn't affect reconnecting
                 }
             }
         }
     }
 
     /**
-     * 从一批 binlog 里取出涉及的订单号（去重、保持顺序）。插入 / 更新取变更后的列，删除取变更前的列。
-     * 订单头和明细表都有 order_no 列，所以两张表一视同仁。
+     * Extract the affected order numbers from a binlog batch (deduplicated, order preserved). Inserts/updates use after-change columns, deletes use before-change columns.
+     * Both the order header and item tables have an order_no column, so they're treated the same.
      */
     static List<Long> orderNosOf(List<CanalEntry.Entry> entries) throws InvalidProtocolBufferException {
         Set<Long> orderNos = new LinkedHashSet<>();

@@ -27,25 +27,25 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * 网关鉴权（C1 改造）。按顺序做四件事：
+ * Gateway authentication (reworked in C1). Does four things in order:
  * <ol>
- *   <li>挡掉 /internal/**：服务间内部接口只给 Feign 用，外部一律 404（不说 403：不告诉外部"这里有个接口"）</li>
- *   <li><b>先删</b>外部请求自带的 X-Tenant-Id / X-User-Id / X-Role：下游无条件信任这三个头，不删就能伪造身份</li>
- *   <li>校验 Access-Token（签名 + 过期 + Redis 里是不是当前有效的那个），取出 userId / role / tenantId</li>
- *   <li>把身份写成请求头往下游透传</li>
+ *   <li>Block /internal/**: internal service-to-service endpoints are for Feign only; external callers always get 404 (not 403, so we don't reveal "there's an endpoint here")</li>
+ *   <li><b>First strip</b> any X-Tenant-Id / X-User-Id / X-Role sent by external requests: downstream trusts these three headers unconditionally, so without stripping identity could be forged</li>
+ *   <li>Verify the Access-Token (signature + expiry + whether it is the currently valid one in Redis) and extract userId / role / tenantId</li>
+ *   <li>Forward the identity downstream as request headers</li>
  * </ol>
- * 白名单路径（登录、渠道回调）跳过第 3、4 步，但第 1、2 步照做 —— 白名单接口同样不能收到伪造的身份头。
+ * Whitelisted paths (login, channel callbacks) skip steps 3 and 4 but still do steps 1 and 2 -- whitelisted endpoints must not receive forged identity headers either.
  */
 @Slf4j
 @Component
 public class AuthorizeFilter implements GlobalFilter, Ordered {
 
     /**
-     * C2：换成响应式客户端。网关是 WebFlux，只有少量 event-loop 线程（约等于 CPU 核数）在处理所有请求；
-     * 之前用阻塞的 StringRedisTemplate，Redis 慢 100ms，这个线程上排队的所有请求都跟着卡 100ms
+     * C2: switched to the reactive client. The gateway is WebFlux, with only a few event-loop threads (about the number of CPU cores) handling all requests;
+     * with the old blocking StringRedisTemplate, if Redis was 100ms slow, every request queued on that thread was delayed 100ms too
      */
     private final ReactiveStringRedisTemplate redis;
-    /** D1：密钥来自配置 merchanthub.jwt.secret，和 user-tenant 签发时用的是同一个 */
+    /** D1: secret comes from merchanthub.jwt.secret, the same one user-tenant signs with */
     private final JwtCodec jwt;
 
     public AuthorizeFilter(ReactiveStringRedisTemplate redis, JwtCodec jwt) {
@@ -53,13 +53,13 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         this.jwt = jwt;
     }
 
-    // 白名单路径：不需要认证的接口
+    // Whitelisted paths: endpoints that don't require authentication
     static final List<String> EXCLUDE_PATHS = Arrays.asList(
-            // D1：user-tenant 的新登录接口（旧 IM 的验证码登录已删除）
+            // D1: user-tenant's new login endpoint (the old IM SMS-code login was removed)
             "/api/user/login",
             "/api/user/register",
             "/api/user/refresh",
-            // 支付渠道的异步通知：渠道没有用户 token，真实场景靠验签（B3 遗留），payment 内部以 SYSTEM 身份处理
+            // Async notifications from the payment channel: the channel has no user token; in reality this relies on signature verification (left over from B3); payment handles it internally as SYSTEM
             "/api/payments/callback/"
     );
 
@@ -68,13 +68,13 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getPath().value();
 
-        // 1. 内部接口不对外。按"解码后的路径段"判断，/api/%69nternal/... 这类编码绕过也能识别
+        // 1. Internal endpoints are not exposed. Checked on "decoded path segments", so encoded bypasses like /api/%69nternal/... are caught too
         if (isInternalPath(request)) {
             log.warn("拒绝外部访问内部接口 path={}", path);
             return buildErrorResponse(exchange, HttpStatus.NOT_FOUND, ErrorCode.NOT_FOUND_ERROR, ErrorCode.NOT_FOUND_ERROR.getMessage());
         }
 
-        // 2. 不管后面放不放行，先清掉客户端自带的身份头
+        // 2. Whether or not the request is let through later, first strip identity headers sent by the client
         ServerHttpRequest.Builder cleaned = request.mutate()
                 .headers(h -> TenantHeaders.ALL.forEach(h::remove));
 
@@ -85,9 +85,9 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         String accessToken = request.getHeaders().getFirst("Access-Token");
         String refreshToken = request.getHeaders().getFirst("Refresh-Token");
 
-        // 3. 先得出鉴权结论（这一步可能查 Redis，异步），4. 再按结论放行或拒绝。
-        // onErrorResume 只包住"得出结论"这一段：如果包在 chain.filter 外面，下游的报错也会被改写成 401
-        // defer：jwt.parse 是同步调用，万一抛异常也要变成 Mono 里的错误，才能被下面的 onErrorResume 接住
+        // 3. First reach an auth verdict (this may hit Redis, asynchronously), 4. then pass or reject based on it.
+        // onErrorResume wraps only the "reach a verdict" part: if it wrapped chain.filter, downstream errors would also be rewritten to 401
+        // defer: jwt.parse is synchronous; if it throws, the exception must become an error inside the Mono so the onErrorResume below can catch it
         return Mono.defer(() -> authenticate(accessToken, refreshToken))
                 .onErrorResume(e -> {
                     log.error("鉴权时 Redis / JWT 系统异常", e);
@@ -112,7 +112,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                 });
     }
 
-    /** 鉴权结论 */
+    /** Auth verdict */
     enum AuthOutcome { PASS, BAD_IDENTITY, NEED_REFRESH, NOT_LOGIN, SYSTEM_ERROR }
 
     record AuthResult(AuthOutcome outcome, Identity identity) {
@@ -122,8 +122,8 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
     }
 
     /**
-     * Access-Token 有效（签名对、没过期、和 Redis 里存的一致）→ PASS；
-     * 否则 Refresh-Token 有效 → NEED_REFRESH（提示前端去刷新）；都不行 → NOT_LOGIN
+     * Access-Token valid (signature ok, not expired, matches what's stored in Redis) -> PASS;
+     * otherwise if Refresh-Token is valid -> NEED_REFRESH (tell the client to refresh); neither -> NOT_LOGIN
      */
     private Mono<AuthResult> authenticate(String accessToken, String refreshToken) {
         Claims acClaims = jwt.parse(accessToken);
@@ -141,7 +141,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
                     }
                     return Mono.just(new AuthResult(AuthOutcome.PASS, id));
                 });
-        // defer：Access-Token 通过时，根本不去解析 / 查 Refresh-Token
+        // defer: when the Access-Token passes, the Refresh-Token is never parsed / looked up
         return byAccess.switchIfEmpty(Mono.defer(() -> {
             Claims rfClaims = jwt.parse(refreshToken);
             if (rfClaims == null) {
@@ -152,7 +152,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         }));
     }
 
-    /** Redis 里存的是不是这个 token（不是 → 已登出 / 被挤下线）。key 不存在时返回 false，而不是空 Mono */
+    /** Whether Redis holds this exact token (if not -> logged out / kicked out). Returns false rather than an empty Mono when the key doesn't exist */
     private Mono<Boolean> sameAsStored(String prefix, String userId, String token) {
         if (userId == null) {
             return Mono.just(false);
@@ -160,7 +160,7 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
         return redis.opsForValue().get(prefix + userId).map(token::equals).defaultIfEmpty(false);
     }
 
-    /** 任一路径段（解码后、忽略大小写）是 internal 就算内部接口 */
+    /** Any path segment (decoded, case-insensitive) equal to internal marks an internal endpoint */
     static boolean isInternalPath(ServerHttpRequest request) {
         return request.getPath().elements().stream()
                 .filter(e -> e instanceof PathContainer.PathSegment)
@@ -169,8 +169,8 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
     }
 
     /**
-     * 从 token 里取出的身份。规则和下游 TenantContextInterceptor 一致：
-     * 商家角色必须有 tenantId；买家 / 平台管理员不能有；SYSTEM 不能出现在用户 token 里（只给服务内部用）
+     * Identity extracted from the token. Same rules as the downstream TenantContextInterceptor:
+     * merchant roles must have a tenantId; buyers / platform admins must not; SYSTEM must never appear in a user token (internal services only)
      */
     record Identity(String userId, Role role, String tenantId) {
         static Identity from(Claims claims) {
@@ -208,6 +208,6 @@ public class AuthorizeFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        return -1; // 优先级较高
+        return -1; // relatively high precedence
     }
 }

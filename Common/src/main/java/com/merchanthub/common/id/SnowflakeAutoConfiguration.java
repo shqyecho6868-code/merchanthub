@@ -11,12 +11,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
- * 雪花 ID 生成器自动装配。
+ * Auto-configuration for the Snowflake ID generator.
  * <p>
- * 为什么用 AutoConfiguration 而不是像 MybatisPlusConfig 那样靠 scanBasePackages 扫描：
- * 这里要用 @ConditionalOnBean(StringRedisTemplate) 判断“服务里有没有 Redis”，
- * 而组件扫描到的配置类会先于 Redis 自动装配处理，那时 StringRedisTemplate 还没注册，条件永远不成立。
- * 自动装配类可以用 after 指定顺序；@SpringBootApplication 的扫描也会自动排除它，不会重复加载。
+ * Why an AutoConfiguration instead of relying on scanBasePackages like MybatisPlusConfig:
+ * we need @ConditionalOnBean(StringRedisTemplate) to check "does this service have Redis",
+ * but component-scanned config classes are processed before Redis auto-configuration, when StringRedisTemplate isn't registered yet, so the condition would never match.
+ * Auto-configurations can declare ordering via after; @SpringBootApplication scanning also excludes them, so it isn't loaded twice.
  */
 @AutoConfiguration(after = RedisAutoConfiguration.class)
 @ConditionalOnClass(StringRedisTemplate.class)
@@ -34,7 +34,7 @@ public class SnowflakeAutoConfiguration {
     @ConditionalOnMissingBean
     public SnowflakeIdGenerator snowflakeIdGenerator(SnowflakeSlotAllocator allocator, SnowflakeProperties props) {
         SnowflakeIdGenerator generator = new SnowflakeIdGenerator(allocator, props);
-        // 旧 IM 代码用静态方法取 ID，这里把 Bean 挂到静态门面上；新代码请直接注入 SnowflakeIdGenerator
+        // Old IM code gets IDs via a static method, so hook the Bean onto the static facade; new code should inject SnowflakeIdGenerator directly
         SnowflakeUtil.bind(generator);
         return generator;
     }

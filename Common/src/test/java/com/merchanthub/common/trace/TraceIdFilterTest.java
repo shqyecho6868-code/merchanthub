@@ -13,11 +13,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Servlet 入口：沿用 / 生成 traceId，请求期间在 MDC 里，结束后一定清掉 */
+/** Servlet entry point: reuse / generate the traceId, keep it in the MDC during the request, always clear it afterwards */
 class TraceIdFilterTest {
 
     private final TraceIdFilter filter = new TraceIdFilter();
-    /** 业务代码执行时 MDC 里看到的 traceId */
+    /** traceId seen in the MDC while business code runs */
     private final AtomicReference<String> seenInside = new AtomicReference<>();
     private final FilterChain chain = (req, res) -> seenInside.set(MDC.get(TraceContext.MDC_KEY));
 
@@ -65,7 +65,7 @@ class TraceIdFilterTest {
         };
         assertThatThrownBy(() -> filter.doFilter(req, new MockHttpServletResponse(), boom))
                 .isInstanceOf(IllegalStateException.class);
-        // 断言在 @AfterEach noLeak
+        // Assertion lives in @AfterEach noLeak
     }
 
     @Test

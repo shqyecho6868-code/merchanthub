@@ -39,12 +39,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
- * E1：两个 realtime 节点跑在同一个 JVM 里（各自一个 Spring 上下文、各自的 Netty 端口和专属消费组），共用真实的 MySQL / Redis / RocketMQ。
+ * E1: two realtime nodes run in the same JVM (each with its own Spring context, Netty port and dedicated consumer group), sharing real MySQL / Redis / RocketMQ.
  * <ul>
- *   <li>节点 A：只接连接，<b>不消费</b>订单事件</li>
- *   <li>节点 B：消费订单事件</li>
+ *   <li>Node A: only accepts connections, <b>does not consume</b> order events</li>
+ *   <li>Node B: consumes order events</li>
  * </ul>
- * 所以"连在 A 的人收到推送"只有一条路：B 消费 → 查路由表得到 A → 经 REALTIME_PUSH（Tag = A）转发 → A 写连接。
+ * So there is only one way for "someone connected to A receives a push": B consumes -> looks up the route table and gets A -> forwards via REALTIME_PUSH (Tag = A) -> A writes to the connection.
  */
 class RealtimePushIT {
 
@@ -78,7 +78,7 @@ class RealtimePushIT {
         p.put("merchanthub.realtime.route-ttl", "3s");
         p.put("merchanthub.realtime.order-consumer.enabled", String.valueOf(consumeOrders));
         p.put("merchanthub.realtime.order-consumer.consume-from", "CONSUME_FROM_FIRST_OFFSET");
-        // 用命令行参数传：builder.properties() 是优先级最低的默认值，会被 application.yml 里的 ${JWT_SECRET} 等盖掉
+        // Pass as command-line args: builder.properties() are lowest-precedence defaults and would be overridden by ${JWT_SECRET} etc. in application.yml
         return new SpringApplicationBuilder(RealTimeServiceApplication.class)
                 .run(p.entrySet().stream().map(e -> "--" + e.getKey() + "=" + e.getValue()).toArray(String[]::new));
     }
@@ -112,9 +112,9 @@ class RealtimePushIT {
         jdbc.execute("TRUNCATE TABLE merchant_order_notice");
     }
 
-    // ---------------- 工具 ----------------
+    // ---------------- Helpers ----------------
 
-    /** 模拟 user-tenant 登录：签 token 并存进 Redis（握手时要比对） */
+    /** Simulate a user-tenant login: sign a token and store it in Redis (compared during the handshake) */
     private static String login(long userId, Long tenantId, String role) {
         String token = JWT.issue(userId, tenantId, role, Duration.ofHours(1));
         redis.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + userId, token);
@@ -125,7 +125,7 @@ class RealtimePushIT {
         return node.getBean(NettyServer.class).port();
     }
 
-    /** 收集收到的文本帧 */
+    /** Collects received text frames */
     static final class Client implements WebSocket.Listener {
         final BlockingQueue<String> frames = new LinkedBlockingQueue<>();
         WebSocket ws;
@@ -168,11 +168,11 @@ class RealtimePushIT {
         return n == null ? 0 : n;
     }
 
-    // ---------------- 用例 ----------------
+    // ---------------- Test cases ----------------
 
     /**
-     * 跨节点推送：商家 7 的员工连在节点 A，ORDER_CREATED 被节点 B 消费 → 商家在 A 上收到新订单提醒。
-     * 同一事件重复投递：通知只写一条、只推一次（消费去重）
+     * Cross-node push: merchant 7's staff is connected to node A, ORDER_CREATED is consumed by node B -> the merchant receives the new-order alert on A.
+     * The same event delivered twice: the notice is written once and pushed once (consumer dedup)
      */
     @Test
     void merchantOnNodeA_eventConsumedByNodeB_pushedViaRoute() throws Exception {
@@ -183,7 +183,7 @@ class RealtimePushIT {
         String json = "{\"eventId\":" + eventId + ",\"orderNo\":" + orderNo + ",\"tenantId\":7,\"buyerId\":1001,"
                 + "\"payAmount\":9900,\"createdAt\":\"2026-11-23T00:00:00\"}";
         sendOrderEvent(PushTopics.TAG_ORDER_CREATED, json);
-        sendOrderEvent(PushTopics.TAG_ORDER_CREATED, json);   // 重复投递
+        sendOrderEvent(PushTopics.TAG_ORDER_CREATED, json);   // duplicate delivery
 
         String frame = merchant.next();
         assertThat(frame).isNotNull().contains("\"type\":\"NEW_ORDER\"").contains("\"orderNo\":\"" + orderNo + "\"");
@@ -192,19 +192,19 @@ class RealtimePushIT {
         assertThat(count("SELECT COUNT(*) FROM merchant_order_notice WHERE order_no = ?", orderNo)).isEqualTo(1);
         assertThat(merchant.frames.poll(3, TimeUnit.SECONDS)).as("重复事件不再推").isNull();
 
-        // 心跳：回 pong 并续期路由
+        // Heartbeat: reply pong and renew the route
         merchant.ws.sendText("ping", true).join();
         assertThat(merchant.next()).isEqualTo("pong");
 
-        // 正常断开：A 注销自己的路由
+        // Normal disconnect: A unregisters its own route
         merchant.ws.sendClose(WebSocket.NORMAL_CLOSURE, "bye").join();
         await().atMost(Duration.ofSeconds(10)).until(() -> !routeOf("merchant:7").contains("node-a"));
     }
 
     /**
-     * 节点宕机：买家 1001 连在某节点 X，X 被 kill -9（来不及注销路由）。
-     * 用"往路由表里写一个 X 的 field、但没有任何节点叫 X"来模拟：B 消费到 ORDER_PAID → 路由说在 X → 转发给 X → 没人收。
-     * 结论：消息分发前已存成"待送达"，不会丢；X 的路由 3 秒没续期自动过期；买家重连到 B → 握手成功后补发
+     * Node crash: buyer 1001 is connected to some node X, and X is kill -9'd (no chance to unregister its route).
+     * Simulated by "writing an X field into the route table while no node is named X": B consumes ORDER_PAID -> route says X -> forwards to X -> nobody receives it.
+     * Result: the message was stored as "pending" before dispatch, so it isn't lost; X's route expires after 3 seconds without renewal; the buyer reconnects to B -> redelivered after a successful handshake
      */
     @Test
     void nodeCrashed_routeExpires_buyerReconnectsElsewhere_getsReplay() throws Exception {
@@ -219,7 +219,7 @@ class RealtimePushIT {
         String msgId = "evt-" + eventId + "-b";
         await().atMost(Duration.ofSeconds(30)).until(() ->
                 count("SELECT COUNT(*) FROM offline_message WHERE msg_id = ? AND status = 0", msgId) == 1);
-        await().atMost(Duration.ofSeconds(10)).until(() -> routeOf("buyer:1001").isEmpty());   // TTL 到期
+        await().atMost(Duration.ofSeconds(10)).until(() -> routeOf("buyer:1001").isEmpty());   // TTL expired
 
         Client buyer = connect(nodeB, login(1001, null, "BUYER"));
         String frame = buyer.next();
@@ -231,7 +231,7 @@ class RealtimePushIT {
         buyer.ws.sendClose(WebSocket.NORMAL_CLOSURE, "bye").join();
     }
 
-    /** 完全不在线：消息留在表里；上线（连到哪台都行）补发，同店另一个员工上线也能收到商家通知 */
+    /** Fully offline: the message stays in the table; on coming online (to any node) it is redelivered, and another staff member of the same shop also gets merchant notices */
     @Test
     void offlineMerchant_getsReplayOnConnect() throws Exception {
         long eventId = IDS.incrementAndGet(), orderNo = IDS.incrementAndGet();
@@ -245,13 +245,13 @@ class RealtimePushIT {
         staff.ws.sendClose(WebSocket.NORMAL_CLOSURE, "bye").join();
     }
 
-    /** 握手鉴权：token 伪造 / 已被新登录顶掉 / 平台管理员（没有订单推送）都连不上 */
+    /** Handshake auth: forged token / token superseded by a new login / platform admin (no order pushes) all fail to connect */
     @Test
     void handshake_rejectsInvalidTokens() {
         assertThatThrownBy(() -> connect(nodeA, "not-a-jwt")).isInstanceOf(CompletionException.class);
 
         String old = login(701, TENANT, "MERCHANT_ADMIN");
-        // 重新登录，旧 token 作废（换个有效期：同一秒内签的两个 token 内容完全相同）
+        // Log in again so the old token is invalidated (use a different TTL: two tokens signed within the same second are identical)
         redis.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + 701,
                 JWT.issue(701, TENANT, "MERCHANT_ADMIN", Duration.ofHours(2)));
         assertThatThrownBy(() -> connect(nodeA, old)).isInstanceOf(CompletionException.class);

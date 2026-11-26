@@ -21,14 +21,14 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
- * 审批结果本地消息表的投递与补偿（照搬 order 的 OutboxRelay，B2）：把 approval_outbox 里 status = 0 的记录发到 MQ。
+ * Delivery and compensation for the approval-result local outbox table (copied from order's OutboxRelay, B2): sends approval_outbox records with status = 0 to MQ.
  * <p>
- * 两个入口走同一个 {@link #publish}：
+ * Both entry points go through the same {@link #publish}:
  * <ul>
- *   <li>{@link #publishAsync}：审批事务提交后立即发一次（快路径）</li>
- *   <li>{@link #scan}：定时扫描到期记录补发（兜底：MQ 不可用、进程在发送前挂掉、快路径任务被丢弃）</li>
+ *   <li>{@link #publishAsync}: send once right after the approval transaction commits (fast path)</li>
+ *   <li>{@link #scan}: periodically scan due records and resend (safety net: MQ unavailable, process died before sending, fast-path task dropped)</li>
  * </ul>
- * 多个实例同时扫描时，靠 {@link ApprovalOutboxMapper#claim} 的条件更新保证同一条记录同一时刻只有一个实例在发。
+ * When several instances scan at once, the conditional update in {@link ApprovalOutboxMapper#claim} ensures only one instance sends a given record at a time.
  */
 @Slf4j
 @Component
@@ -58,9 +58,9 @@ public class ApprovalOutboxRelay {
     }
 
     /**
-     * 快路径：提交后立即异步发送，不占用审批请求的线程。
-     * 线程池的线程<b>没有</b>提交事务那个线程的租户上下文（ThreadLocal 不跨线程），这里显式用 SYSTEM：
-     * 发件箱是基础设施，按 id 处理任意商家的记录；消息属于哪个商家由 outbox 行的 tenant_id 决定（见 toMessage）
+     * Fast path: send asynchronously right after commit, without occupying the approval request's thread.
+     * Pool threads do <b>not</b> have the committing thread's tenant context (ThreadLocal doesn't cross threads), so SYSTEM is used explicitly here:
+     * the outbox is infrastructure and processes records of any merchant by id; which merchant a message belongs to is decided by the outbox row's tenant_id (see toMessage)
      */
     public void publishAsync(long outboxId) {
         executor.execute(() -> TenantContext.runAsSystem(() -> {
@@ -71,9 +71,9 @@ public class ApprovalOutboxRelay {
         }));
     }
 
-    /** 兜底：扫描到期的待发送记录。E3 起由 XXL-Job 的 approvalOutboxRelayJob 触发（原 @Scheduled 5 秒一次） */
+    /** Safety net: scan pending records that are due. Since E3 triggered by XXL-Job's approvalOutboxRelayJob (formerly @Scheduled every 5 seconds) */
     public int scan() {
-        // 任务线程没有任何上下文；扫描本来就跨所有商家，显式声明 SYSTEM（不声明的话租户插件会直接报错）
+        // The job thread has no context at all; the scan spans all merchants anyway, so declare SYSTEM explicitly (otherwise the tenant plugin throws)
         return TenantContext.callAsSystem(this::scanOnce);
     }
 
@@ -83,7 +83,7 @@ public class ApprovalOutboxRelay {
             log.info("本地消息表扫描：{} 条到期待发送", due.size());
         }
         for (ApprovalOutbox row : due) {
-            publish(row);   // 每条单独处理、单独 catch：一条失败不影响同批其他记录
+            publish(row);   // each record handled and caught separately: one failure doesn't affect the rest of the batch
         }
         return due.size();
     }
@@ -91,7 +91,7 @@ public class ApprovalOutboxRelay {
     public void publish(ApprovalOutbox row) {
         LocalDateTime now = LocalDateTime.now(clock);
         if (mapper.claim(row.getId(), now, now.plusSeconds(leaseSeconds)) != 1) {
-            return;   // 被别的实例 / 线程抢走了，或者已经不是待发送状态
+            return;   // taken by another instance / thread, or no longer pending
         }
         try {
             SendResult result = producer.send(toMessage(row));
@@ -117,7 +117,7 @@ public class ApprovalOutboxRelay {
         int updated = mapper.markRetry(row.getId(), row.getRetryCount(), newCount,
                 giveUp ? ApprovalOutbox.FAILED : ApprovalOutbox.PENDING, next, truncate(error));
         if (giveUp) {
-            // 生产环境这里接告警，人工排查后把 status 改回 0 即可重新投递
+            // In production hook an alert here; after manual investigation, set status back to 0 to redeliver
             log.error("本地消息表投递失败已达上限 {} 次，停止自动重试 outboxId={} eventId={} bizKey={} tenantId={} error={}",
                     newCount, row.getId(), row.getEventId(), row.getBizKey(), row.getTenantId(), error);
         } else {
@@ -126,7 +126,7 @@ public class ApprovalOutboxRelay {
         }
     }
 
-    /** 第 n 次失败后等待 base × 2^(n-1)，封顶 max：MQ 短暂抖动很快恢复，长时间故障时不会每秒狂刷 */
+    /** After the n-th failure wait base x 2^(n-1), capped at max: brief MQ blips recover fast, and long outages don't hammer every second */
     Duration backoff(int failures) {
         long seconds = baseBackoffSeconds << Math.min(failures - 1, 20);
         return Duration.ofSeconds(Math.min(seconds, maxBackoffSeconds));
@@ -135,9 +135,9 @@ public class ApprovalOutboxRelay {
     private Message toMessage(ApprovalOutbox row) {
         Message msg = new Message(row.getTopic(), row.getTag(), row.getPayload().getBytes(StandardCharsets.UTF_8));
         msg.setKeys(row.getBizKey() + " " + row.getEventId());
-        // 用我们自己的 event_id 做幂等键：重发时 RocketMQ 的 msgId 会变，event_id 不变（B2 笔记 Q4）
+        // Use our own event_id as the idempotency key: RocketMQ's msgId changes on resend, event_id doesn't (B2 notes Q4)
         msg.putUserProperty("EVENT_ID", String.valueOf(row.getEventId()));
-        // C1：用 outbox 行自己的 tenant_id，不用线程上下文（这里是 SYSTEM，不代表任何商家）
+        // C1: use the outbox row's own tenant_id, not the thread context (which is SYSTEM here and represents no merchant)
         return TenantMessages.stamp(msg, row.getTenantId());
     }
 

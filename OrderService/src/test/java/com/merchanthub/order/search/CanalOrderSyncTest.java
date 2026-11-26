@@ -7,7 +7,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** E2：从 binlog 行变更里取订单号 —— 只看 orders / order_item 两张表，插入 / 更新取新值，删除取旧值，去重 */
+/** E2: extract order numbers from binlog row changes -- only the orders / order_item tables; inserts / updates use new values, deletes use old values; deduplicated */
 class CanalOrderSyncTest {
 
     private static CanalEntry.Entry row(String table, CanalEntry.EventType type, long orderNo) {
@@ -35,7 +35,7 @@ class CanalOrderSyncTest {
                 row("orders", CanalEntry.EventType.INSERT, 123),
                 row("order_item", CanalEntry.EventType.INSERT, 123),
                 row("orders", CanalEntry.EventType.UPDATE, 123),
-                row("order_outbox", CanalEntry.EventType.INSERT, 999),   // 不关心的表
+                row("order_outbox", CanalEntry.EventType.INSERT, 999),   // a table we don't care about
                 row("orders", CanalEntry.EventType.DELETE, 456));
 
         assertThat(CanalOrderSync.orderNosOf(entries)).containsExactly(123L, 456L);

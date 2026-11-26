@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 商品上架审批单（表 listing_approval）：一次提交 = 一行 = 一个流程实例 */
+/** Product listing approval record (table listing_approval): one submission = one row = one process instance */
 @Data
 @TableName("listing_approval")
 public class ListingApproval {

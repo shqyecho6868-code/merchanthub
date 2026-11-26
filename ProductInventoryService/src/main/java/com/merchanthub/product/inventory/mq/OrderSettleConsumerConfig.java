@@ -21,11 +21,11 @@ import org.springframework.context.annotation.Configuration;
 import java.io.IOException;
 
 /**
- * 订阅订单的"已支付 / 已关闭"事件：已支付 → 确认扣减；已关闭 → 释放预占。
+ * Subscribes to order "paid / closed" events: paid → confirm deduction; closed → release the reservation.
  * <p>
- * 这里<b>没有</b> consumed_event 去重表：预占记录 {@code WHERE status = 10} 的 CAS 本身就是幂等闸门，
- * 重复投递时 CAS 影响 0 行，库存不会再动（B3-下笔记第 2 节）。
- * 同一订单的 ORDER_PAID 和 ORDER_CLOSED 不会同时存在（order 侧 CAS 只有一方赢），所以并发消费、乱序都不影响结果。
+ * There is <b>no</b> consumed_event dedup table here: the reservation record's {@code WHERE status = 10} CAS is itself the idempotency gate;
+ * on redelivery the CAS affects 0 rows and stock isn't touched again (B3-下 notes section 2).
+ * ORDER_PAID and ORDER_CLOSED never both exist for the same order (order-side CAS lets only one win), so concurrent or out-of-order consumption doesn't affect the result.
  */
 @Slf4j
 @Configuration
@@ -38,7 +38,7 @@ public class OrderSettleConsumerConfig {
     public DefaultMQPushConsumer orderSettleConsumer(ReservationSettleService settleService, ObjectMapper objectMapper,
                                                      ObjectProvider<ReconAlarm> alarm,
                                                      @Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr,
-                                                     // 最大重试次数，-1 = RocketMQ 默认 16 次；死信测试调成 0（第一次失败就进死信）
+                                                     // Max retries, -1 = RocketMQ default of 16; the DLQ test sets it to 0 (straight to DLQ on first failure)
                                                      @Value("${merchanthub.inventory.settle-consumer.max-reconsume-times:-1}") int maxReconsume)
             throws MQClientException {
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(CONSUMER_GROUP);
@@ -48,7 +48,7 @@ public class OrderSettleConsumerConfig {
         consumer.subscribe(OrderSettledEvent.TOPIC, OrderSettledEvent.TAG_ORDER_PAID + " || " + OrderSettledEvent.TAG_ORDER_CLOSED);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                // traceId: restore the sender's trace ID so every log for this message (including the retry warn below) carries it; restored afterwards so pooled consumer threads don't leak it
                 try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
                     OrderSettledEvent event;
                     try {
@@ -58,7 +58,7 @@ public class OrderSettleConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1：按消息里的商家恢复租户上下文，预占记录、库存的 SQL 都会自动带上 tenant_id
+                        // C1: restore the tenant context from the merchant in the message; reservation and inventory SQL automatically carry tenant_id
                         TenantMessages.consumeAs(m, () -> {
                             if (OrderSettledEvent.TAG_ORDER_PAID.equals(m.getTags())) {
                                 settleService.confirm(event.orderNo(), event.tenantId());
@@ -67,10 +67,10 @@ public class OrderSettleConsumerConfig {
                             }
                         });
                     } catch (RuntimeException e) {
-                        // 数据库不可用 / reserved 不足（数据不一致）：事务已整体回滚，让 RocketMQ 稍后重投
+                        // Database unavailable / reserved insufficient (data inconsistent): the whole transaction is rolled back, let RocketMQ redeliver later
                         log.warn("处理订单事件失败，稍后重投 tag={} eventId={} orderNo={} reconsumeTimes={}",
                                 m.getTags(), event.eventId(), event.orderNo(), m.getReconsumeTimes(), e);
-                        // E3：重试耗尽进死信前告警；预占对账（reservationReconJob）会按订单真实状态兜底了结
+                        // E3: alert before retries are exhausted and it goes to the DLQ; reservation recon (reservationReconJob) backstops it based on the order's real status
                         DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
                                 event.tenantId(), e);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;

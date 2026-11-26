@@ -19,7 +19,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** D1 顺带修 C1 遗留：新登录（BCrypt + 配置化 JWT 密钥），token 写 Redis 供网关核对 */
+/** D1 also fixes a C1 leftover: new login (BCrypt + configurable JWT secret), token written to Redis for the gateway to check */
 class AuthIT extends UserItSupport {
 
     @Autowired
@@ -94,7 +94,7 @@ class AuthIT extends UserItSupport {
     void refresh() throws Exception {
         insertAccount(null, "buyer_03", "password123", "BUYER");
         String refresh = login("buyer_03", "password123").at("/data/refreshToken").asText();
-        Thread.sleep(1100);   // JWT 的 iat 精度是秒：同一秒内签出的新 token 与旧的一模一样
+        Thread.sleep(1100);   // JWT iat has second precision: a new token signed within the same second is identical to the old one
 
         String body = mvc.perform(post("/user/refresh").header("Refresh-Token", refresh))
                 .andExpect(jsonPath("$.code").value(200)).andReturn().getResponse().getContentAsString();

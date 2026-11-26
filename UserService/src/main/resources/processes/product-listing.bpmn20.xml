@@ -14,7 +14,7 @@
     <startEvent id="start" name="提交上架"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="merchantReview"/>
 
-    <!-- 候选组带商家 ID：商家 7 的商品只进"MERCHANT_ADMIN:7"组，商家 8 的管理员查待办时根本查不到 -->
+    <!-- Candidate group includes the merchant ID: merchant 7's products only go to group "MERCHANT_ADMIN:7", so merchant 8's admin can't even find them when querying tasks -->
     <userTask id="merchantReview" name="商家管理员初审" flowable:candidateGroups="MERCHANT_ADMIN:${tenantId}"/>
     <sequenceFlow id="f2" sourceRef="merchantReview" targetRef="merchantDecision"/>
 

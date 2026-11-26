@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CreateOrderVO {
-    /** 订单号转成字符串返回：雪花 ID 有 19 位，超过 JS Number 的安全整数范围，前端直接用 long 会丢精度 */
+    /** Order number returned as a string: snowflake IDs have 19 digits, beyond JS Number's safe integer range, so using a long directly loses precision on the frontend */
     private String orderNo;
     private Integer status;
     private Long payAmount;

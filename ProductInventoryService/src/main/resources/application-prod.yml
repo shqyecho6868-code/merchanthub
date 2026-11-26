@@ -1,6 +1,6 @@
 spring:
   datasource:
-    # 每个服务一个库（mh_product）：服务之间不能跨库 join、也不能共用本地事务，只能通过接口交互
+    # One database per service (mh_product): services can't join across databases or share local transactions; they interact only through APIs
     url: jdbc:mysql://mysql:3306/mh_product?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
     username: root
     password: ${MYSQL_ROOT_PASSWORD}
@@ -12,7 +12,7 @@ spring:
         server-addr: nacos:8848
 
 merchanthub:
-  # E3：注册到 XXL-Job 调度中心
+  # E3: register with the XXL-Job admin (scheduler)
   job:
     xxl:
       enabled: true

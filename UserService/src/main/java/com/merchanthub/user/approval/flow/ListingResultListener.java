@@ -15,11 +15,11 @@ import org.flowable.engine.delegate.DelegateExecution;
 import org.springframework.stereotype.Component;
 
 /**
- * 商品上架流程走到结束节点时执行（BPMN 里 {@code ${listingResultListener.onEnd(execution, 'APPROVED')}}）。
+ * Runs when the product listing process reaches an end event ({@code ${listingResultListener.onEnd(execution, 'APPROVED')}} in the BPMN).
  * <p>
- * 这一步是"审批结果可靠变成业务状态"的起点：它和"完成最后一个审批任务"在<b>同一个数据库事务</b>里，
- * 写两样东西 —— 审批单结果（listing_approval，供 product 补偿时反查）和一条待发消息（approval_outbox）。
- * 事务提交了，两样都在；回滚了，两样都没有，任务也还在待办里。不会出现"审批通过了但没有任何东西去通知 product"。
+ * This step is where "the approval result reliably becomes business state" begins: it runs in the <b>same DB transaction</b> as "completing the last approval task",
+ * and writes two things -- the approval record result (listing_approval, for product's compensation lookup) and a pending message (approval_outbox).
+ * If the transaction commits, both exist; if it rolls back, neither does and the task is still pending. There's never "approved but nothing to notify product".
  */
 @Slf4j
 @Component("listingResultListener")
@@ -39,12 +39,12 @@ public class ListingResultListener {
         boolean approved = ListingResultEvent.APPROVED.equals(result);
         String reason = approved ? null : (String) execution.getVariable(FlowVars.COMMENT);
 
-        // 谁完成的最后一步不确定（商家管理员初审驳回 / 平台管理员复审），这里统一按"这张审批单所属商家"执行：
-        // SQL 带上 tenant_id，消息也打上这个商家
+        // Who completed the last step varies (merchant admin rejecting at first review / platform admin at second review), so always act as "the merchant that owns this approval record":
+        // the SQL includes tenant_id and the message is tagged with this merchant
         TenantContext.runAs(TenantInfo.systemOf(tenantId), () -> {
             int rows = approvalMapper.finish(pid, approved ? ListingApproval.APPROVED : ListingApproval.REJECTED, reason);
             if (rows != 1) {
-                // 已经落过结果（监听器被重复执行）：不再发第二条消息
+                // Result already recorded (listener executed twice): don't send a second message
                 log.warn("上架审批单已有结果，跳过 pid={} productId={} round={}", pid, productId, round);
                 return;
             }

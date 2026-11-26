@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 链路起点：沿用合法的 X-Trace-Id，否则生成；下游请求头和响应头是同一个值 */
+/** Start of the trace: reuse a valid X-Trace-Id, otherwise generate one; the downstream request header and the response header carry the same value */
 class TraceIdGlobalFilterTest {
 
     private final TraceIdGlobalFilter filter = new TraceIdGlobalFilter();

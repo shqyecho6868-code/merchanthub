@@ -16,8 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * E3（C2 遗留）：payment 调 order 的熔断规则。每个资源两条：慢调用比例 + 异常比例，任一触发就熔断。
- * 阈值含义同 order（C2 笔记 Q3）；规则只在内存里，生产应放 Nacos 持久化。
+ * E3 (C2 follow-up): circuit-breaker rules for payment calling order. Two rules per resource: slow-call ratio + exception ratio; either one trips the breaker.
+ * Thresholds mean the same as in order (C2 notes Q3); rules live only in memory — in production they should be persisted in Nacos.
  */
 @Slf4j
 @Configuration
@@ -38,7 +38,7 @@ public class PaymentSentinelConfig {
         private int openSeconds = 10;
     }
 
-    /** 先清空再加载：规则管理器是 JVM 级单例，测试里多个上下文共用，清空才能拿到干净的熔断器状态 */
+    /** Clear before loading: the rule manager is a JVM-wide singleton shared by multiple test contexts; clearing is the only way to get clean breaker state */
     @PostConstruct
     public void reload() {
         DegradeRuleManager.loadRules(List.of());

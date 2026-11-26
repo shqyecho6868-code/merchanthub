@@ -18,15 +18,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 把一个订单同步到 ES（E2）。
+ * Syncs one order to ES (E2).
  * <p>
- * 关键设计：<b>binlog 只当"这个订单变了"的信号，文档内容回 MySQL 查最新值再整篇覆盖</b>。
+ * Key design: <b>binlog is only a signal that "this order changed"; the document is rebuilt from the latest MySQL data and fully overwritten</b>.
  * <ul>
- *   <li>不怕乱序：先后两条 binlog 谁先处理都一样，最后写进去的都是数据库当前值</li>
- *   <li>不怕重复：同步失败重试、Canal 重复投递，整篇覆盖天然幂等</li>
- *   <li>订单头和明细是两张表、两条 binlog，回查一次就能拼成完整文档</li>
+ *   <li>Order-independent: whichever of two binlog events is processed first, what ends up written is the DB's current value</li>
+ *   <li>Duplicate-safe: retries after sync failures and Canal redeliveries are naturally idempotent with full overwrites</li>
+ *   <li>Order header and items are two tables and two binlog events; one lookup assembles the complete document</li>
  * </ul>
- * 代价是每次变更多一次按主键回查，对订单这种低频写入完全可以接受。
+ * The cost is one extra primary-key lookup per change, perfectly acceptable for low-frequency writes like orders.
  */
 @Slf4j
 @Component
@@ -42,8 +42,8 @@ public class OrderSearchIndexer {
     private volatile boolean indexReady;
 
     /**
-     * 首次使用时建索引并显式给出 mapping：不让 ES 自动推断（orderNo 会被推断成 long、商品名会多出一份 keyword 子字段）。
-     * itemNames 用默认 standard 分词器：中文按单字切，够演示"按商品名搜"；IK 分词等调优不在范围内
+     * Create the index on first use with an explicit mapping: don't let ES infer it (orderNo would become long, product names would get an extra keyword sub-field).
+     * itemNames uses the default standard analyzer: Chinese is split per character, enough to demo "search by product name"; IK analyzer tuning is out of scope
      */
     void ensureIndex() throws IOException {
         if (indexReady) {
@@ -62,7 +62,7 @@ public class OrderSearchIndexer {
                         "skuSpecs", Property.of(p -> p.text(t -> t))))));
                 log.info("ES 索引 {} 已创建", INDEX);
             } catch (co.elastic.clients.elasticsearch._types.ElasticsearchException e) {
-                // 多实例同时建索引：别人先建好了，不算错
+                // Multiple instances creating the index at once: someone else got there first, not an error
                 if (!"resource_already_exists_exception".equals(e.error().type())) {
                     throw e;
                 }
@@ -71,10 +71,10 @@ public class OrderSearchIndexer {
         indexReady = true;
     }
 
-    /** 按订单号同步：订单存在 → 整篇覆盖；不存在（被删 / 逻辑删除）→ 删文档 */
+    /** Sync by order number: order exists -> full overwrite; doesn't exist (deleted / soft-deleted) -> delete the document */
     public void sync(long orderNo) throws IOException {
         ensureIndex();
-        // 同步线程不属于任何请求，跨商家读订单：SYSTEM 身份
+        // The sync thread belongs to no request and reads orders across merchants: SYSTEM identity
         OrderSearchDoc doc = TenantContext.callAsSystem(() -> load(orderNo));
         if (doc == null) {
             es.delete(d -> d.index(INDEX).id(String.valueOf(orderNo)));

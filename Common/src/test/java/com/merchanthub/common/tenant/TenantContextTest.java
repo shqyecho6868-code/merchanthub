@@ -50,23 +50,23 @@ class TenantContextTest {
     }
 
     /**
-     * 为什么必须清理（线程池复用）：只有 1 个线程的池子，先后执行商家 7 和"没带身份"的两个任务，
-     * 两个任务跑在<b>同一个线程</b>上。第一个任务如果不清理，第二个任务就会以为自己是商家 7。
+     * Why clearing is mandatory (thread pool reuse): a pool with a single thread runs a merchant 7 task and then a task with no identity,
+     * both on <b>the same thread</b>. If the first task doesn't clean up, the second one thinks it is merchant 7.
      */
     @Test
     @DisplayName("线程池复用：不清理 → 下一个任务串到上一个商家；清理 → 干净")
     void threadPoolReuse() throws Exception {
-        // 反例：任务里 open 了却不 close（模拟忘了清理）
+        // Counter-example: the task opens but never closes (simulating forgotten cleanup)
         ExecutorService leaky = Executors.newSingleThreadExecutor();
         try {
             leaky.submit(() -> TenantContext.open(new TenantInfo(7L, 2001L, Role.MERCHANT_ADMIN))).get();
             Long seenByNextTask = leaky.submit(TenantContext::tenantId).get();
             assertThat(seenByNextTask).as("同一个线程上的下一个任务（本来没身份）读到了商家 7 —— 串租户").isEqualTo(7L);
         } finally {
-            leaky.shutdownNow();   // 线程销毁，泄漏的 ThreadLocal 跟着没了；生产里线程是长期复用的，不会自己消失
+            leaky.shutdownNow();   // destroying the thread drops the leaked ThreadLocal too; in production threads are reused long-term and don't go away on their own
         }
 
-        // 正确写法：runAs / try-with-resources，任务结束必还原
+        // Correct style: runAs / try-with-resources, always restored when the task ends
         ExecutorService clean = Executors.newSingleThreadExecutor();
         try {
             clean.submit(() -> TenantContext.runAs(new TenantInfo(7L, 2001L, Role.MERCHANT_ADMIN), () -> { })).get();

@@ -23,11 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Objects;
 
 /**
- * 收到"支付成功"后由 order 自己把订单改成已支付。payment 不直接改订单：订单状态只有 order 一个写入方，
- * 所有流转都经过同一个状态机和 CAS，不会出现两个服务各改各的。
+ * On "payment succeeded", order itself marks the order as paid. payment never updates orders directly: order is the only writer of order status,
+ * so every transition goes through the same state machine and CAS, and two services never update it independently.
  * <p>
- * 去重记录、状态 CAS、状态流水在同一个本地事务里（同 B2 的消费端幂等）。
- * B3-下：CAS 赢了 → 同一事务写 ORDER_PAID 事件（库存确认扣减）；CAS 输了 → 同一事务写 pay_anomaly（钱收了、单没成，留给对账）。
+ * Dedup record, status CAS, and status log are in the same local transaction (same consumer-side idempotency as B2).
+ * B3-下: CAS wins -> write the ORDER_PAID event in the same transaction (confirm inventory deduction); CAS loses -> write pay_anomaly in the same transaction (money received but order not paid, left for reconciliation).
  */
 @Slf4j
 @Service
@@ -44,7 +44,7 @@ public class OrderPaidService {
     private final OrderEventCodec codec;
     private final SnowflakeIdGenerator idGenerator;
 
-    /** @return true 订单本次被改成已支付；false 重复事件或订单状态不允许，什么也没改 */
+    /** @return true if the order was marked paid this time; false for a duplicate event or a disallowed order status, nothing changed */
     @Transactional(rollbackFor = Exception.class)
     public boolean handle(PaySuccessEvent event) {
         ConsumedEvent mark = new ConsumedEvent();
@@ -61,14 +61,14 @@ public class OrderPaidService {
 
         Orders order = ordersMapper.selectByOrderNoAcrossTenants(event.orderNo());
         if (order == null) {
-            // 回调早于订单：订单可能马上就提交。抛异常 → 事务回滚（去重记录一起撤销）→ RocketMQ 重投（10s、30s、1m…）。
-            // 订单始终不出现：重试 16 次（累计约 4 小时 46 分）后进死信队列 %DLQ%order-pay-success，交给 E3 对账
+            // Callback before the order: the order may commit any moment. Throw -> transaction rolls back (dedup record undone too) -> RocketMQ redelivers (10s, 30s, 1m...).
+            // If the order never appears: after 16 retries (about 4h46m total) it goes to the DLQ %DLQ%order-pay-success for E3 reconciliation
             log.warn("【回调早于订单】支付成功事件到达时订单尚不存在，回滚去重记录、稍后重投 payNo={} orderNo={} tenantId={}",
                     event.payNo(), event.orderNo(), event.tenantId());
             throw new OrderNotVisibleException(event.orderNo());
         }
         if (!Objects.equals(order.getTenantId(), event.tenantId()) || !Objects.equals(order.getPayAmount(), event.amount())) {
-            // 商家不符 / 金额不符：不是重试能解决的，记下来交给对账，消息确认掉
+            // Merchant or amount mismatch: retrying won't fix it; record it for reconciliation and ack the message
             log.error("支付成功事件与订单不匹配，需对账 payNo={} orderNo={} 事件tenantId={} 事件金额={} 订单={}",
                     event.payNo(), event.orderNo(), event.tenantId(), event.amount(), order);
             recordAnomaly(event, PayAnomaly.MISMATCH, order.getStatus(), "订单tenantId=" + order.getTenantId()
@@ -79,9 +79,9 @@ public class OrderPaidService {
         boolean ok = transitioner.transit(event.orderNo(), event.tenantId(), OrderEvent.PAY_SUCCESS,
                 "SYSTEM", 0L, "payNo=" + event.payNo() + " channelTradeNo=" + event.channelTradeNo());
         if (!ok) {
-            // 例：订单已超时关单后钱才到；或同一订单两张支付单都付成功了。订单不能"复活"，也不动库存，
-            // 只记一条支付异常留给对账退款（E3 / 退款范围外）
-            // 必须当前读：普通 SELECT 会读到本事务开头的快照（仍是待支付），见 OrdersMapper#selectStatusForUpdate
+            // E.g. money arrives after the order was closed for timeout, or two payments for one order both succeeded. The order can't be "revived" and inventory isn't touched;
+            // just record a payment anomaly for reconciliation/refund (E3 / refunds out of scope)
+            // Must be a current read: a plain SELECT sees this transaction's starting snapshot (still pending), see OrdersMapper#selectStatusForUpdate
             int status = ordersMapper.selectStatusForUpdate(event.orderNo());
             String type = status == OrderStatus.CLOSED.getCode() ? PayAnomaly.PAID_AFTER_CLOSED : PayAnomaly.DUPLICATE_PAYMENT;
             log.error("【幂等·第四层 订单 CAS】订单当前状态 {} 不是待支付，支付成功未生效，记支付异常 {} 待对账 payNo={} orderNo={} tenantId={}",
@@ -89,7 +89,7 @@ public class OrderPaidService {
             recordAnomaly(event, type, status, "channelTradeNo=" + event.channelTradeNo());
             return false;
         }
-        // 和 CAS 在同一个事务里写"已支付"事件：订单成了已支付，库存确认扣减就一定会发生
+        // Write the "paid" event in the same transaction as the CAS: once the order is paid, inventory deduction confirmation is guaranteed to happen
         OrderSettledEvent paid = new OrderSettledEvent(idGenerator.nextId(), event.orderNo(), event.tenantId(),
                 OrderEvent.PAY_SUCCESS.name(), order.getBuyerId());
         outboxWriter.append(event.tenantId(), paid.eventId(), String.valueOf(event.orderNo()), OrderEventTopics.TOPIC,

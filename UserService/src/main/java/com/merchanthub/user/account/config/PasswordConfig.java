@@ -9,8 +9,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 public class PasswordConfig {
 
     /**
-     * BCrypt：每个密码自带随机盐、计算故意慢（cost 10 ≈ 几十毫秒），库被拖走也很难批量反推。
-     * 旧 IM 用 MD5 + 固定盐：所有人同一个盐，一张彩虹表就能撞出全部弱密码（migration-map 第 49 行）
+     * BCrypt: every password gets its own random salt and hashing is deliberately slow (cost 10 ~ tens of ms), so even a leaked DB is hard to crack in bulk.
+     * The old IM used MD5 + a fixed salt: everyone shared one salt, so one rainbow table could crack every weak password (migration-map line 49)
      */
     @Bean
     public PasswordEncoder passwordEncoder() {

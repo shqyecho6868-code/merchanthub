@@ -1,6 +1,6 @@
 package com.merchanthub.payment.mq;
 
-/** 支付领域事件。order 订阅 PAY_SUCCESS 后自己做订单状态 CAS（payment 不直接改订单） */
+/** Payment domain events. order subscribes to PAY_SUCCESS and does its own order-status CAS (payment never modifies orders directly) */
 public final class PaymentEventTopics {
 
     private PaymentEventTopics() {
@@ -8,8 +8,8 @@ public final class PaymentEventTopics {
 
     public static final String TOPIC = "PAYMENT_EVENT";
     public static final String TAG_PAY_SUCCESS = "PAY_SUCCESS";
-    /** 与 order 的 ORDER_EVENT 约定一致：自定义事件 ID 属性，消费端按它幂等 */
+    /** Matches order's ORDER_EVENT convention: a custom event-ID property that consumers dedupe on */
     public static final String PROP_EVENT_ID = "EVENT_ID";
-    /** 这次回调的尝试 ID（每次回调随机生成）：回查时和支付单上记录的赢家 ID 比对 */
+    /** Attempt ID of this callback (randomly generated per callback): compared on check-back with the winner ID recorded on the payment */
     public static final String PROP_ATTEMPT = "PAY_ATTEMPT";
 }

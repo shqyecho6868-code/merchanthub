@@ -35,14 +35,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
 /**
- * 破坏性实验 ②：本地消息表方案下 MQ 不可用，看补偿扫描如何重发。
+ * Destructive experiment ②: with the local message table approach, MQ is unavailable; observe how the compensation scan re-sends.
  * <p>
- * "MQ 不可用"用 spy 让生产者前 N 次 send 抛 MQClientException 来模拟（和 Broker 宕机时客户端拿到的异常同类）。
- * 不直接停共享的 RocketMQ 容器：同一个 JVM 里其他测试类也在用它。真实停 Broker 的手动实验记录在 B2 笔记 7.4。
+ * "MQ unavailable" is simulated with a spy making the producer's first N sends throw MQClientException (the same kind of exception the client gets when the broker is down).
+ * We don't stop the shared RocketMQ container: other test classes in the same JVM use it. The manual experiment that really stops the broker is recorded in B2 notes 7.4.
  * <p>
- * 退避调成 1 秒、扫描 500 毫秒一次，让几次重试在几秒内跑完。
- * E3 起扫描由 XXL-Job 调度，服务里不再有自己的定时器：这里用一个后台线程每 500 毫秒调一次 relay.scan()，
- * 模拟调度中心触发。只扫这个上下文的 relay（带 spy 生产者），不会被别的缓存上下文抢走补发（P17）。
+ * Backoff set to 1s and scan every 500ms so several retries finish within seconds.
+ * Since E3 the scan is scheduled by XXL-Job and the service has no timer of its own: here a background thread calls relay.scan() every 500ms
+ * to simulate the admin trigger. Only this context's relay (with the spy producer) scans, so other cached contexts can't steal the re-send (P17).
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
@@ -69,7 +69,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         observer = new OrderEventObserver();
     }
 
-    /** 模拟 XXL-Job：每 500 毫秒触发一次 orderOutboxRelayJob */
+    /** Simulates XXL-Job: triggers orderOutboxRelayJob every 500ms */
     @BeforeEach
     void startScanTrigger() {
         scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -77,7 +77,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
             try {
                 relay.scan();
             } catch (RuntimeException ignored) {
-                // 和调度中心一样：一次执行失败不影响下一次
+                // Like the admin: one failed run doesn't affect the next
             }
         }, 500, 500, TimeUnit.MILLISECONDS);
     }
@@ -93,8 +93,8 @@ class OrderOutboxCompensationIT extends OrderItSupport {
     }
 
     /**
-     * "订单已创建"事件的前 failTimes 次发送失败，之后恢复正常。
-     * 只对 ORDER_EVENT 计数：B3-下起每单还会写一行 ORDER_TIMEOUT 定时消息，不能让它分走失败次数
+     * The first failTimes sends of the "order created" event fail, then it recovers.
+     * Count only ORDER_EVENT: since B3-下 each order also writes an ORDER_TIMEOUT scheduled message row, which must not consume the failure count
      */
     private void mqDownFor(int failTimes) throws Exception {
         AtomicInteger calls = new AtomicInteger();
@@ -111,9 +111,9 @@ class OrderOutboxCompensationIT extends OrderItSupport {
     }
 
     /**
-     * MQ 挂了：下单照样成功（这是相对事务消息方案的最大优势）；快路径失败 → 扫描按退避重试 → MQ 恢复后送达。
-     * 结论：retry_count 记下了失败次数，last_error 留着最后一次失败原因，最终 status=1、消费者收到。
-     * （修复前这里会失败：第一次失败后记录停在 status=1、retry_count=0，消费者永远收不到）
+     * MQ down: orders still succeed (the biggest advantage over the transactional-message approach); fast path fails -> scan retries with backoff -> delivered after MQ recovers.
+     * Conclusion: retry_count records the failures, last_error keeps the last failure reason, finally status=1 and the consumer receives it.
+     * (Before the fix this failed: after the first failure the record was stuck at status=1, retry_count=0, and the consumer never received it)
      */
     @Test
     void mqDown_orderStillSucceeds_scanRetriesUntilDelivered() throws Exception {
@@ -129,7 +129,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         assertThat(row.get("sent_at")).isNotNull();
     }
 
-    /** MQ 一直不恢复：重试满上限后标记为失败（2），不再无限重试，也不会被误标成已发送 */
+    /** MQ never recovers: after max retries it's marked failed (2), no infinite retries, and never wrongly marked as sent */
     @Test
     void mqDownForever_givesUpAfterMaxRetries_markedFailed() throws Exception {
         mqDownFor(Integer.MAX_VALUE);
@@ -143,8 +143,8 @@ class OrderOutboxCompensationIT extends OrderItSupport {
     }
 
     /**
-     * 两个"实例"同时补发同一条记录：抢占的条件更新只让一个成功，消息只发一次。
-     * 在 MQ 正常时构造：先让快路径失败一次（记录回到待发送、1 秒后到期），再用 8 个线程同时 publish。
+     * Two "instances" re-send the same record at once: the claiming conditional update lets only one succeed, so the message is sent once.
+     * Built while MQ is healthy: first make the fast path fail once (record back to pending, due in 1s), then publish from 8 threads at once.
      */
     @Test
     void concurrentRelays_sameRow_sentOnce() throws Exception {
@@ -159,7 +159,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         for (int i = 0; i < 8; i++) {
             pool.submit(() -> {
                 start.await();
-                TenantContext.runAsSystem(() -> relay.publish(row));   // 子线程自己设上下文（C1）
+                TenantContext.runAsSystem(() -> relay.publish(row));   // the worker thread sets its own context (C1)
                 return null;
             });
         }
@@ -168,7 +168,7 @@ class OrderOutboxCompensationIT extends OrderItSupport {
         assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
 
         await().atMost(Duration.ofSeconds(30)).until(() -> !observer.received(orderNo).isEmpty());
-        // 再等几个扫描周期，确认没有第二条
+        // Wait a few more scan cycles to confirm there's no second one
         await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5))
                 .until(() -> observer.received(orderNo).size() == 1);
     }

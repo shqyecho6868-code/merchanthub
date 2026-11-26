@@ -26,9 +26,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * E3（补 C2 遗留）：payment → order 的真实 Feign 调用打到一个"很慢的假 order"上：
- * 读超时后不重试；连续超时后熔断，之后的调用不发请求、几毫秒内降级成 DOWNSTREAM_UNAVAILABLE。
- * 业务失败（订单不存在，HTTP 200 + code 40400）不计入熔断，原样透传。
+ * E3 (C2 follow-up): payment → order real Feign calls hit a "very slow fake order":
+ * no retry after a read timeout; after consecutive timeouts the circuit opens, and subsequent calls send no request and degrade to DOWNSTREAM_UNAVAILABLE within a few ms.
+ * Business failures (order not found, HTTP 200 + code 40400) don't count toward the circuit breaker and are passed through as-is.
  */
 @SpringBootTest(properties = {
         "spring.cloud.openfeign.client.config.paymentOrderClient.read-timeout=300",
@@ -47,7 +47,7 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
-        // 订单号 1：很慢（超过读超时）；订单号 2：立即返回"订单不存在"
+        // Order number 1: very slow (exceeds the read timeout); order number 2: immediately returns "order not found"
         FAKE_ORDER.createContext("/internal/orders/", ex -> {
             HITS.incrementAndGet();
             boolean slow = ex.getRequestURI().getPath().endsWith("/1");
@@ -65,7 +65,7 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
                 ex.sendResponseHeaders(200, body.length);
                 ex.getResponseBody().write(body);
             } catch (IOException ignored) {
-                // 调用方超时后已断开
+                // The caller has already disconnected after timing out
             }
             ex.close();
         });
@@ -114,9 +114,9 @@ class PaymentFeignResilienceIT extends IntegrationTestBase {
         int hits = HITS.get();
         long elapsedMs = timedCall();
 
-        // 同 order 的 FeignResilienceIT（P47）：Sentinel 熔断统计按整 10 秒对齐，3 次调用跨过窗口边界时
-        // 凑不够 min-requests，熔断器还没打开（G-下 CI 在 payment 这份上复现，P51）。
-        // 这次调用若仍打到了下游，最多再补 3 次，直到某次没打到下游（= 熔断已打开）
+        // Same as order's FeignResilienceIT (P47): Sentinel's circuit-breaker stats align to whole 10-second windows; when the 3 calls straddle a window boundary
+        // they don't reach min-requests and the breaker hasn't opened yet (reproduced on this payment copy in G-下 CI, P51).
+        // If this call still reached the downstream, make up to 3 more calls until one doesn't (= the breaker is open)
         for (int extra = 0; extra < 3 && HITS.get() != hits; extra++) {
             hits = HITS.get();
             elapsedMs = timedCall();

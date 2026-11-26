@@ -14,14 +14,14 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * order 侧对账（E3）：处理"自动修不了、只能标记 + 告警"的两类问题。
+ * order-side reconciliation (E3): handles two kinds of problems that "can't be auto-fixed, only flagged + alerted".
  * <ol>
- *   <li><b>pay_anomaly</b>：钱收了、订单没成（关单后支付 / 重复支付 / 金额商家不符）。
- *       <b>不改订单</b>：已关闭的订单库存早已释放、可能已被别人买走，"复活"成已支付就会超卖或发不出货；
- *       正确做法是退款（范围外）。这里标记 handle_status = 2（待退款）+ 记 recon_exception + 告警</li>
- *   <li><b>outbox 投递失败（status = 2）</b>：重试满上限仍发不出去，告警等人工排查后改回 0 重新投递</li>
+ *   <li><b>pay_anomaly</b>: money received, order not paid (paid after close / duplicate payment / amount or merchant mismatch).
+ *       <b>Don't modify the order</b>: a closed order's inventory was released long ago and may have been bought by someone else; "reviving" it as paid would oversell or be unfulfillable;
+ *       the right fix is a refund (out of scope). Here we set handle_status = 2 (pending refund) + record recon_exception + alert</li>
+ *   <li><b>outbox delivery failures (status = 2)</b>: still unsent after max retries; alert, and after manual investigation set back to 0 to redeliver</li>
  * </ol>
- * "支付成功但订单还是待支付"不在这里修：那是 payment 侧对账发现后补发支付成功事件，由 order 正常消费修好。
+ * "Payment succeeded but order still pending" isn't fixed here: payment-side reconciliation detects it and re-sends the payment-success event, which order consumes normally to fix it.
  */
 @Slf4j
 @Component

@@ -8,7 +8,7 @@ import java.time.Clock;
 @Configuration
 public class OrderConfig {
 
-    /** 统一用 UTC 时钟（与数据库会话时区一致）；单测里可以换成固定时钟 */
+    /** Use a UTC clock everywhere (matches the DB session time zone); unit tests can swap in a fixed clock */
     @Bean
     public Clock clock() {
         return Clock.systemUTC();

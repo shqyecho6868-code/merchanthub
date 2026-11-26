@@ -33,8 +33,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * order 侧下单流程：真实 MySQL + Redis，product-inventory 用 Mockito 替身（只测本服务，跨服务契约另测）。
- * 预占的并发与全占全不占在 product-inventory 的 IT 里测。
+ * order-side placement flow: real MySQL + Redis, with a Mockito stand-in for product-inventory (only this service is tested; cross-service contracts are tested separately).
+ * Reservation concurrency and all-or-nothing are tested in product-inventory's ITs.
  */
 @SpringBootTest
 class OrderCreateIT extends OrderItSupport {
@@ -62,7 +62,7 @@ class OrderCreateIT extends OrderItSupport {
                 "SELECT event FROM order_status_log WHERE order_no = ? AND from_status IS NULL AND to_status = 10",
                 String.class, orderNo)).isEqualTo("CREATE");
 
-        // 预占请求带着同一个订单号，SKU 按 id 升序
+        // The reserve request carries the same order number, with SKUs in ascending id order
         ArgumentCaptor<ReserveRequest> captor = ArgumentCaptor.forClass(ReserveRequest.class);
         verify(client).reserve(captor.capture());
         assertThat(captor.getValue().getOrderNo()).isEqualTo(orderNo);
@@ -73,7 +73,7 @@ class OrderCreateIT extends OrderItSupport {
     @Test
     void snapshotKeepsPriceAtOrderTime() {
         CreateOrderVO vo = orderCreateService.createOrder(BUYER, req(null, 101, 1));
-        catalog.get(101L).setPrice(12900L); // 下单后商家改价
+        catalog.get(101L).setPrice(12900L); // merchant changes the price after the order is placed
         String content = jdbc.queryForObject("SELECT content FROM trade_snapshot WHERE order_no = ?",
                 String.class, Long.parseLong(vo.getOrderNo()));
         assertThat(content).contains("\"price\": 9900");

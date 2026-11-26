@@ -28,8 +28,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * E3：库存预占对账（B3-下悬空预占扫描的扩展）。预占挂了 30 分钟以上仍是 RESERVED，按订单真实状态了结：
- * 不存在 / 已关闭 → 释放；已支付 → 确认扣减；待支付 → 不动；查询失败 → 整轮跳过。
+ * E3: inventory reservation reconciliation (extension of B3-下's dangling-reservation scan). Reservations held for 30+ minutes and still RESERVED are settled by the order's real status:
+ * missing / closed → release; paid → confirm deduction; pending payment → leave it; query failure → skip the whole round.
  */
 @SpringBootTest(properties = "merchanthub.inventory.reservation-recon.older-than=30m")
 class ReservationReconIT extends ProductItSupport {
@@ -54,7 +54,7 @@ class ReservationReconIT extends ProductItSupport {
         jdbc.update("INSERT INTO inventory (tenant_id, sku_id, available, reserved) VALUES (?, 101, 100, 0)", TENANT);
     }
 
-    /** 预占一单；minutesAgo > 0 时把预占时间改到过去，模拟"占了很久" */
+    /** Reserve one order; when minutesAgo > 0, move the reservation time into the past to simulate "held for a long time" */
     private long reserve(long orderNo, int minutesAgo) {
         reserveService.reserve(new ReserveRequest(orderNo, TENANT, List.of(new ReserveRequest.Item(101L, 1))));
         if (minutesAgo > 0) {
@@ -73,13 +73,13 @@ class ReservationReconIT extends ProductItSupport {
     }
 
     /**
-     * 五种预占一次对账。初始库存 100，5 单各占 1 → available 95 / reserved 5。
+     * Reconcile five kinds of reservations in one run. Initial stock 100, 5 orders reserve 1 each → available 95 / reserved 5.
      * <ul>
-     *   <li>dangling：订单不存在（下单失败）→ 释放，available +1、reserved -1</li>
-     *   <li><b>closed：订单已关闭但预占没释放</b>（ORDER_CLOSED 丢了）→ 释放</li>
-     *   <li>paid：订单已支付但预占没确认（ORDER_PAID 丢了）→ 确认扣减，reserved -1、available 不变</li>
-     *   <li>pending：订单还待支付 → 不动</li>
-     *   <li>fresh：预占才几分钟 → 不是候选</li>
+     *   <li>dangling: order doesn't exist (order placement failed) → release, available +1, reserved -1</li>
+     *   <li><b>closed: order closed but the reservation wasn't released</b> (ORDER_CLOSED lost) → release</li>
+     *   <li>paid: order paid but the reservation wasn't confirmed (ORDER_PAID lost) → confirm deduction, reserved -1, available unchanged</li>
+     *   <li>pending: order still pending payment → leave it</li>
+     *   <li>fresh: reserved only a few minutes ago → not a candidate</li>
      * </ul>
      */
     @Test
@@ -100,13 +100,13 @@ class ReservationReconIT extends ProductItSupport {
         assertThat(status(fresh)).isEqualTo(10);
         assertThat(stock()).containsEntry("available", 97).containsEntry("reserved", 2);
 
-        // 再跑一轮：已了结的不再是候选（CAS 只生效一次），库存不会多还 / 多扣
+        // Run another round: settled ones are no longer candidates (the CAS takes effect only once), so stock isn't over-returned / over-deducted
         ReservationReconciler.Result again = reconciler.reconcile();
         assertThat(again.total()).isZero();
         assertThat(stock()).containsEntry("available", 97).containsEntry("reserved", 2);
     }
 
-    /** 查不到 ≠ 不存在：order 超时 / 宕机时一条都不动，下一轮再说 */
+    /** "Can't look it up" ≠ "doesn't exist": when order times out / is down, nothing is touched; try again next round */
     @Test
     void orderServiceDown_nothingTouched() {
         long dangling = reserve(2001, 40);

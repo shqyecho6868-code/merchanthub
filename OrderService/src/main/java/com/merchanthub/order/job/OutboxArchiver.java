@@ -14,11 +14,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 本地消息表归档（E3）：已发送超过保留期的记录搬到 order_outbox_archive。
+ * Outbox archiving (E3): moves records sent longer ago than the retention period into order_outbox_archive.
  * <p>
- * 为什么要归档：outbox 每单至少 2~3 行（创建 / 超时定时 / 支付或关单），不清理的话主表无限增长，
- * 扫描 SQL 虽然走索引，但表越大写入、备份、DDL 越慢。归档而不是直接删：事后排查"这条事件当时发没发、何时发的"还查得到。
- * 只搬 status = 1：待发送（0）和失败（2）的必须留在主表，否则就"消失"了。
+ * Why archive: each order has at least 2-3 outbox rows (created / timeout scheduled / paid or closed); without cleanup the main table grows forever,
+ * and although the scan SQL uses an index, a bigger table makes writes, backups, and DDL slower. Archive instead of delete: we can still check afterwards "was this event sent, and when".
+ * Only status = 1 is moved: pending (0) and failed (2) rows must stay in the main table, or they'd "disappear".
  */
 @Slf4j
 @Component
@@ -34,12 +34,12 @@ public class OutboxArchiver {
     @Value("${merchanthub.order.jobs.batch-size:200}")
     private int batchSize;
 
-    /** @return 本次归档的记录数（分批，每批一个小事务，避免一个大事务长时间锁表） */
+    /** @return number of records archived this time (in batches, one small transaction per batch, to avoid one big transaction locking the table for long) */
     public int archive() {
         return TenantContext.callAsSystem(() -> {
             LocalDateTime before = LocalDateTime.now(clock).minus(retention);
             int total = 0;
-            for (int round = 0; round < 50; round++) {   // 单次执行最多 50 批，剩下的下次再搬
+            for (int round = 0; round < 50; round++) {   // at most 50 batches per run; the rest is moved next time
                 List<Long> ids = outboxMapper.selectArchivable(before, batchSize);
                 if (ids.isEmpty()) {
                     break;

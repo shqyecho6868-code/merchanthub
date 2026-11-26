@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 预占的两种结局：确认扣减（订单已支付）/ 释放（订单关闭、悬空预占）。
+ * The two outcomes of a reservation: confirm deduction (order paid) / release (order closed, dangling reservation).
  * <p>
- * 每条预占记录先 CAS（RESERVED → CONFIRMED / RELEASED），影响 1 行才去改库存，两步在同一个本地事务里。
- * 所以重复消息、确认与释放并发，库存都只会被改一次 —— 不需要额外的 consumed_event 去重表。
+ * Each reservation record is CASed first (RESERVED → CONFIRMED / RELEASED); only if 1 row is affected is stock changed, both steps in one local transaction.
+ * So with duplicate messages or a confirm racing a release, stock is changed only once — no extra consumed_event dedup table needed.
  */
 @Slf4j
 @Service
@@ -28,25 +28,25 @@ public class ReservationSettleService {
     private final InventoryMapper inventoryMapper;
     private final TransactionTemplate transactionTemplate;
 
-    /** @return 本次真正确认的记录条数（0 = 重复消息或已被释放，什么也没改） */
+    /** @return number of records actually confirmed this call (0 = duplicate message or already released, nothing changed) */
     public int confirm(long orderNo, long tenantId) {
         return settle(orderNo, tenantId, ReservationStatus.CONFIRMED, "确认扣减");
     }
 
-    /** @return 本次真正释放的记录条数（0 = 重复消息或已被确认，什么也没改） */
+    /** @return number of records actually released this call (0 = duplicate message or already confirmed, nothing changed) */
     public int release(long orderNo, long tenantId, String reason) {
         return settle(orderNo, tenantId, ReservationStatus.RELEASED, "释放(" + reason + ")");
     }
 
     private int settle(long orderNo, long tenantId, ReservationStatus target, String action) {
         Integer n = transactionTemplate.execute(s -> {
-            // 和预占一样按 skuId 升序加库存行锁，避免与并发的预占 / 释放交叉等待形成死锁
+            // Like reservation, take inventory row locks in ascending skuId order to avoid circular waits (deadlocks) with concurrent reserves / releases
             List<InventoryReservation> rows = reservationMapper.selectByOrderNo(orderNo).stream()
                     .sorted(Comparator.comparing(InventoryReservation::getSkuId)).toList();
             int changed = 0;
             for (InventoryReservation r : rows) {
                 if (!Objects.equals(r.getTenantId(), tenantId)) {
-                    // 事件里的商家和预占记录不一致：不是重试能解决的，跳过并告警，绝不跨租户改库存
+                    // The merchant in the event doesn't match the reservation record: retrying won't fix it, so skip and alert — never modify stock across tenants
                     log.error("预占记录商家不符，跳过 {} orderNo={} 事件tenantId={} 记录tenantId={}",
                             action, orderNo, tenantId, r.getTenantId());
                     continue;
@@ -60,7 +60,7 @@ public class ReservationSettleService {
                         ? inventoryMapper.confirm(tenantId, r.getSkuId(), r.getQuantity())
                         : inventoryMapper.release(tenantId, r.getSkuId(), r.getQuantity());
                 if (updated != 1) {
-                    // reserved 不够减：库存数据已经不一致。抛异常让整个事务（含上面的记录 CAS）回滚，消息稍后重投并告警
+                    // Not enough reserved to subtract: inventory data is already inconsistent. Throw so the whole transaction (including the record CAS above) rolls back; the message is redelivered later and alerted
                     throw new IllegalStateException("库存 reserved 不足以" + action + " orderNo=" + orderNo
                             + " skuId=" + r.getSkuId() + " qty=" + r.getQuantity());
                 }

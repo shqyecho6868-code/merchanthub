@@ -21,10 +21,10 @@ import org.springframework.context.annotation.Configuration;
 import java.io.IOException;
 
 /**
- * 订阅上架审批结果，回写商品状态（D1）。
+ * Subscribes to listing approval results and writes back the product status (D1).
  * <p>
- * 没有 consumed_event 去重表：{@code UPDATE product ... WHERE status = 1 AND audit_round = ?} 本身就是幂等闸门
- * （同 B3-下 库存确认 / 释放的做法）。重复投递、补偿扫描已经先改过 → CAS 影响 0 行，直接确认消费。
+ * No consumed_event dedup table: {@code UPDATE product ... WHERE status = 1 AND audit_round = ?} is itself the idempotency gate
+ * (same as B3-下's inventory confirm / release). Redelivery, or the compensation scan having already applied it → the CAS affects 0 rows and we just ack.
  */
 @Slf4j
 @Configuration
@@ -44,7 +44,7 @@ public class ListingResultConsumerConfig {
         consumer.subscribe(ListingResultEvent.TOPIC, ListingResultEvent.TAG);
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {
             for (MessageExt m : msgs) {
-                // traceId：恢复发送方的链路 ID，本条消息的所有日志（含下面失败重投的 warn）都带上；处理完还原，消费线程复用不串
+                // traceId: restore the sender's trace ID so every log for this message (including the retry warn below) carries it; restored afterwards so pooled consumer threads don't leak it
                 try (TraceContext.Scope ignoredTrace = TenantMessages.openTrace(m)) {
                     ListingResultEvent e;
                     try {
@@ -54,15 +54,15 @@ public class ListingResultConsumerConfig {
                         continue;
                     }
                     try {
-                        // C1：按消息里的商家恢复上下文，CAS 自动带 tenant_id —— 别的商家的消息改不了这个商家的商品
+                        // C1: restore the context from the merchant in the message; the CAS automatically carries tenant_id — another merchant's message can't modify this merchant's products
                         TenantMessages.consumeAs(m, () -> stateService.applyResult(e.productId(), e.round(),
                                 ListingResultEvent.APPROVED.equals(e.result()), e.rejectReason(), e.processInstanceId(),
                                 ListingStateService.SOURCE_MQ));
                     } catch (RuntimeException ex) {
-                        // 数据库不可用等：事务已回滚，稍后重投；重投仍失败 16 次进死信，补偿扫描反查兜底
+                        // Database unavailable etc.: the transaction is rolled back, redeliver later; after 16 failed retries it goes to the DLQ and the compensation scan backstops it
                         log.warn("处理审批结果失败，稍后重投 eventId={} productId={} reconsumeTimes={}",
                                 e.eventId(), e.productId(), m.getReconsumeTimes(), ex);
-                        // E3：最后一次重试也失败 → 告警 + 记 recon_exception
+                        // E3: the last retry also failed → alert + record recon_exception
                         DeadLetters.onFailure(alarm.getIfAvailable(), CONSUMER_GROUP, m, consumer.getMaxReconsumeTimes(),
                                 TenantMessages.tenantIdOf(m), ex);
                         return ConsumeConcurrentlyStatus.RECONSUME_LATER;

@@ -2,7 +2,7 @@ package com.merchanthub.user.approval.flow;
 
 import org.flowable.common.engine.api.variable.VariableContainer;
 
-/** 流程变量名（BPMN 里的 ${...} 和 Java 代码共用，集中在一处避免拼错） */
+/** Process variable names (shared by ${...} in the BPMN and Java code, kept in one place to avoid typos) */
 public final class FlowVars {
 
     public static final String PROCESS_LISTING = "productListing";
@@ -19,7 +19,7 @@ public final class FlowVars {
     public static final String APPLICANT = "applicantUserId";
     public static final String SHOP_NAME = "shopName";
 
-    /** 审批人的决定：每个审批节点完成时都会覆盖成这一步的结果，紧跟着的网关读它 */
+    /** The approver's decision: overwritten with each approval step's result on completion, and read by the gateway right after */
     public static final String APPROVED = "approved";
     public static final String COMMENT = "comment";
     public static final String RESUBMIT = "resubmit";

@@ -9,12 +9,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * Servlet 服务的入口：读网关写的 X-Trace-Id 放进 MDC（没带就生成一个，比如直接调服务、健康检查），
- * 同时写回响应头 —— 调用方拿着响应头里的 traceId 就能去日志里搜整条链路。
+ * Entry point for Servlet services: puts the gateway's X-Trace-Id into the MDC (or generates one if absent, e.g. direct calls, health checks),
+ * and echoes it in the response header -- with the traceId from the response, the caller can search the logs for the whole trace.
  * <p>
- * 为什么用 Filter 而不是像 TenantContextInterceptor 那样用 HandlerInterceptor：Filter 在 DispatcherServlet 外层，
- * 参数绑定失败、拦截器自己抛异常、GlobalExceptionHandler 打的日志都在它里面，都能带上 traceId；
- * 并且 finally 一定执行，MDC 一定被还原（Tomcat 线程复用，不还原就串到下一个请求）。
+ * Why a Filter rather than a HandlerInterceptor like TenantContextInterceptor: the Filter wraps DispatcherServlet,
+ * so logs from argument binding failures, exceptions thrown by interceptors and GlobalExceptionHandler all happen inside it and carry the traceId;
+ * and finally always runs, so the MDC is always restored (Tomcat reuses threads; without restoring it leaks into the next request).
  */
 public class TraceIdFilter extends OncePerRequestFilter {
 
@@ -22,7 +22,7 @@ public class TraceIdFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         try (TraceContext.Scope scope = TraceContext.open(request.getHeader(TraceContext.HEADER))) {
-            // 在 chain 之前写：响应一旦提交（开始写 body）就不能再加头了
+            // Write before the chain: once the response is committed (body writing starts), headers can no longer be added
             response.setHeader(TraceContext.HEADER, scope.traceId());
             chain.doFilter(request, response);
         }

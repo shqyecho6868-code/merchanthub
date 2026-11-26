@@ -36,8 +36,8 @@ public class OrderController {
     private final OrderSearchService orderSearchService;
 
     /**
-     * 下单：只有买家能下。买家 ID 取自网关解析 token 后注入的身份，不信任请求体里的任何用户字段。
-     * C2：先按商家限流，超阈值直接 429，不往下走（tenantId 和 SKU 归属是否一致在 service 里核对）
+     * Place an order: buyers only. The buyer ID comes from the identity injected by the gateway after parsing the token; no user fields in the request body are trusted.
+     * C2: rate-limit per merchant first; over the threshold return 429 immediately without going further (whether tenantId matches SKU ownership is checked in the service)
      */
     @PostMapping
     @RequireRole(Role.BUYER)
@@ -47,7 +47,7 @@ public class OrderController {
                 () -> orderCreateService.createOrder(buyerId, request)));
     }
 
-    /** 商家（管理员、员工都能看）/ 平台查订单详情：tenant_id 条件由租户插件自动拼，见 OrderQueryService */
+    /** Merchant (admins and staff alike) / platform order detail: the tenant_id condition is added automatically by the tenant plugin, see OrderQueryService */
     @GetMapping("/{orderNo}")
     @RequireRole({Role.MERCHANT_ADMIN, Role.MERCHANT_STAFF, Role.PLATFORM_ADMIN})
     public BaseResponse<OrderDetailVO> getForMerchant(@PathVariable long orderNo) {
@@ -55,8 +55,8 @@ public class OrderController {
     }
 
     /**
-     * E2：商家按关键词搜订单（商品名 / 规格 / 订单号），查的是 ES 副本，有秒级延迟。
-     * 商家 ID 只从网关注入的身份取（不接受参数传入），在 ES 查询里作为强制过滤条件
+     * E2: merchants search orders by keyword (product name / spec / order number) against the ES replica, with second-level lag.
+     * The merchant ID comes only from the gateway-injected identity (not accepted as a parameter) and is a mandatory filter in the ES query
      */
     @GetMapping("/search")
     @RequireRole({Role.MERCHANT_ADMIN, Role.MERCHANT_STAFF})
@@ -67,7 +67,7 @@ public class OrderController {
                 Math.min(Math.max(size, 1), 100)));
     }
 
-    /** 买家查自己的订单：按 buyer_id 过滤 */
+    /** Buyers query their own orders: filtered by buyer_id */
     @GetMapping("/mine/{orderNo}")
     @RequireRole(Role.BUYER)
     public BaseResponse<OrderDetailVO> getForBuyer(@PathVariable long orderNo) {
@@ -75,7 +75,7 @@ public class OrderController {
     }
 
     private static long currentUserId() {
-        // @RequireRole(BUYER) 已保证有上下文；网关对用户 token 一定注入 X-User-Id
+        // @RequireRole(BUYER) already guarantees a context; the gateway always injects X-User-Id for user tokens
         Long userId = TenantContext.get().userId();
         if (userId == null) {
             throw new UnauthorizedException("缺少用户身份");

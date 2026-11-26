@@ -19,13 +19,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
 /**
- * 方案一（事务消息）回查路径。
+ * Option 1 (transactional message) check-back path.
  * <p>
- * report-unknown=true：本地事务提交后返回 UNKNOW，效果等同于"进程在提交消息前被 kill / COMMIT 没送到 Broker"，
- * 是 🧑 kill 实验的自动化版本。测试 Broker 的回查周期调成了 1 秒、免回查时间下限 3 秒（见 RocketMqContainer）。
+ * report-unknown=true: return UNKNOW after the local commit, equivalent to "process killed before committing the message / COMMIT never reached the broker",
+ * i.e. an automated version of the 🧑 kill experiment. The test broker's check-back interval is 1s and the minimum check-immunity time 3s (see RocketMqContainer).
  * <p>
- * 用独立的生产者组：同一个 JVM 里还缓存着其他测试类的 Spring 上下文，它们的生产者在默认组里也在线，
- * Broker 回查会找"同组任意实例"——第一次跑这个测试时回查就被别的上下文接走了（B2 实测，见 pitfalls）。
+ * Uses a separate producer group: the same JVM caches other test classes' Spring contexts, whose producers are also online in the default group,
+ * and the broker check-back goes to "any instance in the group" -- the first run of this test had its check-back taken by another context (observed in B2, see pitfalls).
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=TX_MESSAGE",
@@ -40,7 +40,7 @@ class OrderTxCheckIT extends OrderItSupport {
     @MockitoSpyBean
     private OrderTxListener listener;
 
-    /** 记录每次回查的 (订单号, 结果) */
+    /** Records each check-back's (order number, result) */
     private final List<String> checks = new CopyOnWriteArrayList<>();
 
     @BeforeAll
@@ -62,7 +62,7 @@ class OrderTxCheckIT extends OrderItSupport {
         }).when(listener).checkLocalTransaction(any());
     }
 
-    /** 订单已提交、COMMIT 丢了 → 回查发现订单存在 → COMMIT → 消费者收到。不会出现"订单建了消息没发" */
+    /** Order committed, COMMIT lost -> check-back finds the order -> COMMIT -> consumer receives it. Never "order created, message not sent" */
     @Test
     void commitLost_checkFindsOrder_commits() {
         recordChecks();
@@ -73,8 +73,8 @@ class OrderTxCheckIT extends OrderItSupport {
     }
 
     /**
-     * 回查时订单不存在 → ROLLBACK → 消费者永远收不到。
-     * 构造方式：下单后、回查前把订单删掉，模拟"本地事务其实没成功"。
+     * Order doesn't exist at check-back -> ROLLBACK -> the consumer never receives it.
+     * Setup: delete the order after placement and before check-back, simulating "the local transaction didn't actually succeed".
      */
     @Test
     void checkFindsNoOrder_rollsBack_neverVisible() {
@@ -84,10 +84,10 @@ class OrderTxCheckIT extends OrderItSupport {
 
         await().atMost(Duration.ofSeconds(60))
                 .until(() -> checks.contains(orderNo + "=" + LocalTransactionState.ROLLBACK_MESSAGE));
-        // 消息不满 4 秒时的回查只能回答 UNKNOW（第二道防线）；只有消息够老之后才判回滚
+        // While the message is younger than 4s, check-back can only answer UNKNOW (second line of defense); rollback is decided only once it's old enough
         assertThat(checks.indexOf(orderNo + "=" + LocalTransactionState.ROLLBACK_MESSAGE))
                 .isGreaterThanOrEqualTo(0);
-        // 回滚后再等几个回查周期，确认消息确实没被投递
+        // After rollback, wait a few more check-back cycles to confirm the message really wasn't delivered
         await().during(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(7))
                 .until(() -> observer.received(orderNo).isEmpty());
     }

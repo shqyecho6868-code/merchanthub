@@ -19,14 +19,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * C1 集成测试：MQ 消费时，租户上下文来自<b>消息属性</b>，并且真的被用在了 SQL 上。
- * 用超时关单消费者（真实 RocketMQ）做三组对照，订单都属于商家 7：
+ * C1 integration test: during MQ consumption the tenant context comes from <b>message properties</b> and is really applied to the SQL.
+ * Three contrasting cases using the timeout-close consumer (real RocketMQ); all orders belong to merchant 7:
  * <ol>
- *   <li>消息带 tenantId=7 → 关单成功</li>
- *   <li>消息带 tenantId=8（和订单不符）→ 消费了，但 CAS 的 SQL 被拼上 tenant_id = 8，改不到商家 7 的订单</li>
- *   <li>消息没带 tenantId → 根本不处理（fail-closed，重投直到死信）</li>
+ *   <li>Message with tenantId=7 -> order closed</li>
+ *   <li>Message with tenantId=8 (doesn't match the order) -> consumed, but the CAS SQL gets tenant_id = 8 and can't touch merchant 7's order</li>
+ *   <li>Message without tenantId -> not processed at all (fail-closed, redelivered until the DLQ)</li>
  * </ol>
- * 只看数据库结果，不 spy 消费者：其他缓存的 Spring 上下文里可能有同组消费者分走消息，但不管谁消费，结果都应一致。
+ * Only DB results are checked, the consumer isn't spied: other cached Spring contexts may have same-group consumers taking messages, but whoever consumes, the result should be the same.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
@@ -83,12 +83,12 @@ class TenantMqIT extends OrderItSupport {
         sendTimeout(base + 2, wrong, 8L);
         sendTimeout(base + 3, right, TENANT);
 
-        // ① 正确商家：关单
+        // ① Correct merchant: closed
         await().atMost(Duration.ofSeconds(60)).until(() -> status(right) == 50);
-        // ② 错误商家：消息被消费了（去重记录写入），但订单没被改 —— SQL 里的 tenant_id 用的是消息里的 8
+        // ② Wrong merchant: the message was consumed (dedup record written) but the order wasn't changed -- the SQL's tenant_id is the 8 from the message
         await().atMost(Duration.ofSeconds(60)).until(() -> consumed(base + 2) == 1);
         assertThat(status(wrong)).isEqualTo(10);
-        // ③ 没带商家：不处理
+        // ③ No merchant: not processed
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(4)).until(() -> true);
         assertThat(consumed(base + 1)).isZero();
         assertThat(status(missing)).isEqualTo(10);

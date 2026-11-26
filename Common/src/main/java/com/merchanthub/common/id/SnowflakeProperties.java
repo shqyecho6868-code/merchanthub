@@ -4,19 +4,19 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 雪花 ID 的 workerId 租约配置。
- * 续期间隔必须明显小于租约时长（这里默认 1/3），这样中间漏掉一两次续期也不会丢号。
+ * workerId lease settings for Snowflake IDs.
+ * The renewal interval must be well below the lease duration (1/3 by default) so missing one or two renewals doesn't lose the slot.
  */
 @Data
 @ConfigurationProperties(prefix = "merchanthub.snowflake")
 public class SnowflakeProperties {
 
-    /** Redis key 前缀，完整 key = 前缀 + 槽位号。所有服务共用一个命名空间，保证 order_no、pay_no 等全局不重复 */
+    /** Redis key prefix; full key = prefix + slot number. All services share one namespace so order_no, pay_no etc. are globally unique */
     private String keyPrefix = "mh:snowflake:slot:";
 
-    /** 租约时长（秒）：实例宕机后，最多过这么久号就会被回收 */
+    /** Lease duration (seconds): after an instance crashes, its slot is reclaimed within this time */
     private long leaseSeconds = 90;
 
-    /** 续期间隔（秒） */
+    /** Renewal interval (seconds) */
     private long renewIntervalSeconds = 30;
 }

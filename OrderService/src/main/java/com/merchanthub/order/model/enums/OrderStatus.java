@@ -3,7 +3,7 @@ package com.merchanthub.order.model.enums;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
-/** 订单状态（间隔编码，以后可在中间插入新状态，见 data-model 第 4 节） */
+/** Order status (spaced codes so new statuses can be inserted in between later; see data-model section 4) */
 @Getter
 @AllArgsConstructor
 public enum OrderStatus {

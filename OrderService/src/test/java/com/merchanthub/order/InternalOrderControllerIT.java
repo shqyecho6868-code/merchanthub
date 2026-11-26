@@ -9,7 +9,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 悬空预占扫描依赖的批量存在性查询：只返回真实存在的订单号 */
+/** Batch existence query used by the dangling-reservation scan: returns only order numbers that really exist */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 class InternalOrderControllerIT extends OrderItSupport {
 
@@ -23,7 +23,7 @@ class InternalOrderControllerIT extends OrderItSupport {
         assertThat(controller.statuses(List.of()).getData()).isEmpty();
     }
 
-    /** E3：一次最多 500 条，防止调用方一次传太多拖慢 order */
+    /** E3: at most 500 per call, so callers can't slow order down by sending too many at once */
     @Test
     void batchTooLarge_rejected() {
         List<Long> many = java.util.stream.LongStream.range(0, 501).boxed().toList();

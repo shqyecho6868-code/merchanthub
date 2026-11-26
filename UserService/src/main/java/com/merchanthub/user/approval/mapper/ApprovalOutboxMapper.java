@@ -13,29 +13,29 @@ import java.util.List;
 @Mapper
 public interface ApprovalOutboxMapper extends BaseMapper<ApprovalOutbox> {
 
-    /** 到期待发送的记录，走索引 (status, next_retry_at) */
+    /** Records due for sending, using the (status, next_retry_at) index */
     @Select("SELECT * FROM approval_outbox WHERE status = 0 AND deleted = 0 AND next_retry_at <= #{now}"
             + " ORDER BY next_retry_at LIMIT #{limit}")
     List<ApprovalOutbox> selectDue(@Param("now") LocalDateTime now, @Param("limit") int limit);
 
     /**
-     * 抢占一条记录：只把 next_retry_at 推到租约截止时间，<b>不改 status</b>。
-     * 只有一个实例（或线程）能更新成功，返回 1 的才去发送；租约内其他实例的扫描条件 next_retry_at <= now 不满足，查不到它。
+     * Claim a record: only push next_retry_at out to the lease deadline, <b>without changing status</b>.
+     * Only one instance (or thread) can update it; whoever gets 1 sends it. During the lease, other instances' scan condition next_retry_at <= now doesn't match, so they can't see it.
      * <p>
-     * 为什么不改 status：见 order 的 OrderOutboxMapper.claim（B2 🔍 审代码找到的 bug），这里同样只推租约。
-     * 租约到期还没有结果（比如进程在发送途中被 kill），记录自动重新变成"到期"，被下一轮扫描接手。
+     * Why not change status: see order's OrderOutboxMapper.claim (the bug found in the B2 🔍 code review); here too we only extend the lease.
+     * If the lease expires without a result (e.g. the process was killed mid-send), the record automatically becomes "due" again and the next scan picks it up.
      */
     @Update("UPDATE approval_outbox SET next_retry_at = #{leaseUntil}"
             + " WHERE id = #{id} AND status = 0 AND next_retry_at <= #{now}")
     int claim(@Param("id") long id, @Param("now") LocalDateTime now, @Param("leaseUntil") LocalDateTime leaseUntil);
 
-    /** 只有发送成功才改成 1；带 status = 0 条件，状态只能单向流转 */
+    /** Set to 1 only on successful send; conditioned on status = 0 so the status only moves one way */
     @Update("UPDATE approval_outbox SET status = 1, sent_at = #{now} WHERE id = #{id} AND status = 0")
     int markSent(@Param("id") long id, @Param("now") LocalDateTime now);
 
     /**
-     * 发送失败：重试次数 +1、推迟下次发送时间；次数到上限时 status 传 2（失败，不再自动重试）。
-     * 带上旧的 retry_count 做 CAS，防止两个线程同时记失败把次数算错。
+     * Send failed: retry count +1 and push back the next send time; when the count hits the limit, status is passed as 2 (failed, no more automatic retries).
+     * CAS on the old retry_count, so two threads recording a failure at the same time can't miscount.
      */
     @Update("UPDATE approval_outbox SET status = #{status}, retry_count = #{newRetryCount},"
             + " next_retry_at = #{nextRetryAt}, last_error = #{error}"

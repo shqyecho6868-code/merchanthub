@@ -10,8 +10,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 本节点的连接表：接收方 → 本节点上它的所有连接（同一商家多个员工 / 同一买家多个设备）。
- * 原 IM 的 ChannelManager 是静态 Map，一个 userId 只存一条连接；这里改成实例 + 多连接，并且同一个 JVM 里可以起多个节点（测试）。
+ * This node's connection table: receiver -> all its connections on this node (several staff of one merchant / several devices of one buyer).
+ * The original IM's ChannelManager was a static Map holding one connection per userId; here it's an instance with multiple connections, and several nodes can run in one JVM (tests).
  */
 @Component
 public class ChannelRegistry {
@@ -20,7 +20,7 @@ public class ChannelRegistry {
 
     private final Map<String, Set<Channel>> byReceiver = new ConcurrentHashMap<>();
 
-    /** @return true = 这是该接收方在本节点的第一条连接 */
+    /** @return true = this is the receiver's first connection on this node */
     public boolean add(String receiverKey, Channel ch) {
         ch.attr(RECEIVER).set(receiverKey);
         boolean[] first = {false};
@@ -35,7 +35,7 @@ public class ChannelRegistry {
         return first[0];
     }
 
-    /** @return 如果这是该接收方在本节点的最后一条连接，返回接收方（调用方据此注销路由）；否则 null */
+    /** @return the receiver if this was its last connection on this node (the caller then unregisters the route); otherwise null */
     public String remove(Channel ch) {
         String key = ch.attr(RECEIVER).get();
         if (key == null) {

@@ -19,9 +19,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class TxMessageConfig {
 
     /**
-     * 生产者组名在各环境保持固定（默认 order-tx-producer）：Broker 回查时，是找"同一个生产者组里任意一个在线的实例"来问。
-     * 进程被 kill 后重启，只要组名一样，就能接住宕机前留下的半消息的回查（kill 实验看的就是这个）。
-     * 反过来，组里的每个实例都必须能正确回答任何一条半消息 —— 回查逻辑只能依赖共享的数据库，不能依赖本机内存。
+     * The producer group name stays fixed across environments (default order-tx-producer): on check-back the broker asks "any online instance in the same producer group".
+     * After a killed process restarts, as long as the group name matches it can answer check-backs for half messages left before the crash (that's what the kill experiment checks).
+     * Conversely, every instance in the group must answer correctly for any half message -- check-back logic may rely only on the shared DB, never on local memory.
      */
     @Bean(initMethod = "start", destroyMethod = "shutdown")
     public TransactionMQProducer orderTxProducer(OrderTxListener listener,
@@ -30,18 +30,18 @@ public class TxMessageConfig {
         TransactionMQProducer producer = new TransactionMQProducer(group);
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
-        // 发半消息的超时：MQ 不可用时让下单快速失败，而不是卡住用户（跨服务调用必须有超时）
+        // Half-message send timeout: when MQ is unavailable, fail the order fast instead of hanging the user (cross-service calls must have timeouts)
         producer.setSendMsgTimeout(3000);
-        // 启动时就预取 ORDER_EVENT 的路由：生产者只给"已知路由的 Broker"发心跳，而路由默认要等第一次发消息才拉取。
-        // 不预取的话，宕机重启后的实例在下第一单之前 Broker 都看不到它，回查报 "channel is null"，
-        // 半消息回查满 15 次就被丢弃 —— 订单建了消息没发（B2 kill 实验踩到，pitfalls P18）
+        // Prefetch ORDER_EVENT routes at startup: the producer only heartbeats to "brokers with known routes", and routes are fetched on the first send by default.
+        // Without prefetching, a restarted instance is invisible to the broker until it places its first order, so check-backs fail with "channel is null",
+        // and after 15 check-backs the half message is discarded -- order created, message never sent (hit in the B2 kill experiment, pitfalls P18)
         producer.setTopics(List.of(OrderEventTopics.TOPIC));
         producer.setTransactionListener(listener);
         producer.setExecutorService(checkExecutor());
         return producer;
     }
 
-    /** 回查线程池：有界队列，Broker 一次推来大量回查时不会把内存撑爆 */
+    /** Check-back thread pool: bounded queue, so a flood of check-backs from the broker can't blow up memory */
     private ExecutorService checkExecutor() {
         AtomicInteger n = new AtomicInteger();
         return new ThreadPoolExecutor(2, 4, 60, TimeUnit.SECONDS, new ArrayBlockingQueue<>(2000),

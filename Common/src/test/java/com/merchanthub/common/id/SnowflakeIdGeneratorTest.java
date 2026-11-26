@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 租约状态判断的单元测试：Redis 交互用 Mockito 替身，时钟用可手动拨动的假时钟。
+ * Unit tests for the lease state logic: Redis interaction uses Mockito doubles, and time comes from a fake clock advanced by hand.
  */
 @ExtendWith(MockitoExtension.class)
 class SnowflakeIdGeneratorTest {
@@ -54,7 +54,7 @@ class SnowflakeIdGeneratorTest {
     @DisplayName("槽位拆成 workerId=低 5 位、dataCenterId=高 5 位，并写进 ID 里")
     void slotIsEncodedIntoId() {
         long id = start(37).nextId(); // 37 = 1*32 + 5 → dataCenterId=1, workerId=5
-        // 雪花 ID 布局：... | dataCenterId(5) | workerId(5) | sequence(12)
+        // Snowflake ID layout: ... | dataCenterId(5) | workerId(5) | sequence(12)
         assertThat((id >> 12) & 0x1F).isEqualTo(5);
         assertThat((id >> 17) & 0x1F).isEqualTo(1);
     }
@@ -89,7 +89,7 @@ class SnowflakeIdGeneratorTest {
         generator.renewOnce();
         assertThat(generator.nextId()).isPositive();
 
-        advanceSeconds(60); // 距领号已 90 秒 = 租约时长
+        advanceSeconds(60); // 90 seconds since claiming = lease duration
         assertThatThrownBy(generator::nextId).hasMessageContaining("租约已过期");
     }
 
@@ -100,7 +100,7 @@ class SnowflakeIdGeneratorTest {
         when(allocator.renew(anyInt(), anyString())).thenReturn(true);
         advanceSeconds(80);
         generator.renewOnce();
-        advanceSeconds(80); // 距领号 160 秒，但距上次续期只有 80 秒
+        advanceSeconds(80); // 160 seconds since claiming, but only 80 since the last renewal
         assertThat(generator.nextId()).isPositive();
     }
 

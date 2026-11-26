@@ -15,10 +15,10 @@ import org.springframework.web.servlet.HandlerInterceptor;
 import java.util.Arrays;
 
 /**
- * 接口级 RBAC：看 Controller 方法（或类）上的 {@link RequireRole}，当前角色不在列表里 → 403。
- * 必须排在 {@link TenantContextInterceptor} 之后（先知道"你是谁"，才能判断"你能不能"）。
+ * Endpoint-level RBAC: checks {@link RequireRole} on the Controller method (or class); current role not in the list → 403.
+ * Must run after {@link TenantContextInterceptor} (we need to know "who you are" before deciding "what you may do").
  * <p>
- * 用拦截器而不是 AOP：拦截器在参数绑定之前执行，越权请求连请求体都不解析就被拒绝。
+ * An interceptor rather than AOP: interceptors run before argument binding, so unauthorized requests are rejected without even parsing the body.
  */
 public class RoleCheckInterceptor implements HandlerInterceptor {
 

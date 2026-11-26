@@ -23,9 +23,9 @@ public class PaymentConfig {
     }
 
     /**
-     * payment 用事务消息发"支付成功"（order 默认用本地消息表，两种方案见 B2）。payment 选事务消息的理由见 D30：
-     * 本地事务只有一条 CAS，回查只需"按 pay_no 查支付单是不是成功"，简单可靠，不用再维护一张 outbox 表和扫描任务。
-     * 其余配置理由同 order 的 TxMessageConfig（固定组名、预取路由 P18、发送超时）。
+     * payment uses a transactional message to publish "payment succeeded" (order uses a local message table by default; both approaches are covered in B2). Why payment picks transactional messages, see D30:
+     * the local transaction is a single CAS, and the check-back only needs "look up the payment by pay_no and see whether it succeeded" — simple and reliable, no outbox table and scan job to maintain.
+     * The rest of the config follows order's TxMessageConfig (fixed group name, route prefetch P18, send timeout).
      */
     @Bean(initMethod = "start", destroyMethod = "shutdown")
     public TransactionMQProducer paymentTxProducer(PaymentTxListener listener,

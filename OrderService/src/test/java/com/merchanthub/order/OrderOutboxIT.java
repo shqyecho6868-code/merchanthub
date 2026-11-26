@@ -23,8 +23,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
-/** 方案二（本地消息表）：订单和待发消息同生共死；提交后快路径立即投递 */
-// 只测快路径（补偿扫描在测试配置里默认关闭，见 src/test/resources/application.properties）
+/** Option 2 (local message table): the order and its pending message live or die together; the fast path delivers right after commit */
+// Only tests the fast path (the compensation scan is off by default in test config, see src/test/resources/application.properties)
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 class OrderOutboxIT extends OrderItSupport {
 
@@ -45,7 +45,7 @@ class OrderOutboxIT extends OrderItSupport {
 
     @Test
     void orderAndOutboxRowCommittedTogether_thenDelivered() {
-        // 模拟 TraceIdFilter 已经把网关传来的 traceId 放进了下单请求线程的 MDC
+        // Simulate TraceIdFilter having put the gateway's traceId into the order request thread's MDC
         String traceId = "it-outbox-trace-0001";
         long orderNo;
         try (TraceContext.Scope ignored = TraceContext.open(traceId)) {
@@ -60,13 +60,13 @@ class OrderOutboxIT extends OrderItSupport {
         await().atMost(Duration.ofSeconds(60)).until(() -> !observer.received(orderNo).isEmpty());
         MessageExt m = observer.received(orderNo).get(0);
         assertThat(m.getUserProperty(OrderEventTopics.PROP_EVENT_ID)).isEqualTo(String.valueOf(row.get("event_id")));
-        // 链路追踪：下单请求的 traceId 经 outbox 行 → 线程池投递 → 消息属性，消费者（consumeAs）据此恢复到 MDC
+        // Tracing: the order request's traceId goes outbox row -> pool delivery -> message property, and the consumer (consumeAs) restores it into MDC
         assertThat(m.getUserProperty(TraceContext.MQ_PROPERTY)).isEqualTo(traceId);
         await().atMost(Duration.ofSeconds(10)).until(() -> jdbc.queryForObject(
                 "SELECT status FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CREATED'", Integer.class, String.valueOf(orderNo)) == 1);
     }
 
-    /** 写订单失败 → 整个本地事务回滚：订单和消息记录都不存在，也就不可能发出消息 */
+    /** Writing the order fails -> the whole local transaction rolls back: neither the order nor the message record exists, so no message can be sent */
     @Test
     void orderWriteFails_noOrder_noOutboxRow() {
         doThrow(new DataAccessResourceFailureException("模拟数据库故障")).when(persistService).saveNewOrder(any());

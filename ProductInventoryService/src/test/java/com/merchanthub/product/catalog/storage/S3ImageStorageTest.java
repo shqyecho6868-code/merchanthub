@@ -23,7 +23,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 预签名是本地 HMAC 计算，用假凭证就能测，不需要网络和真实 AWS 账号。
+ * Presigning is a local HMAC computation, so it can be tested with fake credentials — no network or real AWS account needed.
  */
 class S3ImageStorageTest {
 
@@ -48,7 +48,7 @@ class S3ImageStorageTest {
                 .startsWith("https://mh-images.s3.amazonaws.com/products/7/100/a.png?")
                 .contains("X-Amz-Expires=600")
                 .contains("X-Amz-Signature=")
-                // Content-Type 参与签名：客户端换成别的类型上传，S3 会返回 403
+                // Content-Type is part of the signature: if the client uploads with a different type, S3 returns 403
                 .contains("content-type");
         assertThat(up.expiresAt()).isBetween(before.plusSeconds(590), before.plusSeconds(610));
     }
@@ -72,7 +72,7 @@ class S3ImageStorageTest {
 
     @Test
     void existsRethrowsOtherErrors() {
-        // 403（task role 没权限）不能当成"没上传"吞掉，要让调用方看到真实原因
+        // A 403 (task role lacks permission) must not be swallowed as "not uploaded"; the caller needs to see the real cause
         when(s3.headObject(any(HeadObjectRequest.class))).thenThrow(S3Exception.builder().statusCode(403)
                 .awsErrorDetails(AwsErrorDetails.builder().errorCode("AccessDenied").build()).build());
         assertThatThrownBy(() -> storage.exists("k")).isInstanceOf(S3Exception.class);

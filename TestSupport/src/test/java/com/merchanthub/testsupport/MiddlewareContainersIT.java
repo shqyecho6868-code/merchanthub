@@ -19,8 +19,8 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 共享容器的冒烟测试（A2+ 放在 Common，B1 随容器一起抽到 TestSupport）：
- * 证明 MySQL / Redis / RocketMQ 三个单例容器在本机和 CI 上都能起来、能连上。不含业务逻辑。
+ * Smoke test for the shared containers (lived in Common since A2+, moved to TestSupport with the containers in B1):
+ * proves the three singleton containers MySQL / Redis / RocketMQ start and are reachable both locally and in CI. No business logic.
  */
 class MiddlewareContainersIT {
 
@@ -41,7 +41,7 @@ class MiddlewareContainersIT {
 
     @Test
     void mysql_isSameInstanceAcrossCalls() {
-        // 单例：多次获取是同一个容器，不会重复启动
+        // Singleton: repeated lookups return the same container, never started twice
         assertThat(SharedContainers.mysql()).isSameAs(SharedContainers.mysql());
     }
 
@@ -61,7 +61,7 @@ class MiddlewareContainersIT {
     void rocketmq_canSendMessage() throws Exception {
         DefaultMQProducer producer = new DefaultMQProducer("mh-it-producer");
         producer.setNamesrvAddr(SharedContainers.rocketmq().getNamesrvAddr());
-        // VIP 通道会连 listenPort-2，容器没映射那个端口，关掉
+        // The VIP channel connects to listenPort-2, which the container doesn't map, so turn it off
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(10_000);
         producer.start();
@@ -75,8 +75,8 @@ class MiddlewareContainersIT {
     }
 
     /**
-     * Broker 打出 boot success 后，到 NameServer 上路由可见之间可能还有几秒，
-     * 第一次发送偶尔会报 No route info，所以短暂重试（最多约 30 秒）。
+     * After the Broker logs boot success, it may take a few more seconds before its route is visible on the NameServer,
+     * so the first send occasionally fails with No route info; retry briefly (up to ~30 seconds).
      */
     private static SendResult sendWithRetry(DefaultMQProducer producer, Message msg) throws Exception {
         Exception last = null;

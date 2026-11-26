@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 内部接口：order 下单时调用 */
+/** Internal API: called by order when placing an order */
 @RestController
 @RequestMapping("/internal/inventory")
 @RequiredArgsConstructor

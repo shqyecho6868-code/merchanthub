@@ -3,15 +3,15 @@ package com.merchanthub.common.exception;
 import com.merchanthub.common.common.ErrorCode;
 
 /**
- * 抛异常工具类
+ * Helpers for throwing exceptions
  */
 public class ThrowUtils {
 
     /**
-     * 条件成立则抛异常
+     * Throw if the condition holds
      *
-     * @param condition 判断条件，若为 {@code true} 则抛出异常
-     * @param runtimeException 要抛出的运行时异常实例
+     * @param condition the condition; throws if {@code true}
+     * @param runtimeException the runtime exception to throw
      */
     public static void throwIf(boolean condition, RuntimeException runtimeException) {
         if (condition) {
@@ -20,21 +20,21 @@ public class ThrowUtils {
     }
 
     /**
-     * 条件成立则抛异常
+     * Throw if the condition holds
      *
-     * @param condition 判断条件，若为 {@code true} 则抛出异常
-     * @param errorCode 业务错误码，用于构造 {@link BusinessException}
+     * @param condition the condition; throws if {@code true}
+     * @param errorCode business error code used to build the {@link BusinessException}
      */
     public static void throwIf(boolean condition, ErrorCode errorCode) {
         throwIf(condition, new BusinessException(errorCode));
     }
 
     /**
-     * 条件成立则抛异常
+     * Throw if the condition holds
      *
-     * @param condition 判断条件，若为 {@code true} 则抛出异常
-     * @param errorCode 业务错误码
-     * @param message 自定义异常消息
+     * @param condition the condition; throws if {@code true}
+     * @param errorCode business error code
+     * @param message custom exception message
      */
     public static void throwIf(boolean condition, ErrorCode errorCode, String message) {
         throwIf(condition, new BusinessException(errorCode, message));

@@ -25,9 +25,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 端到端：ORDER_EVENT 上的 ORDER_CLOSED / ORDER_PAID（各重复投递 3 次）→ 消费者 → 库存只改一次。
- * E3：最大重试次数调成 0（第一次失败就进死信），验证死信告警；放在同一个测试类里而不是另起一个：
- * 不同配置 = 不同的 Spring 上下文，两个上下文里同组的消费者会分走队列，消息可能落到没调小重试次数的那一个（P17 同类）
+ * End to end: ORDER_CLOSED / ORDER_PAID on ORDER_EVENT (each delivered 3 times) → consumer → stock changes only once.
+ * E3: max retries set to 0 (straight to DLQ on first failure) to verify the DLQ alert; kept in the same test class rather than a separate one:
+ * different config = a different Spring context, and same-group consumers in two contexts split the queues, so the message may land on the one without the reduced retry count (same kind of issue as P17)
  */
 @SpringBootTest(properties = {
         "merchanthub.inventory.settle-consumer.enabled=true",
@@ -72,7 +72,7 @@ class OrderSettleConsumerIT extends ProductItSupport {
         String json = "{\"eventId\":" + System.nanoTime() + ",\"orderNo\":" + orderNo + ",\"tenantId\":" + TENANT
                 + ",\"event\":\"" + (tag.equals(OrderSettledEvent.TAG_ORDER_PAID) ? "PAY_SUCCESS" : "PAY_TIMEOUT") + "\"}";
         for (int i = 0; i < 3; i++) {
-            // C1：和 order 发出的消息一样带上 tenantId，消费端据此恢复租户上下文
+            // C1: carry tenantId like messages sent by order do; the consumer restores the tenant context from it
             producer.send(TenantMessages.stamp(new Message(OrderSettledEvent.TOPIC, tag, json.getBytes(StandardCharsets.UTF_8)), TENANT));
         }
     }
@@ -85,7 +85,7 @@ class OrderSettleConsumerIT extends ProductItSupport {
 
         await().atMost(Duration.ofSeconds(60)).until(() -> stock()[1] == 0);
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> true);
-        assertThat(stock()).containsExactly(10, 0);   // 还了一次，不是三次（13）
+        assertThat(stock()).containsExactly(10, 0);   // returned once, not three times (13)
     }
 
     @Test
@@ -100,8 +100,8 @@ class OrderSettleConsumerIT extends ProductItSupport {
     }
 
     /**
-     * 死信监控（E3）：库存数据已经不一致（预占记录说占了 1 件，库存行 reserved 却是 0），释放必然失败、重试也没用。
-     * 结论：最后一次失败时写 recon_exception（DEAD_LETTER）+ ERROR 告警，消息随后进 %DLQ%inventory-order-settle
+     * DLQ monitoring (E3): inventory data is already inconsistent (the reservation record says 1 unit reserved, but the inventory row's reserved is 0), so release must fail and retrying won't help.
+     * Conclusion: on the last failure, write recon_exception (DEAD_LETTER) + an ERROR alert; the message then goes to %DLQ%inventory-order-settle
      */
     @Test
     void unrecoverableFailure_lastAttempt_raisesDeadLetterAlarm() throws Exception {
@@ -117,7 +117,7 @@ class OrderSettleConsumerIT extends ProductItSupport {
                 "SELECT COUNT(*) FROM recon_exception WHERE type = 'DEAD_LETTER'", Long.class) == 1);
         assertThat(jdbc.queryForObject("SELECT biz_key FROM recon_exception", String.class))
                 .startsWith(OrderSettleConsumerConfig.CONSUMER_GROUP + ":");
-        // 事务整体回滚：预占记录仍是 RESERVED，留给人工 / 预占对账处理
+        // The whole transaction rolled back: the reservation record is still RESERVED, left for manual handling / reservation recon
         assertThat(jdbc.queryForObject("SELECT status FROM inventory_reservation WHERE order_no = ?", Integer.class, orderNo))
                 .isEqualTo(10);
     }

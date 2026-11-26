@@ -44,8 +44,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商品上架审批（D1，user-tenant 侧）：product 发起 → 商家 7 管理员初审 → 平台管理员复审 → 结束时写审批单 + 本地消息表 → RocketMQ。
- * 场景：商家 7 的员工 2002 提交商品 1001"旗舰手机"第 1 轮审核；商家 7 管理员 2001；商家 8 管理员 3001；平台管理员 1。
+ * Product listing approval (D1, user-tenant side): product starts it -> merchant 7 admin first review -> platform admin second review -> on end, write approval record + local outbox table -> RocketMQ.
+ * Scenario: merchant 7's staff 2002 submits product 1001 "Flagship Phone" for round 1 review; merchant 7 admin 2001; merchant 8 admin 3001; platform admin 1.
  */
 class ListingApprovalIT extends UserItSupport {
 
@@ -62,7 +62,7 @@ class ListingApprovalIT extends UserItSupport {
     @Autowired
     private ApprovalOutboxRelay relay;
 
-    /** 模拟 product：订阅审批结果 topic，看消息是不是真的发出去了 */
+    /** Simulates product: subscribes to the approval result topic to check the message was really sent */
     @BeforeAll
     static void subscribe() throws Exception {
         SharedContainers.rocketmq().createTopic(ListingResultEvent.TOPIC);
@@ -92,7 +92,7 @@ class ListingApprovalIT extends UserItSupport {
         return om.readTree(mvc.perform(b).andReturn().getResponse().getContentAsString());
     }
 
-    /** product 以"商家 7 的员工 2002"身份经 Feign 调内部接口（TenantFeignInterceptor 透传身份头） */
+    /** product calls the internal endpoint via Feign as "merchant 7's staff 2002" (TenantFeignInterceptor forwards the identity headers) */
     private String start(long tenant, long productId, int round) throws Exception {
         return call(as(post("/internal/approvals/product-listings").contentType(MediaType.APPLICATION_JSON)
                 .content(om.writeValueAsString(Map.of("productId", productId, "round", round, "productName", "旗舰手机"))),
@@ -126,15 +126,15 @@ class ListingApprovalIT extends UserItSupport {
         String pid = start(M7, 1001, 1);
         assertThat(result(M7, 1001, 1).at("/state").asText()).isEqualTo("RUNNING");
 
-        // 第一步只在商家 7 管理员的待办里
+        // Step one is only in merchant 7 admin's queue
         String t1 = taskOf(m7Admin(get("/approvals/tasks")), pid);
         assertThat(t1).isNotNull();
         assertThat(taskOf(platformAdmin(get("/approvals/tasks")), pid)).isNull();
         assertThat(call(m7Admin(post("/approvals/tasks/" + t1 + "/approve"))).at("/code").asInt()).isEqualTo(200);
         assertThat(runtimeTasks(pid)).isEqualTo(1);
-        assertThat(historicTasks(pid)).isEqualTo(2);   // 一条已完成（有 END_TIME_），一条刚创建
+        assertThat(historicTasks(pid)).isEqualTo(2);   // one completed (has END_TIME_), one just created
 
-        // 第二步到了平台管理员手里，商家 7 管理员那里没了
+        // Step two moved to the platform admin; it's gone from merchant 7 admin's queue
         assertThat(taskOf(m7Admin(get("/approvals/tasks")), pid)).isNull();
         String t2 = taskOf(platformAdmin(get("/approvals/tasks")), pid);
         assertThat(call(platformAdmin(post("/approvals/tasks/" + t2 + "/approve"))).at("/code").asInt()).isEqualTo(200);
@@ -196,9 +196,9 @@ class ListingApprovalIT extends UserItSupport {
 
         assertThat(taskOf(m8Admin(get("/approvals/tasks")), pid)).isNull();
         assertThat(call(m8Admin(post("/approvals/tasks/" + t1 + "/approve"))).at("/code").asInt()).isEqualTo(63001);
-        // 平台管理员也不能越过商家初审
+        // Even the platform admin can't skip the merchant's first review
         assertThat(call(platformAdmin(post("/approvals/tasks/" + t1 + "/approve"))).at("/code").asInt()).isEqualTo(63001);
-        // 商家员工能发起，但不能审批（接口级 RBAC）
+        // Merchant staff can start it but can't approve (endpoint-level RBAC)
         mvc.perform(as(post("/approvals/tasks/" + t1 + "/approve"), M7, 2002, "MERCHANT_STAFF")).andExpect(status().isForbidden());
         assertThat(runtimeTasks(pid)).isEqualTo(1);
 
@@ -219,7 +219,7 @@ class ListingApprovalIT extends UserItSupport {
         for (long admin : new long[]{1, 2}) {
             results.add(pool.submit(() -> {
                 go.await();
-                // 子线程没有测试线程的上下文，自己设（生产里由 Web 拦截器按请求头设）
+                // Worker threads don't have the test thread's context, so set it here (in production the web interceptor sets it from the request headers)
                 try (TenantContext.Scope ignored = TenantContext.open(new TenantInfo(null, admin, Role.PLATFORM_ADMIN))) {
                     taskService.decide(t2, true, "ok");
                     return "OK";
@@ -235,9 +235,9 @@ class ListingApprovalIT extends UserItSupport {
         }
         pool.shutdown();
 
-        // 输家有两种合法结局，取决于它"查任务"那一步落在赢家提交之前还是之后：
-        //   之前 → 查到了任务，complete 时撞上乐观锁（REV_ 已变 / 任务已删）→ 63002
-        //   之后 → 任务已经不在运行时表里，按"不存在"处理 → 63001（CI 这类慢机器上更容易出现）
+        // The loser has two legitimate outcomes, depending on whether its "find task" step lands before or after the winner commits:
+        //   before -> it found the task, and complete hits the optimistic lock (REV_ changed / task deleted) -> 63002
+        //   after -> the task is no longer in the runtime table, handled as "nonexistent" -> 63001 (more likely on slow machines like CI)
         assertThat(outcomes).hasSize(2).containsOnlyOnce("OK");
         assertThat(outcomes).filteredOn(o -> !o.equals("OK")).singleElement().isIn("63001", "63002");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM approval_outbox", Integer.class)).isEqualTo(1);
@@ -253,11 +253,11 @@ class ListingApprovalIT extends UserItSupport {
         await().atMost(Duration.ofSeconds(60)).until(() ->
                 jdbc.queryForObject("SELECT status FROM approval_outbox", Integer.class) == 1);
 
-        // 把它改回"待发送"，相当于快路径从没执行过
+        // Set it back to "pending", as if the fast path never ran
         jdbc.update("UPDATE approval_outbox SET status = 0, sent_at = NULL, next_retry_at = NOW(3) - INTERVAL 1 SECOND");
-        relay.scan();   // E3：相当于 XXL-Job 触发一次 approvalOutboxRelayJob
+        relay.scan();   // E3: equivalent to XXL-Job triggering approvalOutboxRelayJob once
         assertThat(jdbc.queryForObject("SELECT status FROM approval_outbox", Integer.class)).isEqualTo(1);
-        // 消息至少到了一次（重复投递由 product 消费端的 CAS 挡住，见 product 的 ListingResultConsumerIT）
+        // The message arrived at least once (duplicate delivery is stopped by the CAS in product's consumer, see product's ListingResultConsumerIT)
         await().atMost(Duration.ofSeconds(60)).until(() -> received(pid) != null);
     }
 }

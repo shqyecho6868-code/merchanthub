@@ -19,11 +19,11 @@ public class PaymentEventCodec {
         try {
             Message msg = new Message(PaymentEventTopics.TOPIC, PaymentEventTopics.TAG_PAY_SUCCESS,
                     objectMapper.writeValueAsBytes(event));
-            // keys 建索引：按订单号 / 支付单号都能在控制台查到这条消息
+            // Index by keys: the message can be found in the console by either order number or payment number
             msg.setKeys(event.orderNo() + " " + event.payNo());
             msg.putUserProperty(PaymentEventTopics.PROP_EVENT_ID, String.valueOf(event.eventId()));
             msg.putUserProperty(PaymentEventTopics.PROP_ATTEMPT, attempt);
-            // C1：order 消费时据此恢复租户上下文
+            // C1: order restores the tenant context from this when consuming
             return TenantMessages.stamp(msg, event.tenantId());
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);

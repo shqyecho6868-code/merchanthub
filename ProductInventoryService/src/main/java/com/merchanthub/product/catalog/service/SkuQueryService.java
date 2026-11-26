@@ -8,9 +8,9 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 只负责“查”，不判断能不能卖：在售、上架、同商家这些下单规则由 order 判断，
- * 这样商品服务不需要了解下单的业务规则（接口边界：product 提供数据，order 做决策）。
- * 查不到的 SKU 不会出现在结果里，由调用方比对数量。
+ * Only "looks up", never decides whether something can be sold: ordering rules like on sale, listed, same merchant are decided by order,
+ * so the product service doesn't need to know ordering business rules (API boundary: product provides data, order makes decisions).
+ * SKUs that aren't found are simply absent from the result; the caller compares counts.
  */
 @Service
 @RequiredArgsConstructor

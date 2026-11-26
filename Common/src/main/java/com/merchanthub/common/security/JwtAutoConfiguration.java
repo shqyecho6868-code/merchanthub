@@ -8,8 +8,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * 配了 merchanthub.jwt.secret 的服务（网关、user-tenant、realtime）才装配 {@link JwtCodec}。
- * 用自动装配而不是组件扫描：网关只扫描自己的包，也要能拿到这个 Bean。
+ * {@link JwtCodec} is only wired in services that configure merchanthub.jwt.secret (gateway, user-tenant, realtime).
+ * Auto-configuration instead of component scanning: the gateway only scans its own package but still needs this Bean.
  */
 @AutoConfiguration
 @ConditionalOnClass(name = "io.jsonwebtoken.Jwts")

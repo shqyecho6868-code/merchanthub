@@ -22,18 +22,18 @@ import java.util.concurrent.Future;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 破坏性实验 ②（自动化版）：同一订单的"支付成功"和"超时关单"同时到达。
+ * Destructive experiment ② (automated): "payment succeeded" and "timeout close" for the same order arrive at the same time.
  * <p>
- * 结论：订单 CAS（WHERE status = 10）让两者只有一个影响 1 行。
+ * Conclusion: the order CAS (WHERE status = 10) lets only one of them affect 1 row.
  * <ul>
- *   <li>支付赢：订单 20，只写 ORDER_PAID（库存确认），超时一方什么都不写</li>
- *   <li>超时赢：订单 50，只写 ORDER_CLOSED（库存释放），支付一方写一条 PAID_AFTER_CLOSED 支付异常留给对账</li>
+ *   <li>Payment wins: order 20, only ORDER_PAID is written (inventory confirmed); the timeout side writes nothing</li>
+ *   <li>Timeout wins: order 50, only ORDER_CLOSED is written (inventory released); the payment side writes a PAID_AFTER_CLOSED payment anomaly for reconciliation</li>
  * </ul>
- * 任何订单都不会同时有 ORDER_PAID 和 ORDER_CLOSED —— 所以库存不可能"既确认又释放"。
- * 去掉 CAS 里的 {@code AND status = #{from}} 再跑，会看到同一订单两种事件都写了、流水 3 行。
+ * No order ever has both ORDER_PAID and ORDER_CLOSED -- so inventory can never be "both confirmed and released".
+ * Remove {@code AND status = #{from}} from the CAS and rerun: you'll see both events written for the same order and 3 log rows.
  * <p>
- * 这个测试第一次跑就抓到一个 bug（pitfalls P22）：超时赢了，支付一方的异常记录却是 DUPLICATE_PAYMENT / 订单状态 10。
- * 原因是 CAS 失败后用普通 SELECT 读订单状态，可重复读下读到的是本事务开头的快照。改成 FOR UPDATE 当前读后通过。
+ * This test caught a bug on its first run (pitfalls P22): timeout won, yet the payment side's anomaly was recorded as DUPLICATE_PAYMENT / order status 10.
+ * Cause: after the CAS failed, the order status was read with a plain SELECT, which under repeatable read sees the transaction's starting snapshot. Fixed by switching to a FOR UPDATE current read.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 class PayTimeoutRaceIT extends OrderItSupport {
@@ -76,7 +76,7 @@ class PayTimeoutRaceIT extends OrderItSupport {
         }
         start.countDown();
         for (Future<?> f : futures) {
-            f.get();   // 任何一方抛异常（死锁等）都会在这里暴露
+            f.get();   // any exception on either side (deadlock etc.) surfaces here
         }
         pool.shutdown();
 
@@ -87,9 +87,9 @@ class PayTimeoutRaceIT extends OrderItSupport {
             int status = jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo);
             long paidEvents = count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'", key);
             long closedEvents = count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", key);
-            // 带 order_status = 50：记录里的"当时订单状态"也必须是最新的（P22：快照读会记成 10、类型误判成 DUPLICATE_PAYMENT）
+            // With order_status = 50: the recorded "order status at the time" must also be the latest (P22: a snapshot read would record 10 and misclassify as DUPLICATE_PAYMENT)
             long anomalies = count("SELECT COUNT(*) FROM pay_anomaly WHERE order_no = ? AND type = 'PAID_AFTER_CLOSED' AND order_status = 50", orderNo);
-            // 流水：CREATE + 恰好一次流转
+            // Status log: CREATE + exactly one transition
             assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ?", orderNo)).isEqualTo(2);
             if (status == 20) {
                 paid++;
@@ -101,14 +101,14 @@ class PayTimeoutRaceIT extends OrderItSupport {
                 assertThat(status).isEqualTo(50);
                 assertThat(closedEvents).isEqualTo(1);
                 assertThat(paidEvents).isZero();
-                assertThat(anomalies).isEqualTo(1);   // 钱收了单没成：记下来留给对账
+                assertThat(anomalies).isEqualTo(1);   // money received, order not paid: record it for reconciliation
             }
         }
         assertThat(paid + closed).isEqualTo(orders);
         System.out.printf("支付与超时并发 %d 单：支付赢 %d，超时赢 %d%n", orders, paid, closed);
     }
 
-    /** 先后版本：超时先关单，支付成功才到 → 订单不复活、不写 ORDER_PAID，只记支付异常 */
+    /** Sequential version: timeout closes first, then payment success arrives -> order not revived, no ORDER_PAID, only a payment anomaly */
     @Test
     void paySuccessAfterClosed_recordedAsAnomaly_orderStaysClosed() {
         long orderNo = Long.parseLong(orderCreateService.createOrder(BUYER, req(null, 101, 1)).getOrderNo());
@@ -122,16 +122,16 @@ class PayTimeoutRaceIT extends OrderItSupport {
                 .containsEntry("type", "PAID_AFTER_CLOSED").containsEntry("order_status", 50).containsEntry("handle_status", 0);
         assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'", String.valueOf(orderNo))).isZero();
 
-        // 重复的超时消息：去重表挡住
+        // Duplicate timeout message: blocked by the dedup table
         assertThat(timeoutService.handle(new PayTimeoutMessage(payNo + 1, orderNo, TENANT))).isFalse();
     }
 
     /**
-     * 先后版本（反方向）：支付先成功，超时消息照常到期投递。
+     * Sequential version (reverse): payment succeeds first, and the timeout message is still delivered when due.
      * <p>
-     * 这是线上<b>最常见</b>的路径：定时消息发出后不会撤回，所以每个已支付订单都会收到一条超时消息。
-     * 超时一方 CAS(10→50) 影响 0 行 → 订单保持已支付，不写流水、不写 ORDER_CLOSED（库存不会被释放）。
-     * 去掉 CAS 里的 {@code AND status = #{from}} 再跑，会看到已支付订单被关掉、库存先确认又释放（B4 实验 ③）。
+     * This is the <b>most common</b> path in production: a scheduled message can't be recalled once sent, so every paid order receives a timeout message.
+     * The timeout side's CAS(10->50) affects 0 rows -> order stays paid, no log entry, no ORDER_CLOSED (inventory isn't released).
+     * Remove {@code AND status = #{from}} from the CAS and rerun: you'll see the paid order closed and inventory confirmed then released (B4 experiment ③).
      */
     @Test
     void timeoutAfterPaid_noop_orderStaysPaid_noClosedEvent() {
@@ -145,7 +145,7 @@ class PayTimeoutRaceIT extends OrderItSupport {
         String key = String.valueOf(orderNo);
         assertThat(jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo)).isEqualTo(20);
         assertThat(jdbc.queryForObject("SELECT close_reason FROM orders WHERE order_no = ?", String.class, orderNo)).isNull();
-        // 流水：CREATE + PAY_SUCCESS，没有 PAY_TIMEOUT
+        // Status log: CREATE + PAY_SUCCESS, no PAY_TIMEOUT
         assertThat(count("SELECT COUNT(*) FROM order_status_log WHERE order_no = ?", orderNo)).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'", key)).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_CLOSED'", key)).isZero();
@@ -153,9 +153,9 @@ class PayTimeoutRaceIT extends OrderItSupport {
     }
 
     /**
-     * 租户隔离：订单号对、租户不对的超时消息关不掉订单。
-     * 订单 CAS 的 WHERE 里带 tenant_id，所以即使消息体被篡改 / 串租户，也只会影响 0 行。
-     * 之后用正确租户的消息仍能正常关单（错误消息没有"占掉"任何东西）。
+     * Tenant isolation: a timeout message with the right order number but the wrong tenant can't close the order.
+     * The order CAS WHERE clause includes tenant_id, so even a tampered / cross-tenant message body affects 0 rows.
+     * A message with the correct tenant can still close the order afterwards (the bad message didn't "use up" anything).
      */
     @Test
     void timeoutWithOtherTenant_cannotCloseOrder() {

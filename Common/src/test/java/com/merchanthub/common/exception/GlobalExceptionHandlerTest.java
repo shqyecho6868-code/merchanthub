@@ -16,10 +16,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * 单元测试示例（A2+）：证明 JUnit 5 + Mockito + AssertJ 能跑。
+ * Unit test example (A2+): proves JUnit 5 + Mockito + AssertJ work.
  * <p>
- * 单元测试约定：不起 Spring 容器、不连中间件，直接 new 被测对象；外部依赖用 Mockito 替身。
- * 命名以 Test 结尾 → 由 surefire 在 test 阶段执行，无需 Docker。
+ * Unit test conventions: no Spring context, no middleware; instantiate the class under test directly and use Mockito doubles for external dependencies.
+ * Names end with Test → run by surefire in the test phase, no Docker needed.
  */
 @ExtendWith(MockitoExtension.class)
 class GlobalExceptionHandlerTest {
@@ -52,7 +52,7 @@ class GlobalExceptionHandlerTest {
     @Test
     @DisplayName("参数校验异常：取校验器给出的提示（ConstraintViolation 用 Mockito 替身）")
     void constraintViolation_usesViolationMessage() {
-        // ConstraintViolation 是接口，真实对象要靠 Validator 生成；单测里用 mock 直接指定返回值
+        // ConstraintViolation is an interface whose real instances come from a Validator; in a unit test a mock sets the return value directly
         when(violation.getMessage()).thenReturn("数量必须大于 0");
 
         BaseResponse<?> resp = handler.handleConstraintViolation(

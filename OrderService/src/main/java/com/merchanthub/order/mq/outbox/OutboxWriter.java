@@ -14,8 +14,8 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
- * order 的通用发件箱：在<b>调用方的业务事务里</b>写一行 order_outbox，提交后立即异步发一次，失败由扫描补发。
- * 订单已创建 / 已支付 / 已关闭 / 超时关单定时消息都从这里出去 —— "状态改了就一定有事件，没改就一定没有"。
+ * order's generic outbox: writes an order_outbox row <b>inside the caller's business transaction</b>, sends once asynchronously right after commit, and the scan re-sends on failure.
+ * Order created / paid / closed / timeout-close scheduled messages all go out through here -- "if the status changed there's always an event, if not there never is".
  */
 @Component
 @RequiredArgsConstructor
@@ -26,9 +26,9 @@ public class OutboxWriter {
     private final Clock clock;
 
     /**
-     * MANDATORY：必须加入业务事务。单独提交的话，就回到了"订单改了、事件没写"或反过来的老问题。
+     * MANDATORY: must join the business transaction. Committing separately would bring back the old problem of "order changed, event not written" or vice versa.
      *
-     * @param deliverAt 定时投递时间（UTC）；null = 立即投递
+     * @param deliverAt scheduled delivery time (UTC); null = deliver immediately
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void append(long tenantId, long eventId, String bizKey, String topic, String tag,
@@ -41,16 +41,16 @@ public class OutboxWriter {
         row.setTag(tag);
         row.setPayload(payload);
         row.setDeliverAt(deliverAt);
-        // 真正发送的是另一个线程（提交后的线程池 / XXL-Job 扫描），那时 MDC 里已经没有这个请求的 traceId，
-        // 所以和 tenant_id 一样落进行里，由行自己决定消息属于哪条链路
+        // The actual send happens on another thread (post-commit pool / XXL-Job scan), where MDC no longer has this request's traceId,
+        // so like tenant_id it's stored in the row, and the row itself decides which trace the message belongs to
         row.setTraceId(TraceContext.current());
         row.setStatus(OrderOutbox.PENDING);
         row.setRetryCount(0);
-        // 定时消息也是"现在就发给 Broker"，由 Broker 到点再投递；next_retry_at 只管我们什么时候把它交给 Broker
+        // Scheduled messages are also "handed to the broker now" and delivered by the broker when due; next_retry_at only controls when we hand it to the broker
         row.setNextRetryAt(LocalDateTime.now(clock));
         outboxMapper.insert(row);
 
-        // 必须等事务提交后再发：在事务里发，消息出去了事务却可能回滚 → "消息发了订单没建"
+        // Must send after the transaction commits: sending inside it, the message could go out while the transaction rolls back -> "message sent, order never created"
         long outboxId = row.getId();
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override

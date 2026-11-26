@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 交易快照（表 trade_snapshot）
+ * Trade snapshot (table trade_snapshot)
  */
 @Data
 @TableName("trade_snapshot")
@@ -20,11 +20,11 @@ public class TradeSnapshot {
 
     private Long orderNo;
     private Long skuId;
-    /** 下单时刻完整商品信息（JSON） */
+    /** Full product info at the time of ordering (JSON) */
     private String content;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the DB default; null on insert, so MyBatis-Plus skips it */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

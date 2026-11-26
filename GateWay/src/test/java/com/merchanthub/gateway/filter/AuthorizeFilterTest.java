@@ -26,7 +26,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** 网关鉴权：清洗伪造头、注入身份头、挡 /internal/**（不起容器，Redis 用替身） */
+/** Gateway auth: strip forged headers, inject identity headers, block /internal/** (no containers; Redis is a stub) */
 class AuthorizeFilterTest {
 
     private final ReactiveStringRedisTemplate redis = mock(ReactiveStringRedisTemplate.class);
@@ -35,7 +35,7 @@ class AuthorizeFilterTest {
     private final JwtCodec jwt = new JwtCodec(Base64.getEncoder().encodeToString("gateway-test-secret-0123456789abc".getBytes()));
     private final AuthorizeFilter filter = new AuthorizeFilter(redis, jwt);
 
-    /** 放行后下游实际收到的请求 */
+    /** The request actually received downstream after the filter lets it through */
     private final AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
     private final GatewayFilterChain chain = ex -> {
         forwarded.set(ex);
@@ -47,7 +47,7 @@ class AuthorizeFilterTest {
         when(redis.opsForValue()).thenReturn(ops);
     }
 
-    /** 模拟登录：签发 token 并写入 Redis（网关会核对 Redis 里存的是不是这个 token） */
+    /** Simulate login: issue a token and store it in Redis (the gateway checks that Redis holds this exact token) */
     private String login(long userId, Long tenantId, String role) {
         String token = jwt.issue(userId, tenantId, role, Duration.ofMinutes(10));
         when(ops.get(CommonConstant.ACCESS_TOKEN_PREFIX + userId)).thenReturn(Mono.just(token));
@@ -102,7 +102,7 @@ class AuthorizeFilterTest {
         for (String path : new String[]{"/internal/orders/1", "/api/internal/orders/1", "/api/%69nternal/orders/1",
                 "/api/INTERNAL/skus/query"}) {
             forwarded.set(null);
-            // 用 URI.create 保留原样的 %69，不让测试工具再编码一次
+            // URI.create keeps the raw %69 so the test client doesn't encode it again
             MockServerWebExchange ex = run(MockServerHttpRequest.method(HttpMethod.GET, URI.create(path))
                     .header("Access-Token", token).build());
             assertThat(ex.getResponse().getStatusCode()).as(path).isEqualTo(HttpStatus.NOT_FOUND);
@@ -124,7 +124,7 @@ class AuthorizeFilterTest {
         assertThat(run(MockServerHttpRequest.get("/api/orders/1").header("Access-Token", merchantNoTenant).build())
                 .getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
-        // 签名对、但 Redis 里不是这个 token（已登出 / 被挤下线）
+        // Signature is valid, but Redis holds a different token (logged out / kicked out by a newer login)
         String stale = jwt.issue(5L, 7L, "MERCHANT_ADMIN", Duration.ofMinutes(10));
         when(ops.get(anyString())).thenReturn(Mono.empty());
         assertThat(run(MockServerHttpRequest.get("/api/orders/1").header("Access-Token", stale).build())

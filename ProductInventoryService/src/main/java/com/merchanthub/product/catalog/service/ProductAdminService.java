@@ -16,8 +16,8 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 商家后台的商品读写（C1）。和 order 的商家查询一样，代码里不写 tenant_id，靠租户插件自动拼：
- * 商家 7 改商家 8 的 SKU 价格，UPDATE 变成 {@code WHERE id = ? AND tenant_id = 7}，影响 0 行 → 返回"不存在"。
+ * Product reads / writes for the merchant back office (C1). As with order's merchant queries, the code never writes tenant_id; the tenant plugin appends it automatically:
+ * when merchant 7 changes the price of merchant 8's SKU, the UPDATE becomes {@code WHERE id = ? AND tenant_id = 7}, affects 0 rows → returns "not found".
  */
 @Slf4j
 @Service
@@ -41,7 +41,7 @@ public class ProductAdminService {
                 p.getAuditRound() == null ? 0 : p.getAuditRound(), p.getRejectReason(), skus);
     }
 
-    /** 改 SKU 售价。已下的订单不受影响：订单里存的是交易快照（B1） */
+    /** Change a SKU's selling price. Existing orders are unaffected: orders store a transaction snapshot (B1) */
     public void updatePrice(long skuId, long price) {
         int rows = skuMapper.update(null, new LambdaUpdateWrapper<Sku>().eq(Sku::getId, skuId).set(Sku::getPrice, price));
         if (rows != 1) {

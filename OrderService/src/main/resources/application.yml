@@ -1,6 +1,6 @@
 server:
   port: 8107
-  # F1：让 Micrometer 能读到 Tomcat 线程池指标（busy / max），压测时判断是不是线程池先满
+  # F1: let Micrometer read Tomcat thread-pool metrics (busy / max), so load tests can tell whether the thread pool saturates first
   tomcat:
     mbeanregistry:
       enabled: true
@@ -12,10 +12,10 @@ spring:
     active: ${SPRING_PROFILES_ACTIVE:dev}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 连接池保持 Hikari 默认 10，不要随手调大（F1 实测，docs/perf-report.md 第 5 节）：调到 30 后 COMMIT 6ms → 16ms、
-    # 行锁等待 59s → 890s，吞吐反而下降。瓶颈在数据库（提交刷盘 + 库存行锁），池子排队只是症状；池子变大等于把排队挪进数据库
-  # 表结构由 Flyway 管理（db/migration/V*.sql）。B2 之前的库是 spring.sql.init 建的、没有 Flyway 历史表：
-  # baseline-on-migrate 让 Flyway 把这种已有库记为 V1，只执行 V2 起的脚本；空库则从 V1 正常执行
+    # Keep the pool at Hikari's default of 10; don't casually raise it (measured in F1, docs/perf-report.md section 5): at 30, COMMIT went 6ms -> 16ms,
+    # row-lock wait 59s -> 890s, and throughput actually dropped. The bottleneck is the DB (commit flush + inventory row locks); pool queueing is just a symptom, and a bigger pool only moves the queue into the DB
+  # Schema is managed by Flyway (db/migration/V*.sql). Databases created before B2 used spring.sql.init and have no Flyway history table:
+  # baseline-on-migrate makes Flyway record such an existing DB as V1 and run only V2 onward; an empty DB runs from V1 as usual
   flyway:
     baseline-on-migrate: true
     baseline-version: 1
@@ -27,35 +27,35 @@ spring:
     openfeign:
       client:
         config:
-          # 跨服务调用必须有超时（行业规范）。不配的话默认读超时 60 秒，下游一慢，order 的线程全部卡死。
-          # C2 踩坑（P29）：这里的 key 是 @FeignClient 的 contextId，不是服务名。之前写成 product-inventory，
-          # 配置从没生效过（实际读超时 60 秒），FeignResilienceIT 才测出来
+          # Cross-service calls must have timeouts (industry practice). Without this the default read timeout is 60s; one slow downstream and all order threads hang.
+          # C2 pitfall (P29): the key here is the @FeignClient contextId, not the service name. It used to be product-inventory,
+          # so the config never took effect (actual read timeout 60s) until FeignResilienceIT caught it
           productInventoryClient:
             connect-timeout: 1000
             read-timeout: 3000
-          # 兜底：任何没单独配置的客户端也有超时，key 再写错也不会退回 60 秒
+          # Fallback: any client without its own config still gets a timeout, so a wrong key won't fall back to 60s
           default:
             connect-timeout: 1000
             read-timeout: 3000
-    # C2：LoadBalancer 自带的"换个实例再试"也关掉（需要 spring-retry 才生效，现在没引入；显式写出来防止以后被带进来）。
-    # 不重试的原因见 ProductInventoryFeignConfig
+    # C2: also disable LoadBalancer's built-in "retry on another instance" (only active with spring-retry, not on the classpath now; stated explicitly so it doesn't sneak in later).
+    # Why we don't retry: see ProductInventoryFeignConfig
     loadbalancer:
       retry:
         enabled: false
     sentinel:
-      # 启动就连控制台，不等第一次请求（否则控制台里看不到服务，直到有人调接口）
+      # Connect to the dashboard at startup instead of on the first request (otherwise the service is invisible in the dashboard until someone calls an API)
       eager: true
       transport:
-        # 本机和控制台通信的端口：控制台通过它拉监控数据、推规则。被占用会自动 +1
+        # Port the dashboard uses to talk to this process: it pulls metrics and pushes rules through it. Auto-increments by 1 if taken
         port: 8719
 
 merchanthub:
   order:
-    # C2：限流 / 熔断阈值，含义与取法见 SentinelProperties 和 C2 笔记
+    # C2: rate-limit / circuit-breaker thresholds; see SentinelProperties and the C2 notes for meaning and how they were chosen
     sentinel:
       rate-limit:
         per-tenant-qps: 20
-        # 个别商家单独提额，例：'[9]': 50。租户 7 故意不配，压测时让它被限
+        # Per-merchant quota overrides, e.g. '[9]': 50. Tenant 7 is intentionally left out so it gets throttled under load tests
         tenant-overrides: {}
       degrade:
         slow-rt-ms: 1000
@@ -64,43 +64,43 @@ merchanthub:
         min-requests: 10
         stat-interval-ms: 10000
         open-seconds: 10
-    # 待支付订单的支付时限（Duration 格式）：到期由 ORDER_TIMEOUT 定时消息触发超时关单（B3-下）
+    # Payment deadline for pending orders (Duration format): on expiry the ORDER_TIMEOUT scheduled message triggers timeout close (B3-下)
     pay-timeout: 15m
-    # "订单已创建"事件的发送方案，二选一：TX_MESSAGE（RocketMQ 事务消息）/ OUTBOX（本地消息表）。见 B2 笔记 Q1
+    # How the "order created" event is sent, pick one: TX_MESSAGE (RocketMQ transactional message) / OUTBOX (local message table). See B2 notes Q1
     event-mode: OUTBOX
     tx:
-      # 半消息至少隔这么久才会被回查；必须大于本地事务超时 5 秒（B2 笔记 Q2）
+      # Minimum age before a half message is checked back; must exceed the 5s local transaction timeout (B2 notes Q2)
       check-immunity-seconds: 30
-      # 回查时查不到订单、且消息不满这么久 → 返回 UNKNOW 稍后重查，而不是直接回滚（第二道防线，B2 笔记 Q2）
+      # If the check-back can't find the order and the message is younger than this -> return UNKNOW to recheck later instead of rolling back (second line of defense, B2 notes Q2)
       rollback-min-age-seconds: 30
       debug:
-        # 以下两项只给实验/测试用，生产保持默认
+        # The two settings below are for experiments/tests only; keep defaults in production
         pause-after-local-commit-ms: 0
         report-unknown: false
     debug:
-      # 只给 🧑 实验用：库存预占后、订单落库前停顿多少毫秒，制造"支付回调早于订单"（B3-下实验 ①）
+      # For 🧑 experiments only: pause N ms after inventory reservation and before persisting the order, to make "payment callback arrives before the order" happen (B3-下 experiment ①)
       pause-before-persist-ms: 0
     timeout-consumer:
-      # 超时关单消费者（订阅 ORDER_TIMEOUT）
+      # Timeout-close consumer (subscribes to ORDER_TIMEOUT)
       enabled: true
     outbox:
-      # 补偿扫描每批最多取多少条。E3 起扫描由 XXL-Job 的 orderOutboxRelayJob 触发，频率在调度中心配
+      # Max records per compensation scan batch. Since E3 the scan is triggered by the XXL-Job orderOutboxRelayJob; frequency is configured in the admin console
       batch-size: 100
-      # 抢到一条记录后的租约：租约内其他实例不会再发它。必须大于一次发送的最长耗时（3s 超时 × 最多 3 次）
+      # Lease after claiming a record: other instances won't send it during the lease. Must exceed the longest send time (3s timeout x up to 3 attempts)
       lease-seconds: 30
-      # 第 n 次失败后隔 base × 2^(n-1) 秒再试，封顶 max-backoff；失败满 max-retries 次标记为失败并告警
+      # After the n-th failure, retry after base x 2^(n-1) seconds, capped at max-backoff; after max-retries failures mark as failed and alert
       base-backoff-seconds: 10
       max-backoff-seconds: 600
       max-retries: 10
 
-    # E3：XXL-Job 任务参数（任务入口 job/OrderJobs，执行频率在调度中心配）
+    # E3: XXL-Job task parameters (task entry point job/OrderJobs; frequency configured in the admin console)
     jobs:
-      # 超时订单扫描：截止时间过了这么久还是待支付才兜底关单（这期间定时消息大概率正在路上）
+      # Timeout-order scan: close as a fallback only if still pending this long after the deadline (the scheduled message is most likely still in flight meanwhile)
       timeout-grace: 5m
-      # 已发送 outbox 记录保留多久后归档
+      # How long to keep sent outbox records before archiving
       archive-retention: 7d
       batch-size: 200
-    # E2：Canal → ES 订单同步，默认关（没起 Canal 的环境不连），演示时打开
+    # E2: Canal -> ES order sync, off by default (environments without Canal don't connect); turn on for demos
     canal:
       enabled: false
       host: 127.0.0.1
@@ -110,7 +110,7 @@ merchanthub:
     xxl:
       enabled: false
       appname: order
-      # 执行器内嵌服务端口：每个服务不同（order 9201 / payment 9202 / product-inventory 9203 / user-tenant 9204）
+      # Embedded executor server port: different per service (order 9201 / payment 9202 / product-inventory 9203 / user-tenant 9204)
       port: 9201
 
 mybatis-plus:
@@ -123,9 +123,9 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# F1：压测监控。只暴露 health 和 prometheus（不暴露 env / heapdump 等敏感端点）；
-# 服务端口不经网关对外，/actuator 不在网关路由里，外部访问不到。
-# http.server.requests 开直方图桶，Prometheus 才能用 histogram_quantile 算 P99（默认只有 count / sum / max）
+# F1: load-test monitoring. Only health and prometheus are exposed (no sensitive endpoints like env / heapdump);
+# service ports aren't exposed outside the gateway, and /actuator isn't routed by the gateway, so it's unreachable externally.
+# Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (by default there's only count / sum / max)
 management:
   endpoints:
     web:
@@ -138,7 +138,7 @@ management:
       percentiles-histogram:
         http.server.requests: true
 
-# 本地 / 测试日志也带 traceId 和 tenantId（和 application-aws.yml 同一格式）：按 traceId 搜就能串起一张订单经过的 HTTP → Feign → MQ 消费
+# Local / test logs also carry traceId and tenantId (same format as application-aws.yml): searching by traceId links an order's HTTP -> Feign -> MQ consumption
 logging:
   pattern:
     level: "%5p [trace:%X{traceId:-}] [tenant:%X{tenantId:-}]"

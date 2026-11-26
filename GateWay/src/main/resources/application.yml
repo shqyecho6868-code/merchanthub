@@ -11,9 +11,9 @@ spring:
 server:
   port: 10010
 
-# F1：压测监控。只暴露 health 和 prometheus（不暴露 env / heapdump 等敏感端点）；
-# 服务端口不经网关对外，/actuator 不在网关路由里，外部访问不到。
-# http.server.requests 开直方图桶，Prometheus 才能用 histogram_quantile 算 P99（默认只有 count / sum / max）
+# F1: load-test monitoring. Only expose health and prometheus (no sensitive endpoints like env / heapdump);
+# service ports are not exposed outside the gateway and /actuator is not routed by the gateway, so it is unreachable externally.
+# Enable histogram buckets for http.server.requests so Prometheus can compute P99 with histogram_quantile (default is only count / sum / max)
 management:
   endpoints:
     web:

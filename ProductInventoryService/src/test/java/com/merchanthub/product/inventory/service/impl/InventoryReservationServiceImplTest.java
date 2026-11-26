@@ -35,8 +35,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 预占编排逻辑的单元测试（不连数据库）：顺序、分支、异常处理。
- * 真实的行锁、回滚、并发效果在 InventoryReservationIT / ConcurrentOversellIT 里验证。
+ * Unit tests for the reservation orchestration logic (no database): ordering, branches, exception handling.
+ * Real row-lock, rollback and concurrency effects are verified in InventoryReservationIT / ConcurrentOversellIT.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -57,7 +57,7 @@ class InventoryReservationServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new InventoryReservationServiceImpl(inventoryMapper, reservationMapper, transactionTemplate);
-        // 替身事务：直接执行代码块（回滚效果由 IT 验证）
+        // Stub transaction: just run the block (rollback effects are verified by the IT)
         doAnswer(inv -> {
             inv.<Consumer<TransactionStatus>>getArgument(0).accept(mock(TransactionStatus.class));
             return null;
@@ -131,7 +131,7 @@ class InventoryReservationServiceImplTest {
 
     @Test
     void duplicateKeyAfterRollback_recheckedOutsideTransaction() {
-        // 第一次查（快速路径）没有记录；事务里撞唯一键；回滚后再查，看到对方提交的记录
+        // First lookup (fast path) finds no record; the transaction hits the unique key; after rollback, the re-query sees the other request's committed record
         when(reservationMapper.selectByOrderNo(ORDER))
                 .thenReturn(List.of())
                 .thenReturn(List.of(record(TENANT, 101, 2)));

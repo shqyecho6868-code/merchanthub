@@ -13,15 +13,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 推送消息表（offline_message）：<b>先存后推</b>。
+ * Push message table (offline_message): <b>store first, then push</b>.
  * <ol>
- *   <li>分发前先存一行"待送达"（status 0）</li>
- *   <li>某个节点真正写进了接收方的连接 → 标记"已送达"（status 1）</li>
- *   <li>接收方不在线、转发途中目标节点宕机、写连接失败 → 这行一直是 0，就是"离线消息"</li>
- *   <li>接收方上线握手成功 → 按 id 顺序把 0 的全部补发</li>
+ *   <li>Before dispatch, store a "pending" row (status 0)</li>
+ *   <li>Once some node actually writes it to the receiver's connection -> mark "delivered" (status 1)</li>
+ *   <li>Receiver offline, target node crashed mid-forward, or connection write failed -> the row stays 0, i.e. an "offline message"</li>
+ *   <li>Receiver comes online and handshakes successfully -> redeliver all 0 rows in id order</li>
  * </ol>
- * 为什么不是"推送失败才存"：节点 A 宕机的那几十秒里，路由还没过期，消息会被转发给 A；A 已经没了，没人能回头说"我没送到"，
- * 只有"先存、送到才标记"能保证这些消息不丢。代价：每条推送多一次写库；同一消息可能送达多次（客户端按 msgId 去重）。
+ * Why not "store only when the push fails": during the tens of seconds node A is down, its route hasn't expired yet and messages are still forwarded to A; A is gone, so nobody can report back "I didn't deliver it".
+ * Only "store first, mark when delivered" guarantees these messages aren't lost. Cost: one extra DB write per push; a message may be delivered more than once (clients dedupe by msgId).
  */
 @Slf4j
 @Component
@@ -33,7 +33,7 @@ public class OfflineMessageStore {
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 
-    /** 存一行待送达；同一接收方同一 msgId 只存一次（INSERT IGNORE + 唯一键），MQ 重投 / 多节点重复存都没事 */
+    /** Store a pending row; the same msgId for the same receiver is stored only once (INSERT IGNORE + unique key), so MQ redelivery / multi-node duplicate saves are harmless */
     public void save(PushMessage msg) {
         jdbc.update("INSERT IGNORE INTO offline_message (tenant_id, receiver_key, msg_id, type, payload) VALUES (?, ?, ?, ?, ?)",
                 msg.tenantId(), msg.receiverKey(), msg.msgId(), msg.type(), toJson(msg));
@@ -44,9 +44,9 @@ public class OfflineMessageStore {
     }
 
     /**
-     * 上线补发：未送达的按 id 顺序写进连接，写成功才标记（写失败下次上线再补）。
+     * Redelivery on coming online: write undelivered rows to the connection in id order, marking only on successful write (failed writes are retried next time online).
      *
-     * @return 本次补发的条数
+     * @return number of messages redelivered this time
      */
     public int replay(String receiverKey, Channel channel) {
         List<Map<String, Object>> rows = jdbc.queryForList(

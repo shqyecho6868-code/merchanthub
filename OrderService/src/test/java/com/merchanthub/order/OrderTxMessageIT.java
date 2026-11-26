@@ -23,7 +23,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
 /**
- * 方案一（事务消息）正常路径：本地事务成功 → 消息可见；本地事务失败 → 消息永不可见。
+ * Option 1 (transactional message) happy path: local transaction succeeds -> message visible; local transaction fails -> message never visible.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=TX_MESSAGE")
 class OrderTxMessageIT extends OrderItSupport {
@@ -60,8 +60,8 @@ class OrderTxMessageIT extends OrderItSupport {
     }
 
     /**
-     * 破坏性：半消息已发出，本地事务写库失败（模拟数据库故障）。
-     * 结论：订单不存在、下单报原始错误，且消费者永远看不到这条消息 —— 不会出现"消息发了订单没建"。
+     * Destructive: the half message is sent, but the local transaction's DB write fails (simulated DB failure).
+     * Conclusion: the order doesn't exist, placement reports the original error, and consumers never see the message -- no "message sent, order never created".
      */
     @Test
     void localTxFailed_noOrder_andMessageNeverVisible() {
@@ -74,7 +74,7 @@ class OrderTxMessageIT extends OrderItSupport {
         long orderNo = captor.getValue().getOrderNo();
 
         assertThat(countOrders(orderNo)).isZero();
-        // 半消息被 ROLLBACK：等足够久（> 测试 Broker 的回查周期）也收不到
+        // The half message was ROLLed BACK: not received even after waiting long enough (> the test broker's check-back interval)
         await().during(Duration.ofSeconds(8)).atMost(Duration.ofSeconds(10))
                 .until(() -> observer.received(orderNo).isEmpty());
     }

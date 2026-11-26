@@ -12,23 +12,23 @@ import org.springframework.stereotype.Component;
 import java.util.function.Supplier;
 
 /**
- * C2：下单入口按商家限流（Sentinel 热点参数，规则见 SentinelRulesConfig）。
+ * C2: per-merchant rate limiting at the order-placement entry (Sentinel hot parameters; rules in SentinelRulesConfig).
  * <p>
- * 放在 Controller 调 service 之前：被限的请求<b>不查 SKU、不预占、不碰数据库</b>，拒绝成本几乎为 0。
- * 不用 @SentinelResource 注解：注解按"方法参数下标"取热点参数，Controller 的参数是整个请求体，
- * 拿不到 tenantId；手写 SphU.entry 把 tenantId 显式传进去更直观。
+ * Placed before the Controller calls the service: throttled requests <b>don't fetch SKUs, reserve, or touch the DB</b>, so rejection costs almost nothing.
+ * No @SentinelResource annotation: it picks hot parameters by method-argument index, and the Controller's argument is the whole request body,
+ * so it can't get tenantId; passing tenantId explicitly to a hand-written SphU.entry is clearer.
  */
 @Slf4j
 @Component
 public class OrderRateLimiter {
 
-    /** Sentinel 资源名，控制台"热点规则"里按这个名字配置 */
+    /** Sentinel resource name; configure "hot parameter rules" in the dashboard under this name */
     public static final String RESOURCE = "order:create";
 
     public <T> T guard(long tenantId, Supplier<T> action) {
         Entry entry;
         try {
-            // 第 4 个参数开始是热点参数：按 tenantId 的值分别计数
+            // Arguments from the 4th onward are hot parameters: counted separately per tenantId value
             entry = SphU.entry(RESOURCE, EntryType.IN, 1, tenantId);
         } catch (BlockException e) {
             log.warn("【限流】商家下单 QPS 超过阈值，拒绝 tenantId={}", tenantId);
@@ -37,7 +37,7 @@ public class OrderRateLimiter {
         try {
             return action.get();
         } finally {
-            // exit 时也要带上同样的参数，热点规则按"并发线程数"计时才能正确减回去
+            // exit must pass the same arguments so hot-parameter rules counting "concurrent threads" decrement correctly
             entry.exit(1, tenantId);
         }
     }

@@ -11,13 +11,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 订单查询（C1）。两个入口，隔离方式不同：
+ * Order queries (C1). Two entry points with different isolation:
  * <ul>
- *   <li>商家查：代码里<b>不写</b> tenant_id 条件，租户插件自动拼上 —— 商家 7 拿商家 8 的订单号来查，SQL 变成
- *       {@code WHERE order_no = ? AND tenant_id = 7}，查不到</li>
- *   <li>买家查：买家不属于任何商家，租户插件不拼条件，改为代码里显式按 buyer_id 过滤（数据归属校验）</li>
+ *   <li>Merchant query: the code does <b>not</b> write a tenant_id condition; the tenant plugin adds it -- if merchant 7 queries merchant 8's order number, the SQL becomes
+ *       {@code WHERE order_no = ? AND tenant_id = 7} and finds nothing</li>
+ *   <li>Buyer query: buyers belong to no merchant, so the tenant plugin adds no condition; the code filters explicitly by buyer_id instead (data ownership check)</li>
  * </ul>
- * 查不到和"不是你的"都返回同一个"订单不存在"：不让对方通过不同的报错探测出哪些订单号是真实存在的。
+ * "Not found" and "not yours" both return the same "Order not found": callers can't probe which order numbers really exist from different errors.
  */
 @Slf4j
 @Service

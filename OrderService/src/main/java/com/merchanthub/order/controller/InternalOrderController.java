@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 服务间内部接口（/internal/** 网关不对外转发）。只读：别的服务不能通过接口改订单状态 */
+/** Internal service-to-service APIs (/internal/** is not forwarded by the gateway). Read-only: other services can't change order status through APIs */
 @RestController
 @RequestMapping("/internal/orders")
 @RequiredArgsConstructor
@@ -49,8 +49,8 @@ public class InternalOrderController {
 
 
     /**
-     * E3：批量查订单状态（product-inventory 的预占对账用）。不存在的订单不出现在结果里。
-     * 返回订单号 → 状态码，调用方据此决定：已支付 → 确认扣减；已关闭 / 不存在 → 释放；待支付 → 不动
+     * E3: batch-query order statuses (used by product-inventory reservation reconciliation). Nonexistent orders are omitted from the result.
+     * Returns order number -> status code; the caller decides: paid -> confirm deduction; closed / not found -> release; pending -> leave as is
      */
     @PostMapping("/statuses")
     public BaseResponse<Map<Long, Integer>> statuses(@RequestBody List<Long> orderNos) {
@@ -66,9 +66,9 @@ public class InternalOrderController {
     }
 
     /**
-     * E3：payment 对账用 —— 每张"支付成功"的支付单，order 处理过它的事件没有。
-     * 判断依据是消费去重表（eventId = payNo）而不是订单状态：订单已支付也可能是被<b>另一张</b>支付单付的，
-     * 只看状态会漏掉"重复支付且事件丢失"；去重表能精确回答"这张支付单的事件到没到过 order"
+     * E3: for payment reconciliation -- for each "payment succeeded" payment, has order processed its event?
+     * Decided by the consumer dedup table (eventId = payNo) rather than order status: a paid order may have been paid by a <b>different</b> payment,
+     * so looking only at status would miss "duplicate payment with a lost event"; the dedup table answers precisely "did this payment's event ever reach order"
      */
     @PostMapping("/pay-check")
     public BaseResponse<List<PayCheckResult>> payCheck(@RequestBody List<PayCheckItem> items) {

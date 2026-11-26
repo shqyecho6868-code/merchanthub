@@ -58,8 +58,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 /**
- * 支付单 + 回调幂等（B3）。真实 MySQL / Redis / RocketMQ；order 用 Mockito 替身。
- * 用一个"旁观者"消费者统计 PAYMENT_EVENT 上每张支付单收到几条事件 —— 回调幂等的最终标准是"事件只发一条"。
+ * Payment + callback idempotency (B3). Real MySQL / Redis / RocketMQ; order is a Mockito stub.
+ * An "observer" consumer counts how many events each payment gets on PAYMENT_EVENT — the ultimate test of callback idempotency is "only one event is sent".
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -107,7 +107,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
 
     private TenantContext.Scope tenantScope;
 
-    /** C1：测试线程直接调 service（绕过 Controller），默认给 SYSTEM 身份；租户插件 fail-closed，不给会直接报错 */
+    /** C1: the test thread calls the service directly (bypassing the Controller), so give it a SYSTEM identity by default; the tenant plugin is fail-closed and errors out without one */
     @BeforeEach
     void reset() {
         jdbc.execute("TRUNCATE TABLE payment");
@@ -140,13 +140,13 @@ class PaymentCallbackIT extends IntegrationTestBase {
     }
 
     /**
-     * 断言"只有一个逻辑事件"：收到的消息全部来自赢得 CAS 的那次回调（尝试 ID 等于支付单上的记录），eventId 都等于 payNo。
-     * 不断言"恰好 1 条消息"：COMMIT 是 oneway 的，和 Broker 回查有竞态，赢家的消息可能被提交两次（P19 实测）；
-     * RocketMQ 本就不承诺恰好一次，同一 eventId 的重复由 order 消费端去重（第三层）。
+     * Asserts "only one logical event": every received message comes from the callback that won the CAS (attempt ID equals the one recorded on the payment), and every eventId equals payNo.
+     * Does not assert "exactly 1 message": COMMIT is oneway and races with the Broker's check-back, so the winner's message may be committed twice (observed in P19);
+     * RocketMQ never promised exactly-once anyway; duplicates with the same eventId are deduplicated by the order consumer (the third layer).
      */
     private void assertExactlyOneEvent(long payNo) {
         await().atMost(Duration.ofSeconds(30)).until(() -> EVENTS.getOrDefault(payNo, List.of()).size() >= 1);
-        // 测试 Broker 3 秒起回查：多等一会儿，让被误提交的输家消息（如果有）也能到达
+        // The test Broker starts checking back after 3 seconds: wait a bit longer so any wrongly committed loser messages also arrive
         await().pollDelay(Duration.ofSeconds(6)).atMost(Duration.ofSeconds(10)).until(() -> true);
         String winner = jdbc.queryForObject("SELECT success_attempt FROM payment WHERE pay_no = ?", String.class, payNo);
         assertThat(EVENTS.get(payNo)).isNotEmpty().allSatisfy(m -> {
@@ -161,7 +161,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
         var vo = service.create(BUYER, orderNo);
         assertThat(vo.amount()).isEqualTo(9900);
         assertThat(status(vo.payNo())).isZero();
-        // 一个订单可以建多张支付单（多次支付尝试）
+        // One order can have multiple payments (multiple payment attempts)
         assertThat(service.create(BUYER, orderNo).payNo()).isNotEqualTo(vo.payNo());
     }
 
@@ -189,7 +189,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
                 .hasFieldOrPropertyWithValue("code", ErrorCode.DOWNSTREAM_UNAVAILABLE.getCode());
     }
 
-    /** 先后到达的 3 次重复回调：第 1 次 CAS 赢，后 2 次被第一层快速路径挡住；事件只有 1 条 */
+    /** 3 duplicate callbacks arriving one after another: the 1st wins the CAS, the next 2 are stopped by the first-layer fast path; only 1 event */
     @Test
     void sequentialDuplicateCallbacks_onlyFirstTakesEffect() {
         long payNo = newPayment();
@@ -205,11 +205,11 @@ class PaymentCallbackIT extends IntegrationTestBase {
     }
 
     /**
-     * 破坏性：10 次重复回调同时到达（都读到"待支付"，快速路径挡不住）。
-     * 结论：第二层 CAS 只让 1 次成功，其余 9 次的半消息被回滚，事件只有 1 条。
-     * 踩坑（P19）：9 条回滚的半消息实测仍会被 Broker 回查；回查最初只看"支付单已成功"，把它们全提交了，收到 11 条事件。
-     * 改为比对赢家尝试 ID 后，输家的消息不再被提交（赢家自己的消息仍可能被重复投递，见 assertExactlyOneEvent）。
-     * 如果把 CAS 换成"读到待支付就 UPDATE SET status = 1"（不带 WHERE status = 0），10 次都会认为自己成功、发 10 条事件。
+     * Destructive: 10 duplicate callbacks arrive at the same time (all read "pending payment", so the fast path can't stop them).
+     * Conclusion: the second-layer CAS lets only 1 succeed; the other 9 half messages are rolled back, and there is only 1 event.
+     * Pitfall (P19): the 9 rolled-back half messages were still checked back by the Broker; the check-back originally only looked at "payment succeeded" and committed them all, yielding 11 events.
+     * After switching to comparing the winner's attempt ID, the losers' messages are no longer committed (the winner's own message may still be redelivered, see assertExactlyOneEvent).
+     * If the CAS were replaced by "read pending, then UPDATE SET status = 1" (without WHERE status = 0), all 10 would think they succeeded and send 10 events.
      */
     @Test
     void concurrentDuplicateCallbacks_exactlyOneWins() throws Exception {
@@ -222,7 +222,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
         for (int i = 0; i < n; i++) {
             fs.add(pool.submit(() -> {
                 start.await();
-                // 和 Controller 一样以 SYSTEM 身份处理回调；子线程要自己设上下文（C1）
+                // Handle the callback as SYSTEM, same as the Controller; a child thread must set its own context (C1)
                 return TenantContext.callAsSystem(() -> service.handleMockCallback(req));
             }));
         }
@@ -269,7 +269,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
                 .hasFieldOrPropertyWithValue("code", ErrorCode.PAYMENT_NOT_FOUND.getCode());
     }
 
-    /** 事务回查：只看数据库里的支付单 */
+    /** Transaction check-back: looks only at the payment in the database */
     @Test
     void txCheck_decidesByPaymentRow() {
         long ok = newPayment();
@@ -278,7 +278,7 @@ class PaymentCallbackIT extends IntegrationTestBase {
         MessageExt winnerMsg = halfMsg(ok, "K-" + ok, System.currentTimeMillis());
         winnerMsg.putUserProperty(PaymentEventTopics.PROP_ATTEMPT, winner);
         assertThat(txListener.checkLocalTransaction(winnerMsg)).isEqualTo(LocalTransactionState.COMMIT_MESSAGE);
-        // 输掉 CAS 的重复回调的半消息：支付单已成功，但尝试 ID 不是它 → 不能提交（P19）
+        // Half message of a duplicate callback that lost the CAS: the payment has succeeded, but the attempt ID isn't this one → must not commit (P19)
         MessageExt loserMsg = halfMsg(ok, "K-" + ok, System.currentTimeMillis());
         loserMsg.putUserProperty(PaymentEventTopics.PROP_ATTEMPT, "loser");
         assertThat(txListener.checkLocalTransaction(loserMsg)).isEqualTo(LocalTransactionState.ROLLBACK_MESSAGE);

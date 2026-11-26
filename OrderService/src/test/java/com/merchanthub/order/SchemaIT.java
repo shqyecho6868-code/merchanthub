@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 冒烟：上下文能起来，Flyway 建表成功，雪花发号器已从 Redis 领到槽位 */
+/** Smoke test: the context starts, Flyway creates the tables, and the snowflake ID generator has claimed a slot from Redis */
 @SpringBootTest
 class SchemaIT extends IntegrationTestBase {
 
@@ -25,7 +25,7 @@ class SchemaIT extends IntegrationTestBase {
                 "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()", String.class))
                 .contains("orders", "order_item", "trade_snapshot", "order_status_log", "order_outbox",
                         "consumed_event", "pay_anomaly", "recon_exception", "order_outbox_archive", "flyway_schema_history")
-                .doesNotContain("merchant_order_notice");   // E1 迁到 realtime
+                .doesNotContain("merchant_order_notice");   // moved to realtime in E1
     }
 
     @Test

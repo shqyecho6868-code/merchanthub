@@ -16,11 +16,11 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 
 /**
- * 入驻流程的两个 ServiceTask（BPMN 里 {@code ${onboardingDelegate.approve(execution)}}）。
+ * The two ServiceTasks of the onboarding process ({@code ${onboardingDelegate.approve(execution)}} in the BPMN).
  * <p>
- * 入驻审批是<b>本地闭环</b>：引擎和租户表、账号表在同一个库，"完成审批任务 + 建租户 + 开账号 + 改申请状态"是一个本地事务，
- * 不需要 MQ（对比商品上架：product 在另一个服务，只能靠消息回写，D4）。任何一步失败（比如登录名被占用），
- * 整个事务回滚，审核任务还留在平台管理员的待办里。
+ * Onboarding approval is a <b>local closed loop</b>: the engine, tenant table and account table are in the same DB, so "complete approval task + create tenant + open account + update application status" is one local transaction,
+ * with no MQ needed (contrast with product listing: product is another service and can only be written back via messages, D4). If any step fails (e.g. the username is taken),
+ * the whole transaction rolls back and the review task stays in the platform admin's queue.
  */
 @Slf4j
 @Component("onboardingDelegate")
@@ -41,7 +41,7 @@ public class OnboardingDelegate {
         Tenant tenant = new Tenant();
         tenant.setName(app.getShopName());
         tenant.setStatus(Tenant.OPEN);
-        // source_application_id 唯一：同一张申请无论如何只会建出一个租户
+        // source_application_id is unique: one application can only ever create one tenant
         tenant.setSourceApplicationId(appId);
         tenantMapper.insert(tenant);
 
@@ -54,11 +54,11 @@ public class OnboardingDelegate {
         try {
             accountMapper.insert(admin);
         } catch (DuplicateKeyException e) {
-            // 提交时检查过，但审核期间可能被别人注册 / 别的申请先通过了；唯一索引是最终裁决
+            // Checked at submit time, but during review someone else may have registered it / another application got approved first; the unique index is the final arbiter
             throw new BusinessException(ErrorCode.USERNAME_TAKEN, "登录名 " + app.getAdminUsername() + " 已被占用，请驳回让申请人修改");
         }
 
-        // CAS：10 审核中 → 30 已通过。两个管理员同时点"通过"时，Flowable 的乐观锁会先挡住一个；这里是第二道
+        // CAS: 10 in review -> 30 approved. When two admins click "approve" at once, Flowable's optimistic lock stops one first; this is the second line of defense
         if (applicationMapper.markApproved(appId, tenant.getId()) != 1) {
             throw new BusinessException(ErrorCode.APPLICATION_STATE_INVALID);
         }

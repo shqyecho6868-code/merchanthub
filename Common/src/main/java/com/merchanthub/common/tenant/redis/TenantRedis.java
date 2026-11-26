@@ -5,10 +5,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
- * 按商家隔离的 Redis 访问入口：业务缓存（商品详情、库存快照等）一律用它，key 自动带 "t:{tenantId}:" 前缀。
+ * Merchant-isolated Redis entry point: all business caches (product details, inventory snapshots, etc.) go through it, with keys automatically prefixed "t:{tenantId}:".
  * <p>
- * 全局 key（雪花 workerId 租约、登录 token 这类不属于商家的）继续用 StringRedisTemplate。
- * 不做成 StringRedisTemplate 的子类注册成 Bean：那样按类型注入 StringRedisTemplate 的地方会出现两个候选。
+ * Global keys (Snowflake workerId leases, login tokens and other non-merchant data) keep using StringRedisTemplate.
+ * Not registered as a StringRedisTemplate subclass Bean: that would give two candidates wherever StringRedisTemplate is injected by type.
  */
 public class TenantRedis {
 
@@ -25,7 +25,7 @@ public class TenantRedis {
         this.template = t;
     }
 
-    /** 和 StringRedisTemplate 用法一样，只是 key 会自动加租户前缀 */
+    /** Used just like StringRedisTemplate, except keys get the tenant prefix automatically */
     public RedisTemplate<String, String> ops() {
         return template;
     }

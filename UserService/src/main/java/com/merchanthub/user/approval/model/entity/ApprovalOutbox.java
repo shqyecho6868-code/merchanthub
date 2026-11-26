@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 审批结果本地消息表（表 approval_outbox），结构同 order_outbox（B2） */
+/** Approval result local outbox table (table approval_outbox), same structure as order_outbox (B2) */
 @Data
 @TableName("approval_outbox")
 public class ApprovalOutbox {

@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 订单明细（表 order_item）
+ * Order item (table order_item)
  */
 @Data
 @TableName("order_item")
@@ -21,7 +21,7 @@ public class OrderItem {
     private Long orderNo;
     private Long productId;
     private Long skuId;
-    /** 以下三项是快照冗余：列表页直接展示，不回查商品服务 */
+    /** The three fields below are denormalized from the snapshot: shown directly on list pages without calling the product service */
     private String productName;
     private String skuSpec;
     private Long unitPrice;
@@ -32,7 +32,7 @@ public class OrderItem {
     private Long snapshotId;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the DB default; null on insert, so MyBatis-Plus skips it */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

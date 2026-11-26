@@ -1,6 +1,6 @@
 spring:
   datasource:
-    # 每个服务一个库（mh_order）：服务之间不能跨库 join、也不能共用本地事务，只能通过接口交互
+    # One database per service (mh_order): services can't join across databases or share local transactions; they interact only via APIs
     url: jdbc:mysql://127.0.0.1:3306/mh_order?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
     username: root
     password: ${MYSQL_ROOT_PASSWORD}
@@ -17,24 +17,24 @@ spring:
         server-addr: 127.0.0.1:8848
     sentinel:
       transport:
-        # Sentinel 控制台（docker-compose 的 mh-sentinel）
+        # Sentinel dashboard (mh-sentinel in docker-compose)
         dashboard: 127.0.0.1:8858
-        # 控制台跑在容器里，要回连本机的 8719 拉数据，需要告诉它一个"容器里能访问到宿主机"的 IP。
-        # 控制台只认 IP 不认主机名（填 host.docker.internal 会报 Bad IP，P30），所以由 deploy/c2/start-order.sh 现查现传
+        # The dashboard runs in a container and must connect back to port 8719 on this host, so it needs a host IP reachable from inside the container.
+        # The dashboard accepts only IPs, not hostnames (host.docker.internal gives Bad IP, P30), so deploy/c2/start-order.sh looks it up and passes it in
         client-ip: ${SENTINEL_CLIENT_IP:}
 
-  # E2：订单搜索副本（docker-compose 的 mh-es，本地关了安全认证）
+  # E2: order search replica (mh-es in docker-compose, security disabled locally)
   elasticsearch:
     uris: http://127.0.0.1:9200
 
 merchanthub:
   rocketmq:
     namesrv-addr: 127.0.0.1:9876
-  # E3：本地注册到 docker-compose 的 XXL-Job 调度中心（控制台 http://127.0.0.1:8090/xxl-job-admin）
+  # E3: register locally with the docker-compose XXL-Job admin (console at http://127.0.0.1:8090/xxl-job-admin)
   job:
     xxl:
       enabled: true
       admin-addresses: http://127.0.0.1:8090/xxl-job-admin
-      # 调度中心在容器里，回调宿主机上的执行器要走 host.docker.internal
+      # The admin runs in a container; calling back the executor on the host goes through host.docker.internal
       address: http://host.docker.internal:9201/
       access-token: ${XXL_JOB_ACCESS_TOKEN}

@@ -16,11 +16,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 超时订单扫描（E3，B3-下遗留）：主路径是 ORDER_TIMEOUT 定时消息，这里兜底"定时消息没来"的情况 ——
- * outbox 投递失败标成 2、消息重试耗尽进了死信、Broker 丢了定时消息。
+ * Timeout-order scan (E3, left over from B3-下): the main path is the ORDER_TIMEOUT scheduled message; this is the safety net for when it never arrives --
+ * outbox delivery marked as failed (2), message retries exhausted into the DLQ, or the broker lost the scheduled message.
  * <p>
- * 只扫"过了截止时间 + 宽限期"的订单：宽限期内定时消息大概率正在路上，抢着关单没有意义（关是幂等的，只是浪费）。
- * 关单和消息路径走同一个 CAS，和支付成功竞争时只会有一方赢。
+ * Only scans orders "past the deadline + grace period": within the grace period the scheduled message is most likely in flight, so racing to close is pointless (closing is idempotent, just wasteful).
+ * The close uses the same CAS as the message path, so only one side wins against payment success.
  */
 @Slf4j
 @Component
@@ -36,14 +36,14 @@ public class OrderTimeoutScanner {
     @Value("${merchanthub.order.jobs.batch-size:200}")
     private int batchSize;
 
-    /** @return 本轮关掉的订单数 */
+    /** @return number of orders closed in this round */
     public int scan() {
         List<Orders> expired = TenantContext.callAsSystem(() ->
                 ordersMapper.selectExpiredPending(LocalDateTime.now(clock).minus(grace), batchSize));
         int closed = 0;
         for (Orders o : expired) {
             try {
-                // 按订单所属商家执行：状态流水、outbox 都带这个商家
+                // Run as the order's merchant: the status log and outbox both carry this merchant
                 if (TenantContext.callAs(TenantInfo.systemOf(o.getTenantId()),
                         () -> timeoutService.closeExpired(o.getOrderNo(), o.getTenantId()))) {
                     closed++;

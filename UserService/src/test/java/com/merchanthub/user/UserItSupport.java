@@ -12,17 +12,17 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 /**
- * user-tenant 集成测试基类：真实 MySQL（业务表 + Flowable ACT_* 表）、Redis、RocketMQ。
- * 所有子类共用同一组 Spring 配置 → 共用一个缓存的上下文（一个 Flowable 引擎），不会出现两个引擎抢同一批表。
+ * Base class for user-tenant integration tests: real MySQL (business tables + Flowable ACT_* tables), Redis, RocketMQ.
+ * All subclasses share the same Spring config -> one cached context (one Flowable engine), so two engines never fight over the same tables.
  * <p>
- * 走 MockMvc 的请求自己带身份头（模拟网关注入），测试线程上不预设任何 TenantContext：
- * 否则"没带头的请求"看起来也像有身份，401 / 403 / 跨租户的用例就测不准了。
+ * Requests via MockMvc carry their own identity headers (simulating gateway injection); no TenantContext is preset on the test thread:
+ * otherwise "requests without headers" would look authenticated too, and the 401 / 403 / cross-tenant cases couldn't be tested reliably.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 public abstract class UserItSupport extends IntegrationTestBase {
 
-    /** 测试专用密钥（32 字节、补齐的 Base64）。dev 配置里是 ${JWT_SECRET}，这里用优先级更高的动态属性覆盖 */
+    /** Test-only secret (32 bytes, padded Base64). The dev config uses ${JWT_SECRET}; overridden here with a higher-precedence dynamic property */
     public static final String TEST_JWT_SECRET = "dGVzdC1vbmx5LWp3dC1zZWNyZXQtZm9yLWl0LTEyMzQ1Ng==";
 
     @DynamicPropertySource
@@ -37,7 +37,7 @@ public abstract class UserItSupport extends IntegrationTestBase {
     @Autowired
     protected RuntimeService runtimeService;
 
-    /** 模拟网关注入的身份头 */
+    /** Simulates the identity headers injected by the gateway */
     protected static MockHttpServletRequestBuilder as(MockHttpServletRequestBuilder b, Long tenant, long user, String role) {
         if (tenant != null) {
             b.header("X-Tenant-Id", tenant);
@@ -60,11 +60,11 @@ public abstract class UserItSupport extends IntegrationTestBase {
     }
 
     /**
-     * 每个用例从干净状态开始：业务表清空 + 引擎里还在跑的流程实例全部删除。
+     * Each test starts from a clean state: business tables truncated + all process instances still running in the engine deleted.
      * <p>
-     * 只清业务表不够（P32）：上一个测试类留下的待办还在 ACT_RU_TASK 里。CI（Linux）上测试类的执行顺序和 macOS 不同，
-     * ListingApprovalIT 先跑时，它留下的"商家 7 初审"待办让 MerchantOnboardingIT 的"商家 7 管理员待办为空"断言失败。
-     * 用引擎 API 删而不是 TRUNCATE ACT_* 表：引擎表之间有外键和缓存，直接删表会让引擎状态不一致。历史表保留，不影响断言（都按实例 ID 查）
+     * Clearing only the business tables isn't enough (P32): tasks left by the previous test class are still in ACT_RU_TASK. On CI (Linux) the test class order differs from macOS,
+     * and when ListingApprovalIT ran first, its leftover "merchant 7 first review" task broke MerchantOnboardingIT's "merchant 7 admin has no tasks" assertion.
+     * Delete via the engine API instead of TRUNCATE on ACT_* tables: engine tables have foreign keys and caches, so dropping rows directly leaves the engine inconsistent. History tables are kept; they don't affect assertions (all queried by instance ID)
      */
     protected void cleanBusinessTables() {
         runtimeService.createProcessInstanceQuery().list()

@@ -10,11 +10,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * 请求进来：把网关注入的 X-Tenant-Id / X-User-Id / X-Role 写进 {@link TenantContext}；
- * 请求结束（afterCompletion，无论成功还是抛异常都会调用）：还原线程上下文。
+ * On request: writes the gateway-injected X-Tenant-Id / X-User-Id / X-Role into {@link TenantContext};
+ * on completion (afterCompletion, called on success and on exceptions alike): restores the thread context.
  * <p>
- * 没带 X-Role 的请求（如渠道回调、健康检查）不设置上下文：这时如果去查业务表，租户插件会直接报错（fail-closed），
- * 需要跨租户的入口自己显式 {@link TenantContext#runAsSystem}。
+ * Requests without X-Role (e.g. channel callbacks, health checks) get no context: if they then hit a business table, the tenant plugin throws (fail-closed);
+ * entry points that need to cross tenants call {@link TenantContext#runAsSystem} explicitly.
  */
 public class TenantContextInterceptor implements HandlerInterceptor {
 
@@ -24,7 +24,7 @@ public class TenantContextInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         TenantInfo info = fromHeaders(request);
         if (info != null) {
-            // 最后一步才 open：前面校验抛异常时 afterCompletion 不会被调用，先 open 就会把上下文漏在线程上
+            // open only as the last step: if validation above throws, afterCompletion isn't called, so opening earlier would leak the context on the thread
             request.setAttribute(SCOPE_ATTR, TenantContext.open(info));
         }
         return true;
@@ -39,7 +39,7 @@ public class TenantContextInterceptor implements HandlerInterceptor {
         }
     }
 
-    /** 请求头 → 身份。头是网关写的，格式不对说明请求绕过了网关或网关有 bug，直接拒绝 */
+    /** Headers → identity. The gateway writes these headers; a bad format means the request bypassed the gateway or the gateway has a bug, so reject outright */
     static TenantInfo fromHeaders(HttpServletRequest request) {
         String roleHeader = request.getHeader(TenantHeaders.ROLE);
         if (roleHeader == null || roleHeader.isBlank()) {
@@ -55,7 +55,7 @@ public class TenantContextInterceptor implements HandlerInterceptor {
             throw new UnauthorizedException("商家角色缺少 " + TenantHeaders.TENANT_ID);
         }
         if ((role == Role.BUYER || role == Role.PLATFORM_ADMIN) && tenantId != null) {
-            // 买家 / 平台管理员不属于商家：带了 tenantId 说明身份信息自相矛盾，不猜按哪个算
+            // Buyers / platform admins belong to no merchant: carrying a tenantId means the identity is self-contradictory, so don't guess which one applies
             throw new UnauthorizedException(role + " 不应携带 " + TenantHeaders.TENANT_ID);
         }
         return new TenantInfo(tenantId, userId, role);

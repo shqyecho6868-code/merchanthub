@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** 有数据源的服务自动得到 {@link ReconAlarm}（表 recon_exception 由各服务自己的 Flyway 脚本建） */
+/** Services with a data source get a {@link ReconAlarm} automatically (the recon_exception table is created by each service's own Flyway scripts) */
 @AutoConfiguration(after = JdbcTemplateAutoConfiguration.class)
 @ConditionalOnClass(JdbcTemplate.class)
 @ConditionalOnBean(JdbcTemplate.class)

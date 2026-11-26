@@ -18,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * traceId 跨服务的两种透传（和 TenantFeignAndMqTest 对应）：Feign 请求头、RocketMQ 消息属性。
- * 一张订单的日志能串起来，靠的就是这里每一跳都把同一个 ID 交给下一跳，且每一跳用完都还原线程。
+ * The two ways traceId crosses services (mirrors TenantFeignAndMqTest): Feign request headers and RocketMQ message properties.
+ * An order's logs link up only because every hop hands the same ID to the next, and every hop restores its thread afterwards.
  */
 class TracePropagationTest {
 
@@ -80,13 +80,13 @@ class TracePropagationTest {
         m.putUserProperty(TraceContext.MQ_PROPERTY, TRACE);
         TenantMessages.stamp(m, 8L);
 
-        ExecutorService consumerThread = Executors.newSingleThreadExecutor();   // 模拟 RocketMQ 复用的消费线程
+        ExecutorService consumerThread = Executors.newSingleThreadExecutor();   // simulates RocketMQ's reused consumer thread
         try {
             String seenInside = consumerThread.submit(() -> TenantMessages.consumeAs(m, TraceContext::current)).get();
             assertThat(seenInside).isEqualTo(TRACE);
             assertThat(consumerThread.submit(TraceContext::current).get()).as("消费完线程是干净的").isNull();
 
-            // 老消息 / 外部生产者没带 traceId：消费期间新生成一个，本条消息的日志仍能串起来
+            // Old messages / external producers without a traceId: a new one is generated for the duration of consumption, so this message's logs still link up
             MessageExt old = new MessageExt();
             TenantMessages.stamp(old, 8L);
             String generated = consumerThread.submit(() -> TenantMessages.consumeAs(old, TraceContext::current)).get();
@@ -104,7 +104,7 @@ class TracePropagationTest {
         m.putUserProperty(TraceContext.MQ_PROPERTY, TRACE);
         assertThatThrownBy(() -> TenantMessages.consumeAs(m, () -> { }))
                 .isInstanceOf(TenantContextMissingException.class);
-        // 断言在 @AfterEach noLeak
+        // Assertion lives in @AfterEach noLeak
     }
 
     @Test

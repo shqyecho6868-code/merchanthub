@@ -50,8 +50,8 @@ spring:
               filters:
                 - RewritePath=/api/(?<segment>.*), /$\{segment}
 
-            # C1：交易服务。对外统一 /api 前缀，转发时去掉（/api/orders/1 → order 的 /orders/1）。
-            # /internal/** 两层挡：这里没有它的路由；AuthorizeFilter 再按路径段兜底拦截（防 /api/orders/../internal 之类）
+            # C1: trading services. Exposed externally under a unified /api prefix, stripped when forwarding (/api/orders/1 -> order's /orders/1).
+            # /internal/** is blocked twice: no route for it here, and AuthorizeFilter also rejects it by path segment as a fallback (guards against /api/orders/../internal and the like)
             - id: order
               uri: lb://order
               predicates:

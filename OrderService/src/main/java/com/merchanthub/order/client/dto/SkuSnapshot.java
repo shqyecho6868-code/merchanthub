@@ -2,7 +2,7 @@ package com.merchanthub.order.client.dto;
 
 import lombok.Data;
 
-/** product-inventory 返回的 SKU 信息，字段与对方的 SkuSnapshotVO 对应 */
+/** SKU info returned by product-inventory; fields correspond to its SkuSnapshotVO */
 @Data
 public class SkuSnapshot {
     public static final int SKU_ON_SALE = 1;

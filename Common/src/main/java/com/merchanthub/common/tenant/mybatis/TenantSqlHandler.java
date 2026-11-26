@@ -12,15 +12,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * MyBatis-Plus 租户插件的规则（C1）：决定每条 SQL 要不要拼 {@code tenant_id = ?}、拼哪个值。
+ * Rules for the MyBatis-Plus tenant plugin (C1): decides whether each SQL gets {@code tenant_id = ?} and with which value.
  * <p>
- * 规则只看 {@link TenantContext}：
+ * The rules only look at {@link TenantContext}:
  * <ul>
- *   <li>有 tenantId（商家请求、按商家恢复的 MQ 消费）→ 所有业务表都拼 tenant_id = 它</li>
- *   <li>没有 tenantId，但明确是 BUYER / PLATFORM_ADMIN / SYSTEM → 不拼（买家按 buyer_id 过滤，平台和系统任务本来就跨租户）</li>
- *   <li>线程上根本没有上下文 → <b>抛异常（fail-closed）</b>：说明某个入口忘了设置上下文，不能不带条件查全表</li>
+ *   <li>Has a tenantId (merchant request, MQ consumption restored as a merchant) → every business table gets tenant_id = it</li>
+ *   <li>No tenantId but explicitly BUYER / PLATFORM_ADMIN / SYSTEM → no condition (buyers are filtered by buyer_id; platform and system jobs are cross-tenant by nature)</li>
+ *   <li>No context on the thread at all → <b>throw (fail-closed)</b>: some entry point forgot to set the context, and we must not query the whole table unfiltered</li>
  * </ul>
- * 默认所有表都是租户表（黑名单而不是白名单）：以后新加一张业务表忘了登记，结果是"报错"而不是"漏过滤"。
+ * Every table is a tenant table by default (a blocklist, not an allowlist): if a new business table is never registered, the result is "an error" rather than "missing filter".
  */
 public class TenantSqlHandler implements TenantLineHandler {
 
@@ -34,7 +34,7 @@ public class TenantSqlHandler implements TenantLineHandler {
 
     @Override
     public Expression getTenantId() {
-        // 只有 ignoreTable 返回 false 时才会走到这里，此时上下文里一定有 tenantId
+        // We only get here when ignoreTable returned false, so the context is guaranteed to have a tenantId
         return new LongValue(TenantContext.requireTenantId());
     }
 
@@ -43,7 +43,7 @@ public class TenantSqlHandler implements TenantLineHandler {
         return TENANT_COLUMN;
     }
 
-    /** @return true = 这张表这次不拼 tenant_id */
+    /** @return true = skip tenant_id for this table this time */
     @Override
     public boolean ignoreTable(String tableName) {
         if (ignoreTables.contains(unquote(tableName))) {

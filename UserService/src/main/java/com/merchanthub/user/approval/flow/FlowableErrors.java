@@ -7,8 +7,8 @@ import org.flowable.common.engine.api.FlowableObjectNotFoundException;
 import org.flowable.common.engine.api.FlowableOptimisticLockingException;
 
 /**
- * 把引擎异常翻译成业务错误。ServiceTask / 监听器里抛的 BusinessException 会被 Flowable 包一层，这里解出来，
- * 否则调用方只能看到一个笼统的"系统内部异常"。
+ * Translate engine exceptions into business errors. A BusinessException thrown in a ServiceTask / listener gets wrapped by Flowable; unwrap it here,
+ * otherwise the caller only sees a generic "internal system error".
  */
 public final class FlowableErrors {
 
@@ -21,7 +21,7 @@ public final class FlowableErrors {
                 return be;
             }
         }
-        // 两个审批人同时点"通过"：后提交的那个删任务时 REV_ 对不上（乐观锁），或者任务已经没了
+        // Two approvers click "approve" at once: the later one's REV_ doesn't match when deleting the task (optimistic lock), or the task is already gone
         if (e instanceof FlowableOptimisticLockingException || e instanceof FlowableObjectNotFoundException) {
             return new BusinessException(ErrorCode.APPROVAL_TASK_CONFLICT);
         }

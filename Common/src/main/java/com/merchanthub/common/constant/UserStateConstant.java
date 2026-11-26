@@ -1,66 +1,66 @@
 package com.merchanthub.common.constant;
 
 /**
- * 用户状态常量
+ * User state constants
  * <p>
- * 定义用户账号状态相关的常量值
- * 消除魔法数字，统一所有服务的用户状态判断
+ * Constant values for user account state
+ * Removes magic numbers and unifies user state checks across services
  */
 public final class UserStateConstant {
 
     private UserStateConstant() {
-        // 工具类，禁止实例化
+        // Utility class, not instantiable
     }
 
-    // ===================== 用户状态值（User State）=====================
+    // ===================== User state values =====================
 
     /**
-     * 用户正常状态
+     * User state: normal
      */
     public static final int STATE_NORMAL = 0;
 
     /**
-     * 用户封禁状态
+     * User state: banned
      */
     public static final int STATE_BANNED = 1;
 
     /**
-     * 用户注销状态
+     * User state: cancelled (account closed)
      */
     public static final int STATE_CANCELLED = 2;
 
-    // ===================== 状态描述（State Description）=====================
+    // ===================== State descriptions =====================
 
     /**
-     * 正常状态描述
+     * Description for normal state
      */
     public static final String DESC_NORMAL = "正常";
 
     /**
-     * 封禁状态描述
+     * Description for banned state
      */
     public static final String DESC_BANNED = "封禁";
 
     /**
-     * 注销状态描述
+     * Description for cancelled state
      */
     public static final String DESC_CANCELLED = "注销";
 
     /**
-     * 用户不存在描述
+     * Description for a nonexistent user
      */
     public static final String DESC_NOT_EXIST = "用户不存在";
 
     /**
-     * 未知状态描述
+     * Description for an unknown state
      */
     public static final String DESC_UNKNOWN = "未知";
 
     /**
-     * 根据状态码获取状态描述
+     * Get the state description for a state code
      *
-     * @param state 状态码
-     * @return 状态描述
+     * @param state state code
+     * @return state description
      */
     public static String getStateName(Integer state) {
         if (state == null) {

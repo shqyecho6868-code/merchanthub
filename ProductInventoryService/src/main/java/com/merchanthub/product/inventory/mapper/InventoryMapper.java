@@ -10,13 +10,13 @@ import org.apache.ibatis.annotations.Update;
 public interface InventoryMapper extends BaseMapper<Inventory> {
 
     /**
-     * 预占：可售 → 预占。防超卖就靠这一句条件更新：
-     * InnoDB 执行 UPDATE 时先对 sku_id 这一行加排他锁，再判断 WHERE 条件；
-     * 并发请求在这一行上排队，每个请求看到的都是前一个提交后的最新 available，
-     * available 不够时影响行数为 0，由调用方判定为“库存不足”。
-     * tenant_id 条件做租户隔离：拿别的商家的 tenant_id 占不到这一行。
+     * Reserve: available → reserved. Overselling is prevented by this single conditional update:
+     * when InnoDB executes the UPDATE it first takes an exclusive lock on the sku_id row, then evaluates the WHERE condition;
+     * concurrent requests queue on this row, and each sees the latest available committed by the previous one;
+     * when available is insufficient the affected row count is 0, which the caller treats as "insufficient stock".
+     * The tenant_id condition enforces tenant isolation: another merchant's tenant_id can't grab this row.
      *
-     * @return 影响行数：1 = 预占成功；0 = 库存不足（或 SKU 不属于该租户 / 不存在）
+     * @return affected rows: 1 = reserved; 0 = insufficient stock (or the SKU doesn't belong to this tenant / doesn't exist)
      */
     @Update("""
             UPDATE inventory
@@ -27,8 +27,8 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
     int tryReserve(@Param("tenantId") long tenantId, @Param("skuId") long skuId, @Param("qty") int qty);
 
     /**
-     * 确认扣减（支付成功）：预占 → 真正卖出。available 不变（下单时已经减过），reserved 减掉。
-     * reserved >= qty 是防御条件：正常情况一定成立，不成立说明数据已经不一致，调用方抛异常回滚并告警。
+     * Confirm deduction (payment succeeded): reserved → actually sold. available stays the same (already reduced at order time), reserved is decremented.
+     * reserved >= qty is a defensive condition: it always holds normally; if not, the data is already inconsistent and the caller throws to roll back and alert.
      */
     @Update("""
             UPDATE inventory SET reserved = reserved - #{qty}
@@ -36,7 +36,7 @@ public interface InventoryMapper extends BaseMapper<Inventory> {
             """)
     int confirm(@Param("tenantId") long tenantId, @Param("skuId") long skuId, @Param("qty") int qty);
 
-    /** 释放（关单 / 悬空预占）：预占的数量还回可售。条件同 confirm */
+    /** Release (order closed / dangling reservation): return the reserved quantity to available. Same condition as confirm */
     @Update("""
             UPDATE inventory SET available = available + #{qty}, reserved = reserved - #{qty}
             WHERE sku_id = #{skuId} AND tenant_id = #{tenantId} AND deleted = 0 AND reserved >= #{qty}

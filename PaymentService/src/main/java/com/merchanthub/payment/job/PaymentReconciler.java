@@ -28,21 +28,21 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * payment 侧对账（E3）：以支付单为准，核对订单那边对不对得上。两件事：
+ * payment-side reconciliation (E3): treat the payment as the source of truth and check whether the order side matches. Two things:
  * <ol>
- *   <li><b>支付成功 ↔ 订单</b>：成功超过宽限期的支付单，问 order "这张支付单的成功事件你处理过没有"。
+ *   <li><b>Payment succeeded ↔ order</b>: for payments that succeeded longer ago than the grace period, ask order "have you processed this payment's success event".
  *     <ul>
- *       <li>处理过 → 一致（订单已支付，或 order 已把它记成 pay_anomaly，由 order 侧对账标记退款）</li>
- *       <li>没处理过 → 事件丢了（事务消息回查超限被丢弃 / 进了死信）→ <b>补发同一个事件</b>（eventId = payNo 不变）。
- *           订单还是待支付 → order 正常消费把它改成已支付；订单已关闭 → order 记 PAID_AFTER_CLOSED。
- *           不直接改订单：订单只有 order 一个写入方，修复也走它自己的幂等消费 + 状态机 CAS</li>
- *       <li>补发多次仍没处理 / 订单根本不存在 → 停止自动处理，记异常 + 告警</li>
+ *       <li>Processed → consistent (order is paid, or order has recorded it as pay_anomaly and order-side reconciliation flags it for refund)</li>
+ *       <li>Not processed → the event was lost (transactional message dropped after exceeding check-back limits / went to DLQ) → <b>re-send the same event</b> (eventId = payNo unchanged).
+ *           Order still pending payment → order consumes it normally and marks it paid; order closed → order records PAID_AFTER_CLOSED.
+ *           We don't modify the order directly: order is its only writer, so the fix also goes through its own idempotent consumption + state-machine CAS</li>
+ *       <li>Still unprocessed after several re-sends / order doesn't exist at all → stop auto-handling, record an anomaly + alert</li>
  *     </ul>
  *   </li>
- *   <li><b>关单时没关闭的支付单</b>：创建很久仍待支付，而订单已关闭（或已被别的支付单付掉）→ 关闭支付单。
- *       不关的话，买家之后在旧支付页付款，回调照样成功 → 又一笔 PAID_AFTER_CLOSED</li>
+ *   <li><b>Payments left open when the order was closed</b>: created long ago and still pending while the order is closed (or paid by another payment) → close the payment.
+ *       Otherwise, if the buyer later pays on the old payment page, the callback still succeeds → yet another PAID_AFTER_CLOSED</li>
  * </ol>
- * 只看超过宽限期的数据：刚成功的支付单，事件大概率还在路上，现在问 order 只会得到"没处理"、白白补发一次。
+ * Only data older than the grace period is examined: for a just-succeeded payment the event is most likely still in flight; asking order now would only get "not processed" and trigger a pointless re-send.
  */
 @Slf4j
 @Component
@@ -77,7 +77,7 @@ public class PaymentReconciler {
         });
     }
 
-    /** @return [一致, 补发, 告警] */
+    /** @return [consistent, re-sent, alerted] */
     private int[] reconcileSuccess() {
         int consistent = 0, resent = 0, alerted = 0;
         List<Payment> payments = paymentMapper.selectSuccessUnreconciled(LocalDateTime.now(clock).minus(grace), batchSize);
@@ -89,7 +89,7 @@ public class PaymentReconciler {
             results = OrderRemote.call(OrderClient.RES_PAY_CHECK, () -> orderClient.payCheck(
                     payments.stream().map(p -> new PayCheckItem(p.getPayNo(), p.getOrderNo())).toList()));
         } catch (BusinessException e) {
-            // 查不到 ≠ 没处理：order 不可用 / 熔断中，这一轮整体跳过，绝不在不确定时补发或告警
+            // "Can't look it up" ≠ "not processed": order unavailable / circuit open, so skip the whole round — never re-send or alert when uncertain
             log.warn("支付对账：查询 order 失败，本轮跳过 候选={}", payments.size(), e);
             return new int[]{0, 0, 0};
         }
@@ -102,7 +102,7 @@ public class PaymentReconciler {
             if (r.processed()) {
                 consistent += paymentMapper.markReconciled(p.getPayNo());
             } else if (r.orderStatus() == null) {
-                // 钱收了，订单却不存在：补发也没用（order 会一直重试到死信），直接转人工
+                // Money collected but the order doesn't exist: re-sending won't help (order would retry until DLQ), escalate to manual handling directly
                 alerted += exhaust(p, ReconAlarm.PAY_MISMATCH, "支付成功但订单不存在");
             } else if (p.getReconRetry() >= maxResend) {
                 alerted += exhaust(p, ReconAlarm.PAY_RESEND_EXHAUSTED,
@@ -115,7 +115,7 @@ public class PaymentReconciler {
         return new int[]{consistent, resent, alerted};
     }
 
-    /** 补发"支付成功"事件：普通消息即可（支付单早已成功，不再需要事务消息保证"本地事务和消息同生共死"） */
+    /** Re-send the "payment succeeded" event: a normal message is enough (the payment succeeded long ago; no need for a transactional message to tie "local transaction and message" together) */
     private boolean resend(Payment p, int orderStatus) {
         PaySuccessEvent event = new PaySuccessEvent(p.getPayNo(), p.getPayNo(), p.getOrderNo(), p.getTenantId(),
                 p.getBuyerId(), p.getAmount(), p.getChannelTradeNo(), p.getPaidAt());
@@ -145,7 +145,7 @@ public class PaymentReconciler {
         return paymentMapper.markReconExhausted(p.getPayNo());
     }
 
-    /** @return 本轮关闭的支付单数 */
+    /** @return number of payments closed this round */
     private int closeStalePending() {
         List<Payment> stale = paymentMapper.selectStalePending(LocalDateTime.now(clock).minus(pendingCloseAfter), batchSize);
         if (stale.isEmpty()) {
@@ -163,9 +163,9 @@ public class PaymentReconciler {
         for (Payment p : stale) {
             Integer s = status.get(p.getOrderNo());
             if (s != null && s == ORDER_PENDING) {
-                continue;   // 订单还能付：买家可能正在付这一张，不能关
+                continue;   // The order can still be paid: the buyer may be paying with this one right now, can't close it
             }
-            // 订单已关闭 / 已被别的支付单付掉 / 不存在：这张支付单永远不该再成功
+            // Order closed / paid by another payment / missing: this payment must never succeed again
             if (paymentMapper.closeIfPending(p.getPayNo()) == 1) {
                 closed++;
                 log.warn("【支付对账】订单状态 {}，关闭遗留的待支付支付单 payNo={} orderNo={} tenantId={}（真实渠道还需调关单接口）",

@@ -116,8 +116,8 @@ class OutboxRelayTest {
     }
 
     /**
-     * 链路追踪：发件箱是另一个线程在发，请求的 MDC 早没了 —— 靠 outbox 行里的 trace_id 把链路接上。
-     * 扫描一批时每条消息带的是<b>自己那行</b>的 traceId，发完线程上的 MDC 被还原（XXL-Job / 线程池线程复用）
+     * Tracing: the outbox sends on another thread, long after the request's MDC is gone -- the trace_id in the outbox row reconnects the trace.
+     * When scanning a batch, each message carries <b>its own row's</b> traceId, and the thread's MDC is restored after sending (XXL-Job / pool threads are reused)
      */
     @Test
     void scan_eachMessageCarriesItsOwnRowTraceId_andMdcCleared() throws Exception {

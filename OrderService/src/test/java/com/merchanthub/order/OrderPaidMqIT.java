@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
-/** 端到端：PAYMENT_EVENT 上的"支付成功"消息（重复投递 3 次）→ 消费者 → 订单只变成已支付一次 */
+/** End-to-end: a "payment succeeded" message on PAYMENT_EVENT (delivered 3 times) -> consumer -> the order becomes paid only once */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
         "merchanthub.order.pay-consumer.enabled=true",

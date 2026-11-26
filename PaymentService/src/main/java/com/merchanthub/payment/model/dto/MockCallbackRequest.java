@@ -4,11 +4,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * 模拟第三方渠道的"支付成功"异步通知。真实渠道还会带签名，验签失败直接拒绝；本项目不接真实渠道，省略验签。
+ * Simulated async "payment succeeded" notification from a third-party channel. Real channels also send a signature and reject on verification failure; this project doesn't integrate a real channel, so signature verification is omitted.
  *
- * @param payNo          我们下单时传给渠道的商户单号
- * @param channelTradeNo 渠道自己的流水号（同一笔支付的重复通知，这个值相同）
- * @param amount         渠道实际收款金额（分），必须和支付单金额一致
+ * @param payNo          the merchant order number we passed to the channel when placing the payment
+ * @param channelTradeNo the channel's own transaction number (identical across duplicate notifications for the same payment)
+ * @param amount         amount actually collected by the channel (cents); must match the payment amount
  */
 public record MockCallbackRequest(@NotNull Long payNo, @NotBlank String channelTradeNo, @NotNull Long amount) {
 }

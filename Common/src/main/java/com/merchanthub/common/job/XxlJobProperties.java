@@ -4,29 +4,29 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * XXL-Job 执行器配置（E3）。每个服务是一个"执行器"：启动时向调度中心注册自己的地址，
- * 调度中心按 Cron 选一台执行器、通过 HTTP 调它的 @XxlJob 方法。
+ * XXL-Job executor settings (E3). Each service is an "executor": on startup it registers its address with the admin,
+ * and the admin picks an executor per Cron trigger and calls its @XxlJob method over HTTP.
  */
 @Data
 @ConfigurationProperties(prefix = "merchanthub.job.xxl")
 public class XxlJobProperties {
 
-    /** 默认关：测试、没起调度中心的本地环境不注册执行器；dev 配置里打开 */
+    /** Off by default: tests and local setups without an admin don't register an executor; enabled in the dev profile */
     private boolean enabled = false;
-    /** 调度中心地址，多个用逗号分隔，如 http://127.0.0.1:8090/xxl-job-admin */
+    /** Admin address(es), comma-separated, e.g. http://127.0.0.1:8090/xxl-job-admin */
     private String adminAddresses;
-    /** 调度中心与执行器之间的通信令牌，两边必须一致（防止任何人都能调执行器触发任务） */
+    /** Access token between admin and executor; must match on both sides (so not just anyone can call the executor to trigger jobs) */
     private String accessToken;
-    /** 执行器 AppName：调度中心按它把同名实例归成一组（多实例 = 同一个 AppName 多个地址）。默认取服务名 */
+    /** Executor AppName: the admin groups instances with the same name (multiple instances = one AppName, several addresses). Defaults to the service name */
     private String appname;
     /**
-     * 执行器对调度中心公布的回调地址；为空时用"本机 IP:port"。本地开发调度中心在容器里、服务在宿主机上，
-     * 要填 http://host.docker.internal:{port}/，否则调度中心可能连不回来
+     * Callback address the executor advertises to the admin; empty means "local IP:port". In local dev the admin runs in a container and the service on the host,
+     * so set it to http://host.docker.internal:{port}/, otherwise the admin may not be able to reach back
      */
     private String address;
-    /** 执行器内嵌 HTTP 服务端口：同一台机器跑多个服务时必须各不相同 */
+    /** Port of the executor's embedded HTTP server: must differ per service when several run on one machine */
     private int port;
-    /** 任务执行日志目录：默认 /data/applogs 在 Mac 上没有写权限，改到临时目录 */
+    /** Job log directory: the default /data/applogs isn't writable on a Mac, so use the temp dir */
     private String logPath = System.getProperty("java.io.tmpdir") + "/xxl-job";
     private int logRetentionDays = 7;
 }

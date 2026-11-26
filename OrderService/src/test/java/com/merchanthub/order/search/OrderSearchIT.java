@@ -30,15 +30,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * E2（只演示）：订单同步到 ES 后按商家 + 关键词搜。Canal 那一段（读 binlog）不在测试里起，
- * 直接调 indexer.sync(orderNo) —— Canal 线程拿到订单号后做的就是这一步（拆订单号由 CanalOrderSyncTest 覆盖）。
+ * E2 (demo only): after orders sync to ES, search by merchant + keyword. The Canal part (reading the binlog) isn't started in tests;
+ * we call indexer.sync(orderNo) directly -- exactly what the Canal thread does once it has the order number (extracting order numbers is covered by CanalOrderSyncTest).
  * <p>
- * 重点验证<b>租户隔离</b>：ES 不经过 MyBatis 租户插件，tenantId 过滤必须自己加，商家 8 搜不到商家 7 的订单。
+ * Focus on <b>tenant isolation</b>: ES bypasses the MyBatis tenant plugin, so the tenantId filter must be added by hand; merchant 8 can't find merchant 7's orders.
  */
 @SpringBootTest
 class OrderSearchIT extends IntegrationTestBase {
 
-    // 镜像版本与 docker-compose 一致；关掉安全认证（本地 / 测试不需要 TLS 和密码）
+    // Image version matches docker-compose; security disabled (local / tests need no TLS or password)
     static final ElasticsearchContainer ES = new ElasticsearchContainer("docker.elastic.co/elasticsearch/elasticsearch:8.18.8")
             .withEnv("xpack.security.enabled", "false")
             .withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
@@ -97,30 +97,30 @@ class OrderSearchIT extends IntegrationTestBase {
     }
 
     private void refresh() throws Exception {
-        es.indices().refresh(r -> r.index(OrderSearchIndexer.INDEX));   // 让刚写入的文档立即可搜（正常有 1 秒刷新延迟）
+        es.indices().refresh(r -> r.index(OrderSearchIndexer.INDEX));   // make just-written documents searchable immediately (normally 1s refresh delay)
     }
 
     @Test
     void syncThenSearch_byKeywordAndOrderNo_isolatedByTenant() throws Exception {
         long orderNo = order();
         indexer.sync(orderNo);
-        indexer.sync(orderNo);   // 重复同步（Canal 重投）：整篇覆盖，结果不变
+        indexer.sync(orderNo);   // duplicate sync (Canal redelivery): full overwrite, same result
         refresh();
 
         List<OrderSearchDoc> hits = searchService.search(TENANT, "纯棉", 1, 20);
         assertThat(hits).extracting(OrderSearchDoc::orderNo).contains(String.valueOf(orderNo));
         assertThat(searchService.search(TENANT, String.valueOf(orderNo), 1, 20)).hasSize(1);
         assertThat(searchService.search(TENANT, "", 1, 20)).isNotEmpty();
-        // 商家 8 用同样的关键词搜：看不到商家 7 的订单
+        // Merchant 8 searching with the same keyword can't see merchant 7's order
         assertThat(searchService.search(8L, "纯棉", 1, 20)).isEmpty();
 
-        // 订单状态变了 → 再同步一次，文档跟着变（回查数据库取最新值）
+        // Order status changed -> sync again, the document follows (latest value looked up from the DB)
         jdbc.update("UPDATE orders SET status = 50 WHERE order_no = ?", orderNo);
         indexer.sync(orderNo);
         refresh();
         assertThat(searchService.search(TENANT, String.valueOf(orderNo), 1, 20).get(0).status()).isEqualTo(50);
 
-        // 订单行被删（逻辑删除）→ 文档删除
+        // Order row deleted (soft delete) -> document deleted
         jdbc.update("UPDATE orders SET deleted = 1 WHERE order_no = ?", orderNo);
         indexer.sync(orderNo);
         refresh();
@@ -130,9 +130,9 @@ class OrderSearchIT extends IntegrationTestBase {
     @Test
     void searchFails_gracefullyWhenIndexMissing() throws Exception {
         es.indices().delete(d -> d.index(OrderSearchIndexer.INDEX).ignoreUnavailable(true));
-        // ES 是查询副本：查不了就降级成明确的业务错误，不影响下单等交易链路
+        // ES is a query replica: if it can't be queried, degrade to a clear business error without affecting transactional paths like order placement
         assertThatThrownBy(() -> searchService.search(TENANT, "x", 1, 20)).isInstanceOf(BusinessException.class);
-        // 索引 mapping 交还给 indexer 重建（它缓存了"已建好"标记，这里清掉让下一个用例重新建）
+        // Hand the index mapping back to the indexer for rebuilding (it caches an "index ready" flag; clear it so the next case recreates it)
         org.springframework.test.util.ReflectionTestUtils.setField(indexer, "indexReady", false);
     }
 }

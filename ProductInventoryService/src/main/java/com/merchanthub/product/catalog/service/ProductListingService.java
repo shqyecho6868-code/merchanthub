@@ -9,11 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 提交上架审核（D1）：① 本地事务把商品改成"审核中"、开新一轮 → ② 事务提交后 Feign 让 user-tenant 发起审批 → ③ 回填实例 ID。
+ * Submit for listing review (D1): ① a local transaction moves the product to "under review" and opens a new round → ② after commit, Feign asks user-tenant to start the approval → ③ backfill the instance ID.
  * <p>
- * ② 失败（超时 / user-tenant 挂了）怎么办：<b>不回滚 ①</b>。商品停在"审核中、没有实例 ID"，
- * {@code ListingAuditCompensator} 过一会儿反查，发现没发起过就重新发起（发起接口按 (商品, 轮次) 幂等）。
- * 反过来如果 ② 其实成功了只是响应超时，反查会看到 RUNNING，也不会重复发起。
+ * What if ② fails (timeout / user-tenant down): <b>don't roll back ①</b>. The product stays "under review, no instance ID", and
+ * {@code ListingAuditCompensator} queries it a bit later and restarts it if it was never started (the start API is idempotent per (product, round)).
+ * Conversely, if ② actually succeeded and only the response timed out, the query sees RUNNING and doesn't start it again.
  */
 @Slf4j
 @Service
@@ -29,7 +29,7 @@ public class ProductListingService {
         return new ListingSubmitVO(p.getId(), p.getAuditRound(), p.getStatus(), pid);
     }
 
-    /** 发起审批并回填实例 ID；失败返回 null（交给补偿），不抛异常 */
+    /** Start the approval and backfill the instance ID; returns null on failure (left to compensation) instead of throwing */
     String startRemote(Product p) {
         try {
             BaseResponse<String> resp = approvalClient.start(

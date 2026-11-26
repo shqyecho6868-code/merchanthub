@@ -26,31 +26,31 @@ public class ApprovalConfig {
     }
 
     /**
-     * 让 Flowable 引擎在 Flyway <b>之后</b>初始化（参数里要了 FlywayMigrationInitializer，Spring 就会先把它建好）。
+     * Initialize the Flowable engine <b>after</b> Flyway (by taking FlywayMigrationInitializer as a parameter, Spring builds it first).
      * <p>
-     * 为什么要管顺序：Spring Boot 只保证 JPA / JdbcTemplate 等在 Flyway 之后，不管 Flowable。
-     * 全新空库上如果 Flowable 先跑，库里已经有一堆 ACT_* 表、却没有 flyway_schema_history，
-     * Flyway 会报 "Found non-empty schema without schema history table" 拒绝迁移（开了 baseline-on-migrate 更糟：直接把 V1 当成已执行跳过）。
+     * Why ordering matters: Spring Boot only guarantees JPA / JdbcTemplate etc. run after Flyway, not Flowable.
+     * On a brand-new empty DB, if Flowable runs first, the DB already has a pile of ACT_* tables but no flyway_schema_history,
+     * and Flyway refuses to migrate with "Found non-empty schema without schema history table" (baseline-on-migrate is worse: it silently skips V1 as already applied).
      */
     @Bean
     public EngineConfigurationConfigurer<SpringProcessEngineConfiguration> flowableAfterFlyway(FlywayMigrationInitializer flywayInitializer) {
-        // 部署时不生成流程图 PNG：没有页面要展示它（流程设计器范围外），而生成要用 AWT + 系统字体，
-        // 在没装中文字体的 Linux（CI / 容器）上要么报错要么方块字
+        // Don't generate process diagram PNGs on deploy: no page displays them (a process designer is out of scope), and generating them needs AWT + system fonts,
+        // which on Linux without CJK fonts (CI / containers) either errors out or renders boxes
         return cfg -> cfg.setCreateDiagramOnDeploy(false);
     }
 
-    /** 普通生产者即可：一致性靠本地消息表，不需要 MQ 的事务能力（同 order） */
+    /** A plain producer is enough: consistency comes from the local outbox table, MQ transactions aren't needed (same as order) */
     @Bean(initMethod = "start", destroyMethod = "shutdown")
     public DefaultMQProducer approvalOutboxProducer(@Value("${merchanthub.rocketmq.namesrv-addr}") String namesrvAddr) {
         DefaultMQProducer producer = new DefaultMQProducer("approval-outbox-producer");
         producer.setNamesrvAddr(namesrvAddr);
         producer.setVipChannelEnabled(false);
         producer.setSendMsgTimeout(3000);
-        producer.setTopics(List.of(ListingResultEvent.TOPIC));   // 启动时预取路由（P18）
+        producer.setTopics(List.of(ListingResultEvent.TOPIC));   // prefetch routes on startup (P18)
         return producer;
     }
 
-    /** 提交后"立即发一次"的线程池；队列满直接丢：记录还在表里，扫描会补发，不能拖住审批请求 */
+    /** Thread pool for the "send once right after commit" path; drop when the queue is full: the record is still in the table and the scan will resend, so approval requests must never be held up */
     @Bean(destroyMethod = "shutdown")
     public ExecutorService approvalOutboxSendExecutor() {
         AtomicInteger n = new AtomicInteger();

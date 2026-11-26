@@ -6,7 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 通用返回类
+ * Common response wrapper
  *
  */
 @Data

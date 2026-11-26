@@ -47,11 +47,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * E3：payment 侧对账，每种不一致一个用例。order 用 Mockito 替身（按场景返回 pay-check / statuses 结果），
- * 补发的事件用旁观者消费者在真实 RocketMQ 上接住。
+ * E3: payment-side reconciliation, one test case per kind of inconsistency. order is a Mockito stub (returns pay-check / statuses results per scenario);
+ * re-sent events are caught by an observer consumer on a real RocketMQ.
  * <p>
- * 订单侧收到补发事件后的行为（待支付 → 已支付；已关闭 → 记 PAID_AFTER_CLOSED）由 order 的 OrderPaidIT / PayTimeoutRaceIT 覆盖，
- * pay_anomaly 标记待退款由 OrderReconIT 覆盖 —— 三段拼起来就是完整的对账闭环。
+ * What the order side does with a re-sent event (pending payment → paid; closed → record PAID_AFTER_CLOSED) is covered by order's OrderPaidIT / PayTimeoutRaceIT,
+ * and flagging pay_anomaly for refund is covered by OrderReconIT — together the three pieces form the full reconciliation loop.
  */
 @SpringBootTest
 class PaymentReconIT extends IntegrationTestBase {
@@ -109,7 +109,7 @@ class PaymentReconIT extends IntegrationTestBase {
         scope.close();
     }
 
-    /** 造一张支付单：status 0 待支付 / 1 成功；ageMinutes = 创建（和成功）多少分钟前 */
+    /** Create a payment: status 0 pending / 1 succeeded; ageMinutes = how many minutes ago it was created (and succeeded) */
     private long payment(int status, long orderNo, int ageMinutes, int reconRetry) {
         long payNo = NOS.incrementAndGet();
         jdbc.update("INSERT INTO payment (tenant_id, pay_no, order_no, buyer_id, amount, channel, status, channel_trade_no,"
@@ -128,13 +128,13 @@ class PaymentReconIT extends IntegrationTestBase {
     }
 
     /**
-     * 四种"支付成功"单据一次对账：
+     * Reconcile four kinds of "payment succeeded" records in one run:
      * <ul>
-     *   <li>A：order 已处理过 → 标记一致，不补发</li>
-     *   <li>B：<b>支付成功但订单还是待支付</b>（事件丢了）→ 补发同一个事件（eventId = payNo），order 消费后订单变已支付</li>
-     *   <li>C：支付成功但订单不存在 → 不补发，记 PAY_MISMATCH 告警转人工</li>
-     *   <li>D：已补发 3 次 order 仍未处理 → 不再补发，记 PAY_RESEND_EXHAUSTED 告警</li>
-     *   <li>E：刚成功 1 分钟（宽限期内）→ 事件可能还在路上，这一轮不看</li>
+     *   <li>A: order already processed it → mark consistent, no re-send</li>
+     *   <li>B: <b>payment succeeded but the order is still pending payment</b> (event lost) → re-send the same event (eventId = payNo); after order consumes it the order becomes paid</li>
+     *   <li>C: payment succeeded but the order does not exist → no re-send, record a PAY_MISMATCH alert for manual handling</li>
+     *   <li>D: re-sent 3 times and order still hasn't processed it → stop re-sending, record a PAY_RESEND_EXHAUSTED alert</li>
+     *   <li>E: succeeded just 1 minute ago (within the grace period) → the event may still be in flight, skip it this round</li>
      * </ul>
      */
     @Test
@@ -163,22 +163,22 @@ class PaymentReconIT extends IntegrationTestBase {
         assertThat(jdbc.queryForList("SELECT type FROM recon_exception ORDER BY biz_key", String.class))
                 .containsExactlyInAnyOrder("PAY_MISMATCH", "PAY_RESEND_EXHAUSTED");
 
-        // B 的补发事件真的到了 MQ：eventId 就是 payNo，order 的消费去重表按它幂等
+        // B's re-sent event really reached MQ: eventId is payNo, and order's consume-dedup table is idempotent on it
         await().atMost(Duration.ofSeconds(30)).until(() -> EVENTS.containsKey(b));
         MessageExt m = EVENTS.get(b).get(0);
         assertThat(m.getUserProperty(PaymentEventTopics.PROP_EVENT_ID)).isEqualTo(String.valueOf(b));
         assertThat(new String(m.getBody(), StandardCharsets.UTF_8)).contains("\"orderNo\":" + orderB);
         assertThat(EVENTS).doesNotContainKeys(a, c, d);
 
-        // 下一轮 order 处理完了 → 标记一致
-        // 用 doReturn：when(mock.payCheck(..)) 的写法会先真调一次上面那个 answer（参数为 null）
+        // Next round, order has processed it → mark consistent
+        // Use doReturn: the when(mock.payCheck(..)) form would first really invoke the answer above (with null arguments)
         doReturn(ResultUtils.success(List.of(check(b, orderB, 20, true)))).when(orderClient).payCheck(any());
         PaymentReconciler.Result r = reconciler.reconcile();
         assertThat(r.consistent()).isEqualTo(1);
         assertThat(row(b)).containsEntry("recon_status", 1);
     }
 
-    /** order 不可用：这一轮整体跳过，既不补发也不告警 —— 查不到 ≠ 没处理 */
+    /** order unavailable: skip the whole round, neither re-send nor alert — "can't look it up" ≠ "not processed" */
     @Test
     void orderDown_skipsRound() {
         long p = payment(1, NOS.incrementAndGet(), 10, 0);
@@ -196,9 +196,9 @@ class PaymentReconIT extends IntegrationTestBase {
     }
 
     /**
-     * <b>关单时没关闭的支付单</b>：订单已关闭（或已被别的支付单付掉 / 不存在）→ 关闭；订单还待支付 → 不动；
-     * 太新的待支付单（买家可能正在付）→ 不查。
-     * 关闭之后钱又到了 → 回调识别出"已关闭"，记 PAID_AFTER_CLOSED 告警待退款
+     * <b>Payments left open when the order was closed</b>: order closed (or paid by another payment / missing) → close it; order still pending payment → leave it;
+     * pending payments that are too new (the buyer may be paying right now) → not checked.
+     * Money arrives after closing → the callback recognizes "closed" and records a PAID_AFTER_CLOSED alert for refund
      */
     @Test
     void stalePendingPayments_closedWhenOrderNoLongerPayable() {
@@ -221,7 +221,7 @@ class PaymentReconIT extends IntegrationTestBase {
         assertThat(row(p5)).containsEntry("status", 0);
         verify(orderClient, never()).payCheck(any());
 
-        // 买家还在旧支付页付了款：钱到了，但支付单已关闭 → 不发支付成功事件，记异常待退款
+        // The buyer still paid on the old payment page: money arrived but the payment is closed → no payment-success event, record an anomaly for refund
         PaymentService.CallbackOutcome outcome = paymentService.handleMockCallback(new MockCallbackRequest(p1, "CH-LATE", 9900L));
         assertThat(outcome).isEqualTo(PaymentService.CallbackOutcome.IGNORED);
         assertThat(jdbc.queryForObject("SELECT type FROM recon_exception WHERE biz_key = ?", String.class, "payNo:" + p1))

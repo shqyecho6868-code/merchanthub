@@ -15,8 +15,8 @@ import java.util.List;
 public interface OrdersMapper extends BaseMapper<Orders> {
 
     /**
-     * 订单状态 CAS：只有当前状态仍是 from 时才改成 to。影响 1 行 = 本次流转成功；0 行 = 状态已被别人改过。
-     * 带 tenant_id：事件里的商家必须和订单一致，防止串租户改单。
+     * Order status CAS: change to `to` only if the current status is still `from`. 1 row affected = transition succeeded; 0 rows = someone else already changed the status.
+     * Includes tenant_id: the merchant in the event must match the order, preventing cross-tenant updates.
      */
     @Update("UPDATE orders SET status = #{to}, "
             + "paid_at = CASE WHEN #{to} = 20 THEN #{now} ELSE paid_at END, "
@@ -28,22 +28,22 @@ public interface OrdersMapper extends BaseMapper<Orders> {
                   @Param("event") String event);
 
     /**
-     * 当前读订单状态（加行锁，读最新已提交版本）。CAS 失败后判断"现在到底是什么状态"必须用它：
-     * InnoDB 可重复读下，普通 SELECT 读的是本事务第一次读时的快照 —— CAS 前已经读过订单，
-     * 再普通 SELECT 拿到的还是旧的"待支付"，会把"关单后支付"误判成"重复支付"（B3-下 PayTimeoutRaceIT 抓到，pitfalls P22）
+     * Current read of the order status (row lock, latest committed version). Must be used after a failed CAS to find out "what the status actually is now":
+     * under InnoDB repeatable read, a plain SELECT reads the snapshot from the transaction's first read -- the order was already read before the CAS,
+     * so a plain SELECT would still return the stale "pending payment" and misjudge "paid after close" as "duplicate payment" (caught by B3-下 PayTimeoutRaceIT, pitfalls P22)
      */
     /**
-     * <b>显式跨租户</b>按订单号查（C1）：只给"支付成功"消费用 —— 它要能发现"事件里的商家和订单的商家对不上"并记异常，
-     * 带着租户条件查的话对不上的订单直接"查不到"，会被当成"回调早于订单"一直重投到死信，异常就被埋没了。
-     * 绕过租户插件必须像这样单独写一个方法、写清理由，不能在通用查询上随手关掉。
+     * <b>Explicitly cross-tenant</b> lookup by order number (C1): only for the "payment succeeded" consumer -- it must detect "the event's merchant doesn't match the order's merchant" and record an anomaly;
+     * querying with the tenant condition would make a mismatched order simply "not found", treated as "callback before order" and redelivered until the DLQ, burying the anomaly.
+     * Bypassing the tenant plugin must be done in a dedicated method like this with a stated reason, never by casually disabling it on a general query.
      */
     @InterceptorIgnore(tenantLine = "true")
     @Select("SELECT * FROM orders WHERE order_no = #{orderNo} AND deleted = 0")
     Orders selectByOrderNoAcrossTenants(@Param("orderNo") long orderNo);
 
     /**
-     * E3 超时订单扫描：过了支付截止时间 + 宽限期仍是待支付（正常情况下 ORDER_TIMEOUT 定时消息早该把它关了）。
-     * 跨租户：扫描任务以 SYSTEM 身份跑，本来就不拼 tenant_id；走索引 (status, expire_at)
+     * E3 timeout-order scan: still pending after the payment deadline + grace period (normally the ORDER_TIMEOUT scheduled message should have closed it long ago).
+     * Cross-tenant: the scan runs as SYSTEM and doesn't add tenant_id anyway; uses index (status, expire_at)
      */
     @Select("SELECT order_no, tenant_id FROM orders WHERE status = 10 AND expire_at < #{before} AND deleted = 0"
             + " ORDER BY expire_at LIMIT #{limit}")

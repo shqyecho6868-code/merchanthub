@@ -21,8 +21,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 多 SKU 库存预占：一个订单的所有 SKU 在一个本地事务里预占，全占或全不占。
- * 思路与原因见 docs/notes/B1-下单与库存预占.md 第 7 节。
+ * Multi-SKU stock reservation: all SKUs of an order are reserved in one local transaction — all or nothing.
+ * Approach and rationale: see docs/notes/B1-下单与库存预占.md section 7.
  */
 @Slf4j
 @Service
@@ -31,23 +31,23 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
 
     private final InventoryMapper inventoryMapper;
     private final InventoryReservationMapper reservationMapper;
-    /** 编程式事务：外层要能 catch 住“事务回滚之后”的唯一键冲突，见笔记 7.3 */
+    /** Programmatic transaction: the outer layer must be able to catch the unique-key conflict that surfaces "after the transaction rolled back", see notes 7.3 */
     private final TransactionTemplate transactionTemplate;
 
     @Override
     public void reserve(ReserveRequest request) {
         List<ReserveRequest.Item> items = request.getItems();
 
-        // 同一个 skuId 出现两次，第二行插入会撞上第一行的唯一键，被误判成“重复请求”
+        // If the same skuId appears twice, the second row insert hits the first row's unique key and is misjudged as a "duplicate request"
         long distinctSkus = items.stream().map(ReserveRequest.Item::getSkuId).distinct().count();
         ThrowUtils.throwIf(distinctSkus != items.size(), ErrorCode.PARAMS_ERROR, "同一订单内 skuId 不能重复");
 
-        // 所有事务按 skuId 升序加行锁，避免交叉等待形成死锁
+        // All transactions take row locks in ascending skuId order, to avoid circular waits that cause deadlocks
         List<ReserveRequest.Item> sorted = items.stream()
                 .sorted(Comparator.comparing(ReserveRequest.Item::getSkuId))
                 .toList();
 
-        // 快速路径：最常见的重试（上次其实已成功）在这里就结束，不进事务、不抢行锁
+        // Fast path: the most common retry (the previous attempt actually succeeded) ends here, without entering a transaction or contending for row locks
         List<InventoryReservation> existing = reservationMapper.selectByOrderNo(request.getOrderNo());
         if (!existing.isEmpty()) {
             checkSameAsExisting(request, existing);
@@ -58,16 +58,16 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
         try {
             transactionTemplate.executeWithoutResult(status -> reserveAllInTransaction(request, sorted));
         } catch (DuplicateKeyException e) {
-            // 并发的重复请求：两个请求都通过了快速路径，后插入的撞唯一键，它的事务已整体回滚（包括已扣的库存）。
-            // 这里已在事务外，重新查到的是对方提交后的记录
+            // Concurrent duplicate request: both passed the fast path; the later insert hit the unique key and its transaction was rolled back entirely (including deducted stock).
+            // We're outside the transaction here, so the re-query sees the record the other request committed
             checkSameAsExisting(request, reservationMapper.selectByOrderNo(request.getOrderNo()));
             log.info("并发重复预占请求，幂等返回成功 orderNo={}", request.getOrderNo());
         }
     }
 
     /**
-     * 在一个事务里逐个 SKU：先插预占记录（幂等闸门），再条件更新库存。
-     * 任何一个 SKU 失败就抛异常，TransactionTemplate 回滚整个事务。
+     * Within one transaction, SKU by SKU: first insert the reservation record (idempotency gate), then conditionally update stock.
+     * If any SKU fails we throw, and TransactionTemplate rolls back the whole transaction.
      */
     private void reserveAllInTransaction(ReserveRequest request, List<ReserveRequest.Item> sortedItems) {
         for (ReserveRequest.Item item : sortedItems) {
@@ -80,9 +80,9 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
             reservationMapper.insert(reservation);
 
             int rows = inventoryMapper.tryReserve(request.getTenantId(), item.getSkuId(), item.getQuantity());
-            // 影响 0 行 = WHERE 条件不成立（库存不足 / 不属于该租户）。MySQL 不会报错，必须自己抛异常：
-            // 否则这一轮插的预占记录和前面几个 SKU 的扣减都会被提交 → 部分预占，且记录与库存不一致。
-            // （B1 code review 练习：这里曾故意写成 rows < 0，永远不成立，见 interview-qa）
+            // 0 rows affected = the WHERE condition failed (insufficient stock / not this tenant's). MySQL doesn't raise an error, so we must throw ourselves:
+            // otherwise this round's reservation record and the earlier SKUs' deductions would all be committed → partial reservation, with records and stock out of sync.
+            // (B1 code review exercise: this was deliberately written as rows < 0, which never holds; see interview-qa)
             if (rows == 0) {
                 throw new BusinessException(ErrorCode.INVENTORY_INSUFFICIENT, "库存不足 skuId=" + item.getSkuId());
             }
@@ -90,8 +90,8 @@ public class InventoryReservationServiceImpl implements InventoryReservationServ
     }
 
     /**
-     * 已有记录和本次请求是否“同一次预占”：tenantId 相同、SKU 集合相同、每个 SKU 数量相同。
-     * 一致 → 幂等成功；不一致 → 同一个订单号想占不同的东西，是调用方的 bug，拒绝。
+     * Whether the existing records and this request are "the same reservation": same tenantId, same SKU set, same quantity per SKU.
+     * Identical → idempotent success; different → the same order number wants to reserve something else, which is a caller bug, so reject.
      */
     private void checkSameAsExisting(ReserveRequest request, List<InventoryReservation> existing) {
         boolean sameTenant = existing.stream().allMatch(r -> request.getTenantId().equals(r.getTenantId()));

@@ -1,6 +1,6 @@
 spring:
   datasource:
-    # 每个服务一个库（mh_payment）：支付单和订单不在一个库，payment 不能直接改订单，只能发事件让 order 自己改
+    # One database per service (mh_payment): payments and orders live in different databases, so payment can't modify orders directly — it can only publish events and let order update itself
     url: jdbc:mysql://mysql:3306/mh_payment?createDatabaseIfNotExist=true&connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&characterEncoding=UTF-8
     username: root
     password: ${MYSQL_ROOT_PASSWORD}
@@ -19,7 +19,7 @@ spring:
 merchanthub:
   rocketmq:
     namesrv-addr: namesrv:9876
-  # E3：注册到 XXL-Job 调度中心
+  # E3: register with the XXL-Job admin (scheduler)
   job:
     xxl:
       enabled: true

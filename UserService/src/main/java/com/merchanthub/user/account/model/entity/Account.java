@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 账号（表 account）：买家、商家管理员 / 员工、平台管理员 */
+/** Account (table account): buyers, merchant admins / staff, platform admins */
 @Data
 @TableName("account")
 public class Account {
@@ -17,11 +17,11 @@ public class Account {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    /** 商家角色必填；买家 / 平台管理员为 null */
+    /** Required for merchant roles; null for buyers / platform admins */
     private Long tenantId;
     private String username;
     private String passwordHash;
-    /** {@link com.merchanthub.common.tenant.Role} 的名字 */
+    /** Name of a {@link com.merchanthub.common.tenant.Role} */
     private String role;
     private Integer status;
 

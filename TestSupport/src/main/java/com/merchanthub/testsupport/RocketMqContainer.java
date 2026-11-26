@@ -10,13 +10,13 @@ import java.net.ServerSocket;
 import java.time.Duration;
 
 /**
- * 单容器跑 NameServer + Broker。
+ * Runs NameServer + Broker in a single container.
  * <p>
- * 难点：生产者先问 NameServer 要路由，拿到的是 Broker 自己注册的 “brokerIP1:listenPort”，再直连这个地址。
- * Testcontainers 默认把容器端口映射到宿主机的随机端口，Broker 并不知道这个随机端口，注册的地址宿主机连不上。
- * 做法：先在宿主机找一个空闲端口 P，让 Broker 在容器内也监听 P，并固定映射 P→P，brokerIP1 设为 Docker 主机地址。
- * 这样 Broker 注册的地址在宿主机上就是可达的。（和 docker-compose 里用 host.docker.internal 是同一个问题，见 A2 笔记。）
- * NameServer 端口照常随机映射即可，因为它的地址是我们主动传给客户端的。
+ * The tricky part: a producer first asks the NameServer for routes, receives the "brokerIP1:listenPort" the Broker registered itself with, then connects to it directly.
+ * Testcontainers maps container ports to random host ports by default; the Broker doesn't know that random port, so the registered address is unreachable from the host.
+ * Fix: find a free port P on the host, have the Broker listen on P inside the container too, map P->P fixed, and set brokerIP1 to the Docker host address.
+ * That way the address the Broker registers is reachable from the host. (Same problem as using host.docker.internal in docker-compose; see the A2 notes.)
+ * The NameServer port can be randomly mapped as usual, since we hand its address to clients ourselves.
  */
 public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
 
@@ -35,8 +35,8 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
                 "brokerRole=ASYNC_MASTER",
                 "flushDiskType=ASYNC_FLUSH",
                 "autoCreateTopicEnable=true",
-                // 事务消息回查调快（默认几十秒一轮），让回查类测试几秒内出结果：
-                // transactionTimeOut 是半消息"多老才会被回查"的下限，也是免回查时间的最小值
+                // Speed up transactional message checkback (default is tens of seconds per round) so checkback tests finish within seconds:
+                // transactionTimeOut is the lower bound on "how old a half message must be before it's checked back", and also the minimum check-immunity time
                 "transactionCheckInterval=1000",
                 "transactionTimeOut=3000",
                 "listenPort=" + brokerPort,
@@ -45,7 +45,7 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
         withExposedPorts(NAMESRV_PORT);
         addFixedExposedPort(brokerPort, brokerPort);
         withCopyToContainer(Transferable.of(brokerConf), "/home/rocketmq/broker-it.conf");
-        // 默认堆按 GB 申请，CI 机器和本机都吃不消，调小
+        // The default heap is sized in GB, too much for both CI machines and local; shrink it
         withEnv("JAVA_OPT_EXT", "-Xms512m -Xmx512m -Xmn256m");
         withCommand("sh", "-c",
                 "sh mqnamesrv & sh mqbroker -n localhost:" + NAMESRV_PORT + " -c /home/rocketmq/broker-it.conf");
@@ -53,12 +53,12 @@ public class RocketMqContainer extends GenericContainer<RocketMqContainer> {
     }
 
     /**
-     * 提前建 Topic（和生产环境"关闭自动建 Topic、提前规划"的做法一致）。
-     * 依赖自动建 Topic 时，刚启动的 Broker 第一次发送常报 No route info，测试会偶发失败。
+     * Create Topics up front (consistent with production practice of "disable auto topic creation, plan topics in advance").
+     * With auto-creation, a freshly started Broker often fails the first send with No route info, making tests flaky.
      */
     public void createTopic(String topic) {
-        // Broker 打出 boot success 后，到它出现在 NameServer 的集群信息里还有一段延迟，
-        // 这期间 mqadmin 报 "Make sure the specified clusterName exists"，所以重试（最多约 60 秒）
+        // After the Broker logs boot success, there's still a delay before it appears in the NameServer's cluster info;
+        // meanwhile mqadmin reports "Make sure the specified clusterName exists", so retry (up to ~60 seconds)
         String last = "";
         for (int i = 0; i < 30; i++) {
             try {

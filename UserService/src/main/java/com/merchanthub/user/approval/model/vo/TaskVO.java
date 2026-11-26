@@ -4,7 +4,7 @@ import java.util.Date;
 import java.util.Map;
 
 /**
- * 待办。processKey 区分是哪类审批，summary 给列表页显示（商品名 / 店铺名等），不把所有流程变量都吐出去
+ * A pending task. processKey tells which kind of approval it is, summary is for list display (product name / shop name etc.), instead of dumping all process variables
  */
 public record TaskVO(String taskId, String taskName, String taskKey, String processKey, String processInstanceId,
                      Date createdAt, Map<String, Object> summary) {

@@ -1,13 +1,13 @@
 package com.merchanthub.common.tenant;
 
 /**
- * 四种业务角色 + 一个内部角色 SYSTEM（C1）。
+ * Four business roles + one internal role, SYSTEM (C1).
  * <ul>
- *   <li>PLATFORM_ADMIN：平台管理员，不属于任何商家，能看全平台</li>
- *   <li>MERCHANT_ADMIN：商家管理员，只能看、改自己商家的数据</li>
- *   <li>MERCHANT_STAFF：商家员工，只能看自己商家的数据，不能改（改价等管理接口返回 403）</li>
- *   <li>BUYER：买家，平台级用户，不属于某个商家；数据按 buyer_id 归属过滤</li>
- *   <li>SYSTEM：只在服务内部使用（定时扫描、渠道回调），<b>网关不会给外部 token 签发这个角色</b></li>
+ *   <li>PLATFORM_ADMIN: platform administrator, belongs to no merchant, can see the whole platform</li>
+ *   <li>MERCHANT_ADMIN: merchant administrator, can only view and modify their own merchant's data</li>
+ *   <li>MERCHANT_STAFF: merchant staff, can only view their own merchant's data, not modify it (admin endpoints like price changes return 403)</li>
+ *   <li>BUYER: buyer, a platform-level user not tied to any merchant; data is filtered by buyer_id ownership</li>
+ *   <li>SYSTEM: used only inside services (scheduled scans, channel callbacks); <b>the gateway never issues this role in external tokens</b></li>
  * </ul>
  */
 public enum Role {
@@ -17,17 +17,17 @@ public enum Role {
     BUYER,
     SYSTEM;
 
-    /** 商家角色必须带 tenantId；其余角色不带 */
+    /** Merchant roles must carry a tenantId; other roles must not */
     public boolean isMerchant() {
         return this == MERCHANT_ADMIN || this == MERCHANT_STAFF;
     }
 
-    /** 能出现在用户 token 里的角色（SYSTEM 不行） */
+    /** Roles that may appear in a user token (not SYSTEM) */
     public boolean isUserRole() {
         return this != SYSTEM;
     }
 
-    /** 解析请求头 / token 里的角色名；不认识返回 null */
+    /** Parse a role name from a header / token; returns null if unknown */
     public static Role parse(String name) {
         if (name == null || name.isBlank()) {
             return null;

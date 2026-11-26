@@ -5,12 +5,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * user-tenant 服务（D1 从旧 IM 的 UserService 改造）。两个子域：
+ * user-tenant service (reworked in D1 from the old IM UserService). Two subdomains:
  * <ul>
- *   <li>account：账号、租户、登录（签发带身份的 JWT）</li>
- *   <li>approval：Flowable 引擎所在地 —— 商家入驻审批（本地闭环）、商品上架审批（product 经 Feign 发起，结果经 MQ 回写）</li>
+ *   <li>account: accounts, tenants, login (issues JWTs carrying identity)</li>
+ *   <li>approval: home of the Flowable engine -- merchant onboarding approval (closed loop locally) and product listing approval (started by product via Feign, result written back via MQ)</li>
  * </ul>
- * MapperScan 只扫自己的包：Flowable 有自己的一套 MyBatis，ACT_* 表不归 MyBatis-Plus 管（也就不会被租户插件改写）。
+ * MapperScan only scans our own packages: Flowable has its own MyBatis setup and the ACT_* tables aren't managed by MyBatis-Plus (so the tenant plugin never rewrites them).
  */
 @SpringBootApplication(scanBasePackages = {"com.merchanthub.user", "com.merchanthub.common"})
 @MapperScan({"com.merchanthub.user.account.mapper", "com.merchanthub.user.approval.mapper"})

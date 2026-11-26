@@ -1,8 +1,8 @@
 package com.merchanthub.realtime.config;
 
 /**
- * 本节点的 ID。路由表里记的值、节点间转发消息的 Tag、本节点专属消费组名都由它决定，
- * 所以只能包含 RocketMQ 消费组名允许的字符（字母、数字、- 和 _）。
+ * This node's ID. It determines the value stored in the route table, the Tag for inter-node forwarding and this node's dedicated consumer group name,
+ * so it may only contain characters allowed in RocketMQ consumer group names (letters, digits, - and _).
  */
 public record NodeId(String value) {
 

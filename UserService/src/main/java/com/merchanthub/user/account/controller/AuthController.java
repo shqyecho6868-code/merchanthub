@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 对外：/api/user/**（网关白名单，不需要 token），网关转发时去掉 /api */
+/** External: /api/user/** (gateway whitelist, no token required); the gateway strips /api when forwarding */
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor

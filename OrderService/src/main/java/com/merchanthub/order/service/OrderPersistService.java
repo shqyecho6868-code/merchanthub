@@ -26,10 +26,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 事务 B：快照 + 明细 + 订单 + 状态流水，要么全写入，要么全不写。
+ * Transaction B: snapshot + items + order + status log, all written or none.
  * <p>
- * 单独成一个 Bean 是为了让 @Transactional 生效：Spring 事务靠代理实现，
- * 如果放在 OrderCreateService 里被同类方法调用（this.xxx()），会绕过代理，事务不生效。
+ * It's a separate Bean so @Transactional takes effect: Spring transactions work via proxies,
+ * and a self-invocation from within OrderCreateService (this.xxx()) would bypass the proxy and the transaction.
  */
 @Service
 @RequiredArgsConstructor
@@ -45,8 +45,8 @@ public class OrderPersistService {
     private final SnowflakeIdGenerator idGenerator;
 
     /**
-     * timeout = 5：本地事务最多 5 秒，超时必回滚。事务消息的免回查时间（30 秒）必须比它长，
-     * 这样 Broker 回查时本地事务一定已经结束，"查不到订单"才能放心判定为回滚（B2 笔记 Q2）。
+     * timeout = 5: the local transaction runs at most 5s and always rolls back on timeout. The transactional message's check-immunity time (30s) must be longer,
+     * so the local transaction has always finished when the broker checks back, and "order not found" can safely be judged a rollback (B2 notes Q2).
      */
     @Transactional(rollbackFor = Exception.class, timeout = 5)
     public void saveNewOrder(NewOrder newOrder) {
@@ -57,7 +57,7 @@ public class OrderPersistService {
         for (OrderPricing.Line line : pricing.lines()) {
             SkuSnapshot sku = line.sku();
 
-            // 完整快照（点“查看快照”时才读）：商家以后改价、改描述、删商品，都不影响这份记录
+            // Full snapshot (read only on "view snapshot"): later price changes, description edits, or product deletion by the merchant don't affect this record
             TradeSnapshot snapshot = new TradeSnapshot();
             snapshot.setTenantId(tenantId);
             snapshot.setOrderNo(orderNo);
@@ -65,7 +65,7 @@ public class OrderPersistService {
             snapshot.setContent(toJson(sku));
             tradeSnapshotMapper.insert(snapshot);
 
-            // 明细行冗余关键字段（列表页直接用，不回查商品服务）
+            // Items denormalize key fields (used directly by list pages without calling the product service)
             OrderItem item = new OrderItem();
             item.setTenantId(tenantId);
             item.setOrderNo(orderNo);
@@ -104,8 +104,8 @@ public class OrderPersistService {
         log.setOperatorId(buyerId);
         statusLogMapper.insert(log);
 
-        // 超时关单定时消息：和订单在同一个事务里写进 outbox（两种 event-mode 都走这里）。
-        // 不在 createOrder 最后直接 send：订单提交后、send 之前进程挂了，这单就永远不会超时关单，库存永远被占着
+        // Timeout-close scheduled message: written to outbox in the same transaction as the order (both event-modes go through here).
+        // Not sent directly at the end of createOrder: if the process died after commit but before send, the order would never time out and its inventory would stay reserved forever
         PayTimeoutMessage timeout = new PayTimeoutMessage(idGenerator.nextId(), orderNo, tenantId);
         outboxWriter.append(tenantId, timeout.eventId(), String.valueOf(orderNo), OrderEventTopics.TIMEOUT_TOPIC,
                 OrderEventTopics.TAG_PAY_TIMEOUT, codec.toJson(timeout), newOrder.expireAt());
@@ -128,7 +128,7 @@ public class OrderPersistService {
         }
     }
 
-    /** {"颜色":"白","尺码":"L"} → "白 / L" */
+    /** {"color":"white","size":"L"} -> "white / L" */
     String specText(String specJson) {
         try {
             Map<String, Object> spec = objectMapper.readValue(specJson, new TypeReference<LinkedHashMap<String, Object>>() {

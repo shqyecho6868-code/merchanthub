@@ -29,11 +29,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 破坏性实验 ①（自动化版）：支付成功事件比订单先到。
+ * Destructive experiment ① (automated): the payment-success event arrives before the order.
  * <p>
- * 结论：订单不存在时抛 {@link OrderNotVisibleException} → 消费事务回滚（去重记录一起撤销）→ RocketMQ 重投 →
- * 订单落库后的某次重投成功，订单变成已支付。
- * 修复前（订单不存在时 return false）：去重记录提交、消息被确认，订单落库后永远收不到这次支付，最终被超时关单 —— 钱收了单没了。
+ * Conclusion: when the order doesn't exist, {@link OrderNotVisibleException} is thrown -> consumer transaction rolls back (dedup record undone too) -> RocketMQ redelivers ->
+ * some redelivery after the order is persisted succeeds, and the order becomes paid.
+ * Before the fix (return false when the order doesn't exist): the dedup record committed and the message was acked, so the order never got this payment after being persisted and was eventually closed for timeout -- money received, order gone.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=OUTBOX",
@@ -49,7 +49,7 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
     private OrderPlacer orderPlacer;
     @Autowired
     private ObjectMapper objectMapper;
-    /** 应用的 UTC 时钟。不能用 LocalDateTime.now()：本机是 PST，expire_at 会落在 8 小时前 → 超时消息立即投递（P24） */
+    /** The app's UTC clock. Can't use LocalDateTime.now(): this machine is on PST, so expire_at would land 8 hours in the past -> timeout message delivered immediately (P24) */
     @Autowired
     private Clock clock;
 
@@ -67,7 +67,7 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
         producer.shutdown();
     }
 
-    /** 用指定订单号落一单（真实下单流程里订单号由服务端生成，测试需要提前知道它） */
+    /** Persist an order with a given order number (in the real flow the server generates it; the test needs to know it in advance) */
     private void placeOrder(long orderNo) {
         Map<Long, Integer> qty = new TreeMap<>(Map.of(101L, 1));
         OrderPricing.Result pricing = OrderPricing.price(qty, catalog);
@@ -87,7 +87,7 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
         assertThatThrownBy(() -> paidService.handle(e)).isInstanceOf(OrderNotVisibleException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM consumed_event WHERE event_id = ?", Long.class, e.eventId())).isZero();
 
-        // 订单出现后同一事件再来（模拟重投）：正常处理
+        // The same event again after the order appears (simulated redelivery): processed normally
         placeOrder(orderNo);
         assertThat(paidService.handle(e)).isTrue();
     }
@@ -98,12 +98,12 @@ class PaySuccessBeforeOrderIT extends OrderItSupport {
         producer.send(TenantMessages.stamp(
                 new Message(PaySuccessEvent.TOPIC, PaySuccessEvent.TAG, objectMapper.writeValueAsBytes(event(orderNo))), TENANT));
 
-        // 等消费者至少处理过一次（失败、等待重投）再落单
+        // Wait until the consumer has processed it at least once (failed, awaiting redelivery) before persisting the order
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> true);
         assertThat(countOrders(orderNo)).isZero();
         placeOrder(orderNo);
 
-        // 第一次重投在 10 秒后（之后 30s、1m…）
+        // The first redelivery is 10s later (then 30s, 1m...)
         await().atMost(Duration.ofSeconds(90)).until(() ->
                 jdbc.queryForObject("SELECT status FROM orders WHERE order_no = ?", Integer.class, orderNo) == 20);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_outbox WHERE biz_key = ? AND tag = 'ORDER_PAID'",

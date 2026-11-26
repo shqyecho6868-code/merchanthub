@@ -1,4 +1,4 @@
-// UserInfosResponse.java（位于 Common 模块）
+// UserInfosResponse.java (in the Common module)
 package com.merchanthub.common.model.vo;
 
 import lombok.Data;

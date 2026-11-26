@@ -13,7 +13,7 @@ import java.util.List;
 @Mapper
 public interface SkuMapper extends BaseMapper<Sku> {
 
-    /** SKU 连商品一次查出，供下单快照用。已逻辑删除的 SKU / 商品当作不存在 */
+    /** Fetch the SKU together with its product in one query, for the order snapshot. Logically deleted SKUs / products are treated as nonexistent */
     @Select("""
             <script>
             SELECT s.id AS sku_id, s.tenant_id, s.product_id, p.name AS product_name,

@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** 两个拦截器 + 全局异常处理串起来跑（不起 Spring 容器）：RBAC 的 403、身份缺失的 401、坏 JSON 的 400 */
+/** Both interceptors + the global exception handler wired together (no Spring context): RBAC 403, missing identity 401, bad JSON 400 */
 class TenantWebMvcTest {
 
     @RestController

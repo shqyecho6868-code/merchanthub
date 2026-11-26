@@ -18,9 +18,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * C2：启动时把配置加载成 Sentinel 规则。
+ * C2: load the config into Sentinel rules at startup.
  * <p>
- * Sentinel 的规则管理器是 JVM 级的静态单例：控制台推下来的规则会<b>整体替换</b>这里加载的同类规则，重启后又回到这里的配置。
+ * Sentinel's rule managers are JVM-wide static singletons: rules pushed from the dashboard <b>replace wholesale</b> the same kind of rules loaded here, and a restart reverts to this config.
  */
 @Slf4j
 @Configuration
@@ -31,8 +31,8 @@ public class SentinelRulesConfig {
     private final SentinelProperties props;
 
     /**
-     * 先清空再加载：规则管理器是 JVM 级单例，同一 JVM 里的多个测试上下文共用它；
-     * 规则内容不变时 Sentinel 会沿用旧的熔断器 / 令牌桶（连同"已熔断"状态），先清空才能得到干净的状态
+     * Clear before loading: the rule manager is a JVM-wide singleton shared by multiple test contexts in the same JVM;
+     * if rule content is unchanged Sentinel reuses the old breakers / token buckets (including an "open" state), so clearing first gives a clean state
      */
     public void reload() {
         ParamFlowRuleManager.loadRules(List.of());
@@ -51,8 +51,8 @@ public class SentinelRulesConfig {
     }
 
     /**
-     * 热点参数限流：资源 order:create 的第 0 个参数（tenantId）<b>每个不同的值各有一个令牌桶</b>。
-     * 租户 7 把自己的 20 个令牌用完只会拒绝租户 7，租户 8 的桶不受影响 —— 这就是"按租户隔离"
+     * Hot-parameter rate limiting: for parameter 0 (tenantId) of resource order:create, <b>each distinct value gets its own token bucket</b>.
+     * When tenant 7 uses up its 20 tokens only tenant 7 is rejected; tenant 8's bucket is unaffected -- that's "per-tenant isolation"
      */
     static ParamFlowRule perTenantOrderRule(SentinelProperties.RateLimit cfg) {
         List<ParamFlowItem> items = new ArrayList<>();
@@ -65,7 +65,7 @@ public class SentinelRulesConfig {
                 .setParamFlowItemList(items);
     }
 
-    /** 每个下游资源两条熔断规则：慢调用比例 + 异常比例，任一触发就熔断 */
+    /** Two breaker rules per downstream resource: slow-call ratio + error ratio; either one trips the breaker */
     public static List<DegradeRule> degradeRules(SentinelProperties.Degrade cfg, String... resources) {
         List<DegradeRule> rules = new ArrayList<>();
         for (String res : resources) {

@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 商家入驻申请（表 merchant_application） */
+/** Merchant onboarding application (table merchant_application) */
 @Data
 @TableName("merchant_application")
 public class MerchantApplication {

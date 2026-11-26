@@ -12,15 +12,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 
 /**
- * 调用 product-inventory 的内部接口。超时在 application.yml 里配（连接 1s / 读 3s）；
- * 不自动重试（原因见 {@link ProductInventoryFeignConfig}）；熔断降级在 {@link RemoteResults} 里按下面的资源名做（C2）。
- * 下游返回的是统一返回体：HTTP 200 + body.code，业务失败要看 code，见 {@link RemoteResults}。
+ * Calls product-inventory's internal APIs. Timeouts are configured in application.yml (connect 1s / read 3s);
+ * no automatic retry (see {@link ProductInventoryFeignConfig} for why); circuit breaking/degradation is done in {@link RemoteResults} by the resource names below (C2).
+ * The downstream returns the unified response body: HTTP 200 + body.code; business failures are read from code, see {@link RemoteResults}.
  */
 @FeignClient(name = "product-inventory", contextId = "productInventoryClient", path = "/internal",
         configuration = ProductInventoryFeignConfig.class)
 public interface ProductInventoryClient {
 
-    /** Sentinel 资源名（熔断规则按它配），控制台"簇点链路"里能看到 */
+    /** Sentinel resource names (breaker rules are keyed by them), visible under "cluster point links" in the dashboard */
     String RES_QUERY_SKUS = "product-inventory:querySkus";
     String RES_RESERVE = "product-inventory:reserve";
 

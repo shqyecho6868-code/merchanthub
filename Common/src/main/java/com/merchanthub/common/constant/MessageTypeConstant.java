@@ -1,12 +1,12 @@
 package com.merchanthub.common.constant;
 /**
- * 消息类型常量
+ * Message type constants
  *
- * 消息类型分类：
- * - 0-99：聊天消息（文本、图片、表情包等）
- * - 100-199：系统通知（好友申请、新会话等）
+ * Message type ranges:
+ * - 0-99: chat messages (text, image, sticker, etc.)
+ * - 100-199: system notifications (friend requests, new sessions, etc.)
  *
- * 本常量类定义系统通知类型（100-199范围）
+ * This class defines the system notification types (range 100-199)
  */
 public class MessageTypeConstant {
 
@@ -17,56 +17,56 @@ public class MessageTypeConstant {
     public static final int EMOJI_MESSAGE = 2;
 
     /**
-     * 系统通知：收到好友申请
-     * 场景：用户A向用户B发送好友申请
+     * System notification: friend request received
+     * Scenario: user A sends user B a friend request
      */
     public static final int TYPE_SYSTEM_NEW_APPLY = 101;
 
     /**
-     * 系统通知：新会话创建
-     * 场景：用户A和用户B成为好友后，系统创建单聊会话
+     * System notification: new session created
+     * Scenario: after users A and B become friends, the system creates a one-to-one session
      */
     public static final int TYPE_SYSTEM_NEW_SESSION = 102;
 
     /**
-     * 系统通知：新群聊会话创建（群组邀请通知）
-     * 场景：用户被邀请加入群聊
+     * System notification: new group session created (group invitation)
+     * Scenario: a user is invited to a group chat
      */
     public static final int TYPE_SYSTEM_NEW_GROUP_SESSION = 103;
 
     /**
-     * 系统通知：群聊踢出通知
-     * 场景：用户被踢出群聊，通知群聊所有成员（包括被踢出者）
+     * System notification: removed from group chat
+     * Scenario: a user is removed from a group chat; all members (including the removed user) are notified
      */
     public static final int TYPE_SYSTEM_GROUP_KICK = 104;
 
     /**
-     * 聊天消息类型范围：0-99
+     * Chat message type range: 0-99
      */
     public static final int CHAT_MESSAGE_MIN = 0;
     public static final int CHAT_MESSAGE_MAX = 99;
 
     /**
-     * 系统通知类型范围：100-199
+     * System notification type range: 100-199
      */
     public static final int SYSTEM_NOTIFICATION_MIN = 100;
     public static final int SYSTEM_NOTIFICATION_MAX = 199;
 
     /**
-     * 判断是否为系统通知类型
+     * Whether the type is a system notification
      *
-     * @param type 消息类型
-     * @return true if 是系统通知类型
+     * @param type message type
+     * @return true if it is a system notification type
      */
     public static boolean isSystemNotification(int type) {
         return type >= SYSTEM_NOTIFICATION_MIN && type <= SYSTEM_NOTIFICATION_MAX;
     }
 
     /**
-     * 判断是否为聊天消息类型
+     * Whether the type is a chat message
      *
-     * @param type 消息类型
-     * @return true if 是聊天消息类型
+     * @param type message type
+     * @return true if it is a chat message type
      */
     public static boolean isChatMessage(int type) {
         return type >= CHAT_MESSAGE_MIN && type <= CHAT_MESSAGE_MAX;

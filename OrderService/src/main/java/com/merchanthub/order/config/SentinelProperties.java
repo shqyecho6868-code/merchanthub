@@ -7,8 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * C2：限流 / 熔断阈值。启动时由 {@link SentinelRulesConfig} 加载成 Sentinel 规则（只在内存里）。
- * 生产要把规则放到 Nacos 配置中心持久化 + 动态推送，否则控制台改的规则重启就丢（C2 范围外，见 C2 笔记）。
+ * C2: rate-limit / circuit-breaker thresholds. Loaded into Sentinel rules (in memory only) by {@link SentinelRulesConfig} at startup.
+ * In production the rules should be persisted in the Nacos config center + pushed dynamically; otherwise rules changed in the dashboard are lost on restart (out of C2 scope, see C2 notes).
  */
 @Data
 @ConfigurationProperties(prefix = "merchanthub.order.sentinel")
@@ -19,24 +19,24 @@ public class SentinelProperties {
 
     @Data
     public static class RateLimit {
-        /** 每个商家的下单 QPS 默认阈值（单机）。取法：单机容量 100 ÷ 预期同时大促的商家数 5 ≈ 20，见 C2 笔记 Q2 */
+        /** Default per-merchant order-placement QPS threshold (per instance). Derivation: per-instance capacity 100 / ~5 merchants expected to run promotions at once = 20, see C2 notes Q2 */
         private int perTenantQps = 20;
-        /** 例外项：个别商家单独的阈值（付费套餐 / 报备过的大促），key = tenantId */
+        /** Exceptions: per-merchant thresholds (paid plans / pre-registered promotions), key = tenantId */
         private Map<Long, Integer> tenantOverrides = new HashMap<>();
     }
 
     @Data
     public static class Degrade {
-        /** 慢调用：响应超过这么多毫秒算"慢" */
+        /** Slow call: a response taking longer than this many ms counts as "slow" */
         private int slowRtMs = 1000;
-        /** 统计窗口内慢调用占比 ≥ 它就熔断 */
+        /** Break when the slow-call ratio in the stats window >= this */
         private double slowRatio = 0.5;
-        /** 统计窗口内异常（超时 / 连不上 / 5xx）占比 ≥ 它就熔断 */
+        /** Break when the error ratio (timeout / connection failure / 5xx) in the stats window >= this */
         private double errorRatio = 0.5;
-        /** 统计窗口内至少这么多次调用才判断（防止 2 次里错 1 次就熔断） */
+        /** Minimum calls in the stats window before judging (prevents breaking on 1 failure out of 2) */
         private int minRequests = 10;
         private int statIntervalMs = 10_000;
-        /** 熔断后多少秒内直接快速失败；到时放一个探测请求，成功就恢复 */
+        /** Seconds to fail fast after breaking; then let one probe request through, and recover if it succeeds */
         private int openSeconds = 10;
     }
 }

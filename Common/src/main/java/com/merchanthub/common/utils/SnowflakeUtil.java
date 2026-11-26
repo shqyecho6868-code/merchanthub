@@ -3,10 +3,10 @@ package com.merchanthub.common.utils;
 import com.merchanthub.common.id.SnowflakeIdGenerator;
 
 /**
- * 静态门面：只为兼容旧 IM 代码里的 {@code SnowflakeUtil.nextId()} 调用。
+ * Static facade: exists only for {@code SnowflakeUtil.nextId()} calls in the old IM code.
  * <p>
- * 原实现把 workerId 写死为 1，多实例会撞号（pitfalls P1）；现在委托给 Redis 领号的 {@link SnowflakeIdGenerator}。
- * 新代码（订单号、支付单号）直接注入 SnowflakeIdGenerator，不要用这个类。旧 IM 代码删除后这个类一起删。
+ * The original implementation hard-coded workerId to 1, so multiple instances collided (pitfalls P1); it now delegates to the Redis-leased {@link SnowflakeIdGenerator}.
+ * New code (order numbers, payment numbers) should inject SnowflakeIdGenerator directly, not use this class. It goes away together with the old IM code.
  */
 public final class SnowflakeUtil {
 
@@ -22,7 +22,7 @@ public final class SnowflakeUtil {
     public static long nextId() {
         SnowflakeIdGenerator g = generator;
         if (g == null) {
-            // 没配 Redis 的服务没有生成器；宁可报错，也不退回写死 workerId 的老做法
+            // Services without Redis have no generator; better to fail than fall back to the old hard-coded workerId
             throw new IllegalStateException("SnowflakeIdGenerator 未初始化：当前服务需要依赖 Redis");
         }
         return g.nextId();

@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
-/** Netty WebSocket 服务（原 IM 已有，E1 调整：端口可配、鉴权改为按身份算接收方、业务处理挪到独立线程组） */
+/** Netty WebSocket server (inherited from the original IM; E1 changes: configurable port, receiver derived from identity during auth, business handling moved to a separate thread group) */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -45,7 +45,7 @@ public class NettyServer {
 
     private NioEventLoopGroup boss;
     private NioEventLoopGroup workers;
-    /** 业务线程组：握手后的处理器要访问 Redis / MySQL，放这里跑，不占 IO 线程 */
+    /** Business thread group: post-handshake handlers access Redis / MySQL, so they run here instead of occupying IO threads */
     private DefaultEventExecutorGroup business;
     private Channel serverChannel;
 
@@ -72,7 +72,7 @@ public class NettyServer {
         log.info("WebSocket 服务已启动 ws://0.0.0.0:{}{} node={}", port(), WS_PATH, nodeId);
     }
 
-    /** 实际监听端口（配置成 0 时是随机端口） */
+    /** Actual listening port (random when configured as 0) */
     public int port() {
         return ((InetSocketAddress) serverChannel.localAddress()).getPort();
     }
@@ -82,7 +82,7 @@ public class NettyServer {
         if (serverChannel != null) {
             serverChannel.close().syncUninterruptibly();
         }
-        // 优雅关闭会让每条连接走 channelInactive → 注销本节点路由；进程被 kill -9 时走不到这里，靠路由 TTL 过期
+        // Graceful shutdown makes every connection go through channelInactive -> unregister this node's routes; kill -9 never gets here, so we rely on route TTL expiry
         workers.shutdownGracefully(0, 2, TimeUnit.SECONDS).syncUninterruptibly();
         boss.shutdownGracefully(0, 2, TimeUnit.SECONDS).syncUninterruptibly();
         business.shutdownGracefully(0, 2, TimeUnit.SECONDS).syncUninterruptibly();

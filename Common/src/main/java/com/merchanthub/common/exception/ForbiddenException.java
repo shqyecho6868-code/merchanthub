@@ -2,7 +2,7 @@ package com.merchanthub.common.exception;
 
 import com.merchanthub.common.common.ErrorCode;
 
-/** 越权：已登录但角色不允许（HTTP 403）。和 401 的区别：401 是"你是谁我不知道"，403 是"知道你是谁，但你不能做" */
+/** Access denied: authenticated but the role is not allowed (HTTP 403). Unlike 401 ("I don't know who you are"), 403 means "I know who you are, but you can't do this" */
 public class ForbiddenException extends BusinessException {
 
     public ForbiddenException(String message) {

@@ -1,10 +1,10 @@
 package com.merchanthub.order.mq.tx;
 
 /**
- * 交给 {@code sendMessageInTransaction(msg, arg)} 的 arg：本地事务本身 + 执行结果。
+ * The arg passed to {@code sendMessageInTransaction(msg, arg)}: the local transaction itself + its result.
  * <p>
- * 为什么要把结果带回来：RocketMQ 客户端会吞掉 executeLocalTransaction 里抛出的异常（只记日志、按 UNKNOW 处理），
- * 调用方拿不到"库存不足""数据库挂了"这些原始异常。所以监听器自己 catch 住异常放这里，由 placer 再抛给上层。
+ * Why carry the result back: the RocketMQ client swallows exceptions thrown in executeLocalTransaction (just logs and treats as UNKNOW),
+ * so the caller never sees the original exceptions like "insufficient stock" or "DB down". The listener catches them and stores them here, and the placer rethrows them upward.
  */
 final class LocalTx {
 
@@ -16,7 +16,7 @@ final class LocalTx {
         this.work = work;
     }
 
-    /** @return true 表示本地事务已提交 */
+    /** @return true if the local transaction committed */
     boolean run() {
         executed = true;
         try {
@@ -28,7 +28,7 @@ final class LocalTx {
         }
     }
 
-    /** false：半消息没发成功，本地事务根本没执行 */
+    /** false: the half message wasn't sent, so the local transaction never ran */
     boolean executed() {
         return executed;
     }

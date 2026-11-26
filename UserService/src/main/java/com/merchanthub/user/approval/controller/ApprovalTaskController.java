@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** 我的待办 + 通过 / 驳回（对外 /api/approvals/**）。接口级 RBAC 先挡角色，任务级的"是不是你的"在 service 里查 */
+/** My tasks + approve / reject (external /api/approvals/**). Endpoint-level RBAC checks the role first; the task-level "is it yours" check happens in the service */
 @RestController
 @RequestMapping("/approvals/tasks")
 @RequiredArgsConstructor

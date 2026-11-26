@@ -6,8 +6,8 @@ import com.merchanthub.common.exception.BusinessException;
 import java.time.Duration;
 
 /**
- * 没配 S3 时（本地开发、测试）的占位实现：调用图片接口直接报"未开启"，其他功能不受影响。
- * 本地 docker-compose 里没有 MinIO，不为了本地演示再引入一个对象存储。
+ * Placeholder used when S3 isn't configured (local dev, tests): image APIs fail with "not enabled", other features are unaffected.
+ * The local docker-compose has no MinIO; we don't add an object store just for local demos.
  */
 public class DisabledImageStorage implements ImageStorage {
 

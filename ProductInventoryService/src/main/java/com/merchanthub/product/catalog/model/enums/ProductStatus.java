@@ -1,12 +1,12 @@
 package com.merchanthub.product.catalog.model.enums;
 
 /**
- * 商品状态（product.status）。上架审批相关的流转（D1）：
+ * Product status (product.status). Transitions related to listing approval (D1):
  * <pre>
- *   0 草稿 ──提交──▶ 1 审核中 ──通过──▶ 2 已上架（买家可下单：order 只接受 status = 2 的商品）
- *   4 已驳回 ─提交─▶ 1 审核中 ──驳回──▶ 4 已驳回
+ *   0 draft ──submit──▶ 1 under review ──approve──▶ 2 listed (buyers can order: order only accepts products with status = 2)
+ *   4 rejected ─submit─▶ 1 under review ──reject──▶ 4 rejected
  * </pre>
- * 只有 1 能变成 2 / 4，且必须是同一轮（audit_round）；其他方向一律不改。3 已下架留给以后的下架功能。
+ * Only 1 can become 2 / 4, and only within the same round (audit_round); every other direction is a no-op. 3 delisted is reserved for a future delisting feature.
  */
 public final class ProductStatus {
 

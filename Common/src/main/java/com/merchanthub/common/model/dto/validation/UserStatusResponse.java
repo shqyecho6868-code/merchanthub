@@ -8,10 +8,10 @@ import com.merchanthub.common.constant.UserStateConstant;
 import lombok.Data;
 
 /**
- * 用户状态响应
+ * User status response
  *
- * 供内部校验接口返回用户状态信息
- * 供 UserService 等服务共用
+ * Returned by the internal validation API with the user's status
+ * Shared by UserService and other services
  */
 @Data
 public class UserStatusResponse implements Serializable {
@@ -20,22 +20,22 @@ public class UserStatusResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 用户 ID
+     * User ID
      */
     private Long userId;
 
     /**
-     * 用户状态
+     * User status
      * @see UserStateConstant
-     * 0: 正常
-     * 1: 封禁
-     * 2: 注销
-     * null: 用户不存在
+     * 0: normal
+     * 1: banned
+     * 2: cancelled
+     * null: user does not exist
      */
     private Integer state;
 
     /**
-     * 状态描述
+     * Status description
      */
     private String stateName;
 

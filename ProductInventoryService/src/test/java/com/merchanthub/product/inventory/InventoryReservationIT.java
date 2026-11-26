@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 真实 MySQL 上验证预占的四个性质：全占或全不占、幂等、租户隔离、并发不死锁。
+ * Verifies four properties of reservation on a real MySQL: all-or-nothing, idempotency, tenant isolation, and no deadlock under concurrency.
  */
 @SpringBootTest
 class InventoryReservationIT extends ProductItSupport {
@@ -91,7 +91,7 @@ class InventoryReservationIT extends ProductItSupport {
         assertThat(records(orderNo)).isEqualTo(2);
     }
 
-    /** 全占或全不占：102 不够 → 101 已经扣的也要回滚，记录一条都不留（B1 code review 那个 bug 的回归测试） */
+    /** All-or-nothing: 102 is short → what was already deducted for 101 must roll back too, leaving no records (regression test for the bug from the B1 code review) */
     @Test
     void multiSku_oneInsufficient_nothingReserved() {
         stock(101, 10);
@@ -112,7 +112,7 @@ class InventoryReservationIT extends ProductItSupport {
         stock(101, 10);
         long orderNo = ORDER_NO.incrementAndGet();
         service.reserve(req(orderNo, TENANT, 101, 2));
-        service.reserve(req(orderNo, TENANT, 101, 2)); // Feign 超时后重试
+        service.reserve(req(orderNo, TENANT, 101, 2)); // retry after a Feign timeout
 
         assertThat(available(101)).isEqualTo(8);
         assertThat(reserved(101)).isEqualTo(2);
@@ -129,7 +129,7 @@ class InventoryReservationIT extends ProductItSupport {
         assertThat(available(103)).isEqualTo(10);
     }
 
-    /** 租户隔离：拿别的商家的 tenant_id 占不到这一行（条件更新带 tenant_id） */
+    /** Tenant isolation: another merchant's tenant_id can't grab this row (the conditional update includes tenant_id) */
     @Test
     void otherTenant_cannotReserve() {
         stock(101, 10);
@@ -137,7 +137,7 @@ class InventoryReservationIT extends ProductItSupport {
         assertThat(available(101)).isEqualTo(10);
     }
 
-    /** 并发重复请求（同一订单号同时到达 20 次）：唯一键兜底，只扣一次，所有请求都返回成功 */
+    /** Concurrent duplicate requests (the same order number arriving 20 times at once): the unique key backstops it, stock is deducted once, and every request returns success */
     @Test
     void concurrentDuplicates_reservedOnlyOnce() throws Exception {
         stock(101, 10);
@@ -155,9 +155,9 @@ class InventoryReservationIT extends ProductItSupport {
     }
 
     /**
-     * 防死锁：一半订单请求顺序是 [101,102]，一半是 [102,101]，并发执行。
-     * 服务内部按 skuId 排序后加锁，不会出现 MySQL 1213 Deadlock。
-     * （实验：把 reserve() 里的排序去掉再跑，会看到 DeadlockLoserDataAccessException）
+     * Deadlock prevention: half the orders request [101,102], half request [102,101], run concurrently.
+     * The service sorts by skuId before locking, so MySQL 1213 Deadlock never occurs.
+     * (Experiment: remove the sort in reserve() and rerun, and you'll see DeadlockLoserDataAccessException)
      */
     @Test
     void crossOrderedSkus_noDeadlock() throws Exception {
@@ -182,7 +182,7 @@ class InventoryReservationIT extends ProductItSupport {
         Callable<Void> create(int index);
     }
 
-    /** 所有线程在同一个起跑线（CountDownLatch）同时开始，尽量制造真正的并发 */
+    /** All threads start from the same line (CountDownLatch) at once, to create real concurrency as much as possible */
     static List<Throwable> runConcurrently(int threads, TaskFactory factory) throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(threads);
         CountDownLatch start = new CountDownLatch(1);
@@ -193,8 +193,8 @@ class InventoryReservationIT extends ProductItSupport {
                 long buyerId = 50_000L + i;
                 futures.add(pool.submit(() -> {
                     start.await();
-                    // C1：子线程拿不到测试线程的 ThreadLocal，要自己设置上下文。
-                    // 生产里预占是买家下单时 order 用 Feign 调过来的，下游看到的身份是 BUYER
+                    // C1: child threads don't get the test thread's ThreadLocal, so they must set the context themselves.
+                    // In production, reservation is called by order via Feign when a buyer places an order, so the downstream sees a BUYER identity
                     try (var ignored = TenantContext.open(new TenantInfo(null, buyerId, Role.BUYER))) {
                         return task.call();
                     }

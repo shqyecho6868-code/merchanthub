@@ -3,7 +3,7 @@ package com.merchanthub.common.constant;
 public class CommonConstant {
 
 
-    // D1：JWT 密钥已移到配置 merchanthub.jwt.secret（见 JwtCodec），有效期见 JwtProperties
+    // D1: the JWT secret moved to config merchanthub.jwt.secret (see JwtCodec); token lifetimes are in JwtProperties
 
     public static final String ACCESS_TOKEN_PREFIX = "access:token:";
 
@@ -40,12 +40,12 @@ public class CommonConstant {
     public static final Integer SESSION_STATUS = 0;
 
     /**
-     * 系统通知消息 Kafka 主题
+     * Kafka topic for system notification messages
      */
     public static final String KAFKA_SYSTEM_NOTIFICATION_TOPIC = "system-notification-topic";
 
     /**
-     * 系统通知持久化 Kafka 主题
+     * Kafka topic for persisting system notifications
      */
     public static final String KAFKA_STORE_NOTIFICATION_TOPIC = "store-notification-topic";
 }

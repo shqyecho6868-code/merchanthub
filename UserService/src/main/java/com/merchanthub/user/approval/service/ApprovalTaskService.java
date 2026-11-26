@@ -24,15 +24,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 待办查询与办理（两类审批共用）。核心规则：<b>能看到的 = 能办的</b>，都由 {@link ApprovalGroups#restrict} 按当前身份限定。
- * 商家 8 的管理员拿着商家 7 的 taskId 来办理 → 按 MERCHANT_ADMIN:8 查不到 → 当作不存在（63001），不说"无权"。
+ * Querying and handling tasks (shared by both kinds of approval). Core rule: <b>what you can see = what you can handle</b>, both scoped to the current identity by {@link ApprovalGroups#restrict}.
+ * Merchant 8's admin trying to handle merchant 7's taskId -> nothing found under MERCHANT_ADMIN:8 -> treated as nonexistent (63001), not "forbidden".
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ApprovalTaskService {
 
-    /** 列表里展示的流程变量：只挑需要的，申请人 ID 这类内部字段不外露 */
+    /** Process variables shown in the list: only the ones needed; internal fields like the applicant ID aren't exposed */
     private static final Set<String> SUMMARY_VARS = Set.of(FlowVars.TENANT_ID, FlowVars.PRODUCT_ID, FlowVars.PRODUCT_NAME,
             FlowVars.ROUND, FlowVars.APPLICATION_ID, FlowVars.SHOP_NAME, FlowVars.COMMENT);
 
@@ -47,8 +47,8 @@ public class ApprovalTaskService {
     }
 
     /**
-     * 通过 / 驳回。完成任务后引擎会接着往下走：入驻通过 → 建租户开账号；上架最后一步 → 写结果和待发消息，
-     * 这些都在<b>本方法的事务</b>里（Flowable 加入当前 Spring 事务），任何一步失败整体回滚、任务还在。
+     * Approve / reject. After the task completes the engine moves on: onboarding approved -> create tenant and account; last listing step -> write result and pending message,
+     * all inside <b>this method's transaction</b> (Flowable joins the current Spring transaction); if any step fails, everything rolls back and the task remains.
      */
     @Transactional
     public void decide(String taskId, boolean approved, String comment) {
@@ -58,14 +58,14 @@ public class ApprovalTaskService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "驳回必须填写原因");
         }
         if (FlowVars.TASK_APPLICANT_REVISE.equals(task.getTaskDefinitionKey())) {
-            // 申请人的"修改重提"不是审批，走 /merchant-applications 的接口（要带修改后的内容）
+            // The applicant's "revise and resubmit" isn't an approval; it goes through the /merchant-applications endpoints (which carry the revised content)
             throw new BusinessException(ErrorCode.APPROVAL_TASK_NOT_FOUND);
         }
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put(FlowVars.APPROVED, approved);
         vars.put(FlowVars.COMMENT, comment);
 
-        // 让引擎记下"谁办的"：写进 ACT_HI_COMMENT.USER_ID_ 等历史字段；线程变量，用完必须清掉
+        // Let the engine record "who handled it": written to history fields like ACT_HI_COMMENT.USER_ID_; it's a thread-local, so it must be cleared afterwards
         Authentication.setAuthenticatedUserId(String.valueOf(me.userId()));
         try {
             taskService.addComment(taskId, task.getProcessInstanceId(), (approved ? "通过" : "驳回")
@@ -80,7 +80,7 @@ public class ApprovalTaskService {
                 taskId, task.getTaskDefinitionKey(), approved, me.userId(), me.role(), me.tenantId());
     }
 
-    /** 按当前身份查这条待办；查不到（不存在 / 已办完 / 不是你的）一律 63001 */
+    /** Look up this task under the current identity; not found (nonexistent / already done / not yours) is always 63001 */
     Task findMine(String taskId, TenantInfo me) {
         TaskQuery q = taskService.createTaskQuery().taskId(taskId);
         Task task = ApprovalGroups.restrict(q, me) ? q.singleResult() : null;
@@ -97,7 +97,7 @@ public class ApprovalTaskService {
                 summary.put(k, v);
             }
         });
-        // processDefinitionId 形如 productListing:1:abc，冒号前就是流程 key
+        // processDefinitionId looks like productListing:1:abc; the part before the first colon is the process key
         String processKey = t.getProcessDefinitionId() == null ? null : t.getProcessDefinitionId().split(":")[0];
         return new TaskVO(t.getId(), t.getName(), t.getTaskDefinitionKey(), processKey, t.getProcessInstanceId(),
                 t.getCreateTime(), summary);

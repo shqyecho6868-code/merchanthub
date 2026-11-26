@@ -4,7 +4,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** 应用上下文里的 RequestInterceptor Bean 会被 Spring Cloud OpenFeign 应用到所有 FeignClient（同 TenantFeignConfig） */
+/** Spring Cloud OpenFeign applies any RequestInterceptor Bean in the application context to all FeignClients (same as TenantFeignConfig) */
 @Configuration
 @ConditionalOnClass(name = "feign.RequestInterceptor")
 public class TraceFeignConfig {

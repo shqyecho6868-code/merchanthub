@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 直接用 MyBatis-Plus 的租户插件改写 SQL，看改写结果（不连数据库）。
- * 🧑 实验里在日志看到的 "AND tenant_id = 7" 就是这一步加上的。
+ * Runs the MyBatis-Plus tenant plugin directly and inspects the rewritten SQL (no database).
+ * The "AND tenant_id = 7" seen in the logs during the 🧑 hands-on experiment is added by this step.
  */
 class TenantSqlHandlerTest {
 

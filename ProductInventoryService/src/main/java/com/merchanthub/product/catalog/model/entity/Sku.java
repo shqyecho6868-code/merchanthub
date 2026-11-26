@@ -9,7 +9,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * SKU（表 sku）
+ * SKU (table sku)
  */
 @Data
 @TableName("sku")
@@ -20,15 +20,15 @@ public class Sku {
 
     private Long productId;
     private String skuCode;
-    /** 规格 JSON，如 {"颜色":"白","尺码":"L"} */
+    /** Spec JSON, e.g. {"color":"white","size":"L"} */
     private String specJson;
-    /** 售价（分） */
+    /** Selling price (cents) */
     private Long price;
-    /** 0 停售 / 1 在售 */
+    /** 0 off sale / 1 on sale */
     private Integer status;
 
     private Long tenantId;
-    /** 由数据库默认值维护，插入时为 null 会被 MyBatis-Plus 跳过 */
+    /** Maintained by the database default; a null on insert is skipped by MyBatis-Plus */
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     @TableLogic

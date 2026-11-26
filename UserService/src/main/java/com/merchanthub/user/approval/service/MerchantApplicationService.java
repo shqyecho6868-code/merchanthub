@@ -29,8 +29,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 商家入驻申请（申请人侧）：提交、驳回后修改重提、撤回、查看。审核侧走通用的 {@link ApprovalTaskService}。
- * 每个方法都是一个本地事务：申请表的变更和引擎的推进（启动实例 / 完成"修改重提"任务）一起提交或回滚。
+ * Merchant onboarding applications (applicant side): submit, revise and resubmit after rejection, withdraw, view. The reviewer side uses the generic {@link ApprovalTaskService}.
+ * Each method is one local transaction: application table changes and engine progress (start instance / complete the "revise and resubmit" task) commit or roll back together.
  */
 @Slf4j
 @Service
@@ -63,7 +63,7 @@ public class MerchantApplicationService {
         app.setSubmitCount(1);
         applicationMapper.insert(app);
 
-        // 业务键把流程实例和申请单关联起来；applicantUserId 存成字符串，BPMN 里直接当 assignee 用
+        // The business key links the process instance to the application; applicantUserId is stored as a string so the BPMN can use it directly as assignee
         ProcessInstance pi = runtimeService.startProcessInstanceByKey(FlowVars.PROCESS_ONBOARDING, "onboarding:" + app.getId(),
                 Map.of(FlowVars.APPLICATION_ID, app.getId(),
                         FlowVars.APPLICANT, String.valueOf(applicant),
@@ -74,7 +74,7 @@ public class MerchantApplicationService {
         return toVO(applicationMapper.selectById(app.getId()));
     }
 
-    /** 驳回后修改重提：同一个流程实例，完成"申请人修改"任务后回到平台审核 */
+    /** Revise and resubmit after rejection: same process instance; completing the "applicant revises" task returns to platform review */
     @Transactional
     public ApplicationVO resubmit(long id, ApplicationRequest req) {
         long applicant = currentUserId();
@@ -85,7 +85,7 @@ public class MerchantApplicationService {
                 passwordEncoder.encode(req.adminPassword())) != 1) {
             throw new BusinessException(ErrorCode.APPLICATION_STATE_INVALID);
         }
-        // 店铺名可能改了，同步到流程变量：平台管理员待办列表里看到的是新名字
+        // The shop name may have changed, so sync it to the process variables: the platform admin's task list shows the new name
         complete(task, Map.of(FlowVars.RESUBMIT, true, FlowVars.SHOP_NAME, req.shopName()));
         log.info("入驻申请重提 applicationId={} applicant={}", id, applicant);
         return toVO(applicationMapper.selectById(id));
@@ -104,7 +104,7 @@ public class MerchantApplicationService {
         return toVO(applicationMapper.selectById(id));
     }
 
-    /** 申请人只能看自己的；平台管理员都能看 */
+    /** Applicants can only see their own; platform admins can see all */
     public ApplicationVO get(long id) {
         TenantInfo me = TenantContext.get();
         MerchantApplication app = applicationMapper.selectById(id);
@@ -129,7 +129,7 @@ public class MerchantApplicationService {
         return app;
     }
 
-    /** 只有"已驳回"时才有这条任务；办理人必须是申请人本人（BPMN 里 assignee = applicantUserId） */
+    /** This task exists only while "rejected"; the assignee must be the applicant themself (assignee = applicantUserId in the BPMN) */
     private Task reviseTask(MerchantApplication app, long applicant) {
         Task task = taskService.createTaskQuery().processInstanceId(app.getProcessInstanceId())
                 .taskDefinitionKey(FlowVars.TASK_APPLICANT_REVISE).taskAssignee(String.valueOf(applicant)).singleResult();
@@ -147,7 +147,7 @@ public class MerchantApplicationService {
         }
     }
 
-    /** 快速失败；最终以 account.username 唯一索引为准（审核通过时才真正建账号） */
+    /** Fail fast; the account.username unique index is the final word (the account is only really created on approval) */
     private void checkUsernameFree(String username) {
         if (accountMapper.selectCount(new LambdaQueryWrapper<Account>().eq(Account::getUsername, username)) > 0) {
             throw new BusinessException(ErrorCode.USERNAME_TAKEN);

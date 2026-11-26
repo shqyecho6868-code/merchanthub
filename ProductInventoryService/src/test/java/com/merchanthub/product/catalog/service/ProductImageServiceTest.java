@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 主图上传的校验逻辑（不连 S3 / 数据库）。跨租户查不到商品由租户插件保证，已在 ProductTenantIsolationIT 验证。
+ * Validation logic for main image upload (no S3 / database). Cross-tenant products not being found is guaranteed by the tenant plugin and verified in ProductTenantIsolationIT.
  */
 @ExtendWith(MockitoExtension.class)
 class ProductImageServiceTest {
@@ -42,7 +42,7 @@ class ProductImageServiceTest {
 
     @BeforeAll
     static void initMybatisMeta() {
-        // LambdaUpdateWrapper 解析 Product::getId 需要实体元数据；单测里没有 MyBatis 启动流程，手动初始化
+        // LambdaUpdateWrapper needs entity metadata to resolve Product::getId; unit tests have no MyBatis bootstrap, so initialize it manually
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), Product.class);
     }
 
@@ -67,7 +67,7 @@ class ProductImageServiceTest {
 
         ImageUploadVO vo = service.createUploadUrl(100L, "image/png");
 
-        // key 由服务端生成：租户 / 商品前缀 + 随机名 + 按类型决定的扩展名
+        // The key is generated server-side: tenant / product prefix + random name + extension determined by the type
         assertThat(vo.objectKey()).startsWith("products/7/100/").endsWith(".png");
         assertThat(vo.uploadUrl()).isEqualTo("https://signed");
         assertThat(vo.imageUrl()).isEqualTo("https://cdn/" + vo.objectKey());
@@ -83,7 +83,7 @@ class ProductImageServiceTest {
 
     @Test
     void uploadUrl_productOfOtherTenantIsNotFound() {
-        // 租户插件过滤后 selectById 返回 null
+        // After the tenant plugin filters, selectById returns null
         when(productMapper.selectById(100L)).thenReturn(null);
         assertThatThrownBy(() -> service.createUploadUrl(100L, "image/jpeg"))
                 .extracting("code").isEqualTo(ErrorCode.NOT_FOUND_ERROR.getCode());
@@ -92,10 +92,10 @@ class ProductImageServiceTest {
     @Test
     void confirm_rejectsKeyOfAnotherProductOrTenant() {
         when(productMapper.selectById(100L)).thenReturn(product(7, 100));
-        // 商家 7 想把商家 8 的图片挂到自己商品上
+        // Merchant 7 tries to attach merchant 8's image to its own product
         assertThatThrownBy(() -> service.confirm(100L, "products/8/200/a.png"))
                 .extracting("code").isEqualTo(ErrorCode.FORBIDDEN_ERROR.getCode());
-        // 前缀对，但用 .. 跳出目录
+        // Correct prefix, but escapes the directory with ..
         assertThatThrownBy(() -> service.confirm(100L, "products/7/100/../../8/200/a.png"))
                 .extracting("code").isEqualTo(ErrorCode.FORBIDDEN_ERROR.getCode());
         verify(storage, never()).exists(any());

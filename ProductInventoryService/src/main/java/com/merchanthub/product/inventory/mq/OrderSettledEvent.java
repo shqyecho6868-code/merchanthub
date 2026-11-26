@@ -1,8 +1,8 @@
 package com.merchanthub.product.inventory.mq;
 
 /**
- * order 发出的"订单已支付 / 已关闭"事件（Topic ORDER_EVENT，Tag ORDER_PAID / ORDER_CLOSED）。
- * 契约是 JSON 字段，这里自己定义一份同结构的类，不共享 jar（同 payment ↔ order 的做法）。
+ * The "order paid / closed" event published by order (Topic ORDER_EVENT, Tag ORDER_PAID / ORDER_CLOSED).
+ * The contract is the JSON fields; we define our own class with the same shape instead of sharing a jar (same as payment ↔ order).
  */
 public record OrderSettledEvent(long eventId, long orderNo, long tenantId, String event) {
 

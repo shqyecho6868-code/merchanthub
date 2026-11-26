@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-/** 把消息写进本节点上接收方的所有连接；写成功一条就标记已送达 */
+/** Write the message to all of the receiver's connections on this node; mark delivered once any write succeeds */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -18,11 +18,11 @@ public class LocalDelivery {
     private final ChannelRegistry channels;
     private final OfflineMessageStore store;
 
-    /** @return 本节点上有没有这个接收方的活跃连接 */
+    /** @return whether this node has an active connection for this receiver */
     public boolean deliver(PushMessage msg) {
         List<Channel> targets = channels.channelsOf(msg.receiverKey());
         if (targets.isEmpty()) {
-            // 路由说在本节点，实际已断开（断开和路由注销之间的空档）：消息已在表里是"待送达"，上线后补发
+            // Route says this node, but the connection has already closed (the gap between disconnect and route unregistration): the message is already "pending" in the table and will be redelivered on coming online
             log.info("接收方已不在本节点，留待上线补发 receiverKey={} msgId={}", msg.receiverKey(), msg.msgId());
             return false;
         }

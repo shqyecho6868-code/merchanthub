@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 消费去重记录（表 consumed_event） */
+/** Consumer dedup record (table consumed_event) */
 @Data
 @TableName("consumed_event")
 public class ConsumedEvent {

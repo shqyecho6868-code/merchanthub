@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 端到端（D1）：同一条"上架通过"消息投递 3 次 → 消费者 → 商品只从 1 改成 2 一次、只有一条流水。
- * 另一条消息属性里的商家是 8（别的商家），改不了商家 7 的商品。
+ * End to end (D1): the same "listing approved" message delivered 3 times → consumer → product goes from 1 to 2 only once, with a single history row.
+ * Another message whose properties carry merchant 8 (a different merchant) can't modify merchant 7's product.
  */
 @SpringBootTest(properties = "merchanthub.product.listing-result-consumer.enabled=true")
 class ListingResultConsumerIT extends ProductItSupport {
@@ -90,7 +90,7 @@ class ListingResultConsumerIT extends ProductItSupport {
         long id = inReview(7);
         long marker = inReview(7);
         send(8, id, "APPROVED", 1);
-        send(7, marker, "REJECTED", 1);   // 用同一个消费者处理完它，说明前一条也已经处理过了（同一队列顺序不保证，所以多等一会儿）
+        send(7, marker, "REJECTED", 1);   // Once the same consumer has processed this one, the previous one has been processed too (ordering within a queue isn't guaranteed, so wait a bit longer)
 
         await().atMost(Duration.ofSeconds(60)).until(() -> status(marker) == 4);
         await().pollDelay(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> true);

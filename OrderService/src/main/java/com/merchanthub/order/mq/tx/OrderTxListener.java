@@ -21,11 +21,11 @@ import org.springframework.stereotype.Component;
 import java.time.Clock;
 
 /**
- * 事务消息的两个回调：
+ * The two transactional-message callbacks:
  * <ol>
- *   <li>executeLocalTransaction：半消息发送成功后，客户端立刻在<b>当前线程</b>调用它执行本地事务（写订单）</li>
- *   <li>checkLocalTransaction：Broker 迟迟没收到 COMMIT/ROLLBACK（进程挂了、网络断了、返回了 UNKNOW）时，
- *       主动来问"这个事务到底成没成"。运行在客户端的回查线程池里，和当初发消息的线程、甚至进程都无关</li>
+ *   <li>executeLocalTransaction: right after the half message is sent, the client calls it on the <b>current thread</b> to run the local transaction (write the order)</li>
+ *   <li>checkLocalTransaction: when the broker hasn't received COMMIT/ROLLBACK for a while (process died, network dropped, UNKNOW returned),
+ *       it actively asks "did this transaction succeed?". Runs in the client's check-back thread pool, unrelated to the original sending thread or even process</li>
  * </ol>
  */
 @Slf4j
@@ -39,18 +39,18 @@ public class OrderTxListener implements TransactionListener {
     private final Clock clock;
 
     /**
-     * 查不到订单时，消息至少要"出生"这么久才判 ROLLBACK，否则返回 UNKNOW 让 Broker 稍后再问。
-     * 必须大于本地事务超时（5 秒）。这是免回查时间之外的第二道防线：B2 实测回查比免回查时间来得早（见 pitfalls），
-     * 不能只靠 Broker 那边的时间窗口。bornTimestamp 是生产者自己的时钟，不受 Broker 时钟影响。
+     * If the order isn't found, the message must be at least this old before we decide ROLLBACK; otherwise return UNKNOW so the broker asks again later.
+     * Must exceed the local transaction timeout (5s). This is a second line of defense beyond the check-immunity time: in B2 the check-back arrived earlier than that (see pitfalls),
+     * so we can't rely only on the broker-side window. bornTimestamp is the producer's own clock, unaffected by the broker's clock.
      */
     @Value("${merchanthub.order.tx.rollback-min-age-seconds:30}")
     private long rollbackMinAgeSeconds;
 
-    /** 🧑 kill 实验用：本地事务提交后停顿多少毫秒再返回 COMMIT，给你留出 kill 进程的窗口。生产必须为 0 */
+    /** For the 🧑 kill experiment: pause N ms after the local commit before returning COMMIT, leaving a window to kill the process. Must be 0 in production */
     @Value("${merchanthub.order.tx.debug.pause-after-local-commit-ms:0}")
     private long pauseAfterLocalCommitMs;
 
-    /** 集成测试用：本地事务提交后返回 UNKNOW，效果等同于"COMMIT 没送到 Broker"，用来触发回查。生产必须为 false */
+    /** For integration tests: return UNKNOW after the local commit, equivalent to "COMMIT never reached the broker", to trigger a check-back. Must be false in production */
     @Value("${merchanthub.order.tx.debug.report-unknown:false}")
     private boolean reportUnknown;
 
@@ -58,11 +58,11 @@ public class OrderTxListener implements TransactionListener {
     public LocalTransactionState executeLocalTransaction(Message msg, Object arg) {
         LocalTx tx = (LocalTx) arg;
         if (!tx.run()) {
-            // 本地事务已回滚 → 删掉半消息，消费者永远看不到
+            // Local transaction rolled back -> delete the half message; consumers never see it
             log.warn("本地事务失败，回滚半消息 keys={}", msg.getKeys(), tx.failure());
             return LocalTransactionState.ROLLBACK_MESSAGE;
         }
-        // ---- 走到这里：订单已提交到数据库，但 Broker 还不知道 ----
+        // ---- At this point: the order is committed to the DB, but the broker doesn't know yet ----
         if (pauseAfterLocalCommitMs > 0) {
             log.warn("【kill 实验】本地事务已提交 keys={}，{} ms 后才提交消息，现在 kill 进程", msg.getKeys(), pauseAfterLocalCommitMs);
             try {
@@ -85,27 +85,27 @@ public class OrderTxListener implements TransactionListener {
         try {
             event = codec.fromMessage(msg);
         } catch (IllegalArgumentException e) {
-            // 消息体坏了：无法判断也无法消费，回滚丢弃，留日志人工看
+            // Corrupt message body: can neither decide nor consume; roll back and discard, leave a log for manual review
             log.error("事务回查：消息体无法解析，回滚 msgId={} keys={}", msg.getMsgId(), msg.getKeys(), e);
             return LocalTransactionState.ROLLBACK_MESSAGE;
         }
         boolean exists;
         try {
-            // 按订单号判断本地事务结果。能这样判断的前提：回查时本地事务一定已经结束
-            // （本地事务超时 5s < 免回查时间 30s，B2 笔记 Q2）
-            // 回查线程是 RocketMQ 的线程，没有租户上下文：按事件里的商家查（同时也校验了订单确实属于这个商家）
+            // Decide the local transaction result by order number. This works only because the local transaction has always finished by check-back time
+            // (local tx timeout 5s < check-immunity time 30s, B2 notes Q2)
+            // The check-back thread is a RocketMQ thread with no tenant context: query by the merchant in the event (which also verifies the order really belongs to it)
             exists = TenantContext.callAs(TenantInfo.systemOf(event.tenantId()), () ->
                     ordersMapper.exists(new LambdaQueryWrapper<Orders>().eq(Orders::getOrderNo, event.orderNo())));
         } catch (RuntimeException e) {
-            // 查库失败 ≠ 订单不存在。这里返回 ROLLBACK 会把一个可能已经建好的订单的消息删掉；
-            // 返回 UNKNOW 让 Broker 过一会儿再来问
+            // DB query failure != order doesn't exist. Returning ROLLBACK here could delete the message of an order that may already exist;
+            // return UNKNOW so the broker asks again later
             log.warn("事务回查：查库失败，稍后重查 orderNo={} tenantId={} checkTimes={}",
                     event.orderNo(), event.tenantId(), checkTimes, e);
             return LocalTransactionState.UNKNOW;
         }
         long ageMs = clock.millis() - msg.getBornTimestamp();
         if (!exists && ageMs < rollbackMinAgeSeconds * 1000) {
-            // 本地事务可能还没结束：现在判回滚，万一它稍后提交了，就是"订单建了消息没了"
+            // The local transaction may not be done yet: rolling back now would mean "order created but message lost" if it commits later
             log.info("事务回查 orderNo={} tenantId={} checkTimes={} 订单暂不存在、消息仅 {} ms，稍后重查 → UNKNOW",
                     event.orderNo(), event.tenantId(), checkTimes, ageMs);
             return LocalTransactionState.UNKNOW;

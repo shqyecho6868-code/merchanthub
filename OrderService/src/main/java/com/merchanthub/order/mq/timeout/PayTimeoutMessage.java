@@ -1,5 +1,5 @@
 package com.merchanthub.order.mq.timeout;
 
-/** 超时关单定时消息（Topic ORDER_TIMEOUT）。下单时和订单同事务写进 outbox，投递时间 = 订单 expire_at */
+/** Timeout-close scheduled message (Topic ORDER_TIMEOUT). Written to the outbox in the same transaction as the order at placement; delivery time = order expire_at */
 public record PayTimeoutMessage(long eventId, long orderNo, long tenantId) {
 }

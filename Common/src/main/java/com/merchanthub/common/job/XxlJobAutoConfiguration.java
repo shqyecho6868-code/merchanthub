@@ -10,11 +10,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 /**
- * XXL-Job 执行器自动装配（E3）：服务只要声明了 xxl-job-core 依赖、并打开 merchanthub.job.xxl.enabled，
- * 就会注册成执行器，@XxlJob 方法自动成为可调度的任务。
+ * XXL-Job executor auto-configuration (E3): any service that declares the xxl-job-core dependency and turns on merchanthub.job.xxl.enabled
+ * registers as an executor, and its @XxlJob methods become schedulable jobs.
  * <p>
- * 为什么任务方法和"执行器开关"分开：任务类（如 OrderJobs）始终是普通 Bean，测试里直接调用；
- * 只有执行器（内嵌 HTTP 服务 + 向调度中心注册）受开关控制。测试不需要起调度中心。
+ * Why job methods are separate from the executor switch: job classes (e.g. OrderJobs) are always plain Beans that tests call directly;
+ * only the executor (embedded HTTP server + registration with the admin) is behind the switch. Tests don't need a running admin.
  */
 @Slf4j
 @AutoConfiguration

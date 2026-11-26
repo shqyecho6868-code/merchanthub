@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 支付成功 → 订单状态 CAS + 状态流水（B3）。直接调用消费处理方法，覆盖各种"重复 / 迟到 / 并发"的支付成功事件。
+ * Payment succeeded -> order status CAS + status log (B3). Calls the consumer handler directly, covering "duplicate / late / concurrent" payment-success events.
  */
 @SpringBootTest(properties = "merchanthub.order.event-mode=OUTBOX")
 class OrderPaidIT extends OrderItSupport {
@@ -69,7 +69,7 @@ class OrderPaidIT extends OrderItSupport {
                 .containsEntry("from_status", 10).containsEntry("to_status", 20).containsEntry("operator_type", "SYSTEM");
     }
 
-    /** 同一事件重投（MQ at-least-once）：第三层消费去重挡住 */
+    /** The same event redelivered (MQ at-least-once): blocked by L3 consumer dedup */
     @Test
     void sameEventTwice_dedupedByConsumedEvent() {
         long orderNo = placeOrder();
@@ -80,31 +80,31 @@ class OrderPaidIT extends OrderItSupport {
         assertThat(logs(orderNo, "PAY_SUCCESS")).isEqualTo(1);
     }
 
-    /** 同一订单两张支付单都付成功（eventId 不同，去重挡不住）：第四层订单 CAS 挡住，订单只流转一次 */
+    /** Two payments for the same order both succeed (different eventIds, dedup can't stop it): blocked by the L4 order CAS, the order transitions only once */
     @Test
     void twoPaymentsForSameOrder_secondRejectedByCas() {
         long orderNo = placeOrder();
         assertThat(service.handle(paid(orderNo, 9900))).isTrue();
         assertThat(service.handle(paid(orderNo, 9900))).isFalse();
         assertThat(status(orderNo)).isEqualTo(20);
-        // 🔍 B3 审代码的 bug：流水曾在 CAS 判断之前插入，第二次失败的流转也会留下一条 PAY_SUCCESS
+        // 🔍 Bug from the B3 code review: the log used to be inserted before the CAS check, so the second, failed transition also left a PAY_SUCCESS entry
         assertThat(logs(orderNo, "PAY_SUCCESS")).isEqualTo(1);
     }
 
-    /** 已关闭的订单（如超时关单后钱才到）不能被支付事件"复活" */
+    /** A closed order (e.g. money arrives after timeout close) can't be "revived" by a payment event */
     @Test
     void closedOrder_notRevived() {
         long orderNo = placeOrder();
         jdbc.update("UPDATE orders SET status = 50 WHERE order_no = ?", orderNo);
         assertThat(service.handle(paid(orderNo, 9900))).isFalse();
         assertThat(status(orderNo)).isEqualTo(50);
-        // 不能出现"订单已关闭、流水却写着已支付"
+        // Must never have "order closed, but the log says paid"
         assertThat(logs(orderNo, "PAY_SUCCESS")).isZero();
     }
 
     /**
-     * 破坏性：8 个不同支付单的成功事件同时到达同一订单。
-     * 结论：CAS 只让一个成功。如果改成"先 SELECT 判断 status == 10 再 UPDATE"，8 个线程都会读到 10，都认为自己赢了。
+     * Destructive: success events from 8 different payments hit the same order at once.
+     * Conclusion: the CAS lets only one succeed. With "SELECT to check status == 10, then UPDATE", all 8 threads would read 10 and each think it won.
      */
     @Test
     void concurrentPayEvents_exactlyOneWins() throws Exception {
@@ -117,7 +117,7 @@ class OrderPaidIT extends OrderItSupport {
             PaySuccessEvent e = paid(orderNo, 9900);
             results.add(pool.submit(() -> {
                 start.await();
-                // 子线程没有测试线程的上下文：和真实消费者一样按消息的商家设置（C1）
+                // Worker threads lack the test thread's context: set it from the message's merchant, like the real consumer (C1)
                 return TenantContext.callAs(TenantInfo.systemOf(TENANT), () -> service.handle(e));
             }));
         }
@@ -132,7 +132,7 @@ class OrderPaidIT extends OrderItSupport {
         assertThat(logs(orderNo, "PAY_SUCCESS")).isEqualTo(1);
     }
 
-    /** 事件里的商家 / 金额和订单对不上：不流转 */
+    /** The event's merchant / amount doesn't match the order: no transition */
     @Test
     void tenantOrAmountMismatch_rejected() {
         long orderNo = placeOrder();
@@ -143,7 +143,7 @@ class OrderPaidIT extends OrderItSupport {
         assertThat(status(orderNo)).isEqualTo(10);
     }
 
-    /** MANDATORY：脱离事务调用直接报错，防止有人绕过事务导致"状态改了流水没写" */
+    /** MANDATORY: calling outside a transaction fails immediately, preventing anyone from bypassing the transaction and leaving "status changed, log not written" */
     @Test
     void transitWithoutTransaction_rejected() {
         long orderNo = placeOrder();

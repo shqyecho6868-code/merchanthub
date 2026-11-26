@@ -11,8 +11,8 @@ import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequ
 import java.time.Duration;
 
 /**
- * S3 实现。签名用的是 ECS task role 的临时凭证（SDK 默认凭证链自动从容器元数据端点取），
- * 所以 URL 的有效期还受临时凭证剩余时间限制 —— 这里只签 10 分钟，远小于凭证的小时级有效期。
+ * S3 implementation. Signing uses the ECS task role's temporary credentials (the SDK default credential chain fetches them from the container metadata endpoint),
+ * so URL validity is also bounded by the credentials' remaining lifetime — we sign for only 10 minutes, far below the credentials' hour-scale validity.
  */
 public class S3ImageStorage implements ImageStorage {
 
@@ -30,7 +30,7 @@ public class S3ImageStorage implements ImageStorage {
 
     @Override
     public PresignedUpload presignUpload(String objectKey, String contentType, Duration ttl) {
-        // 预签名是纯本地计算（HMAC），不发网络请求
+        // Presigning is purely local computation (HMAC), no network request
         PresignedPutObjectRequest req = presigner.presignPutObject(b -> b
                 .signatureDuration(ttl)
                 .putObjectRequest(PutObjectRequest.builder().bucket(bucket).key(objectKey).contentType(contentType).build()));
@@ -45,7 +45,7 @@ public class S3ImageStorage implements ImageStorage {
         } catch (NoSuchKeyException e) {
             return false;
         } catch (S3Exception e) {
-            // HeadObject 没有响应体，对象不存在时 SDK 有时只给 404 的 S3Exception 而不是 NoSuchKeyException
+            // HeadObject has no response body; for a missing object the SDK sometimes only gives a 404 S3Exception instead of NoSuchKeyException
             if (e.statusCode() == 404) {
                 return false;
             }

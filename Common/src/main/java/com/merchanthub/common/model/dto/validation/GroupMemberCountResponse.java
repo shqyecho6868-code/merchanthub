@@ -6,10 +6,10 @@ import java.io.Serializable;
 import lombok.Data;
 
 /**
- * 群成员数量响应
+ * Group member count response
  *
- * 供内部校验接口返回群成员数量信息
- * 供 UserService 等服务共用
+ * Returned by the internal validation API with the group's member count
+ * Shared by UserService and other services
  */
 @Data
 public class GroupMemberCountResponse implements Serializable {
@@ -18,21 +18,21 @@ public class GroupMemberCountResponse implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 会话 ID（群聊 ID）
+     * Session ID (group chat ID)
      */
     private Long sessionId;
 
     /**
-     * 群成员数量
+     * Number of group members
      */
     private Integer memberCount;
 
     /**
-     * 创建响应对象
+     * Create a response
      *
-     * @param sessionId   会话 ID
-     * @param memberCount 成员数量
-     * @return 响应对象
+     * @param sessionId   session ID
+     * @param memberCount member count
+     * @return the response
      */
     public static GroupMemberCountResponse of(Long sessionId, Integer memberCount) {
         GroupMemberCountResponse response = new GroupMemberCountResponse();

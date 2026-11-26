@@ -4,80 +4,80 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 消息校验错误枚举
+ * Message validation error enum
  *
- * 统一管理所有校验相关的错误码和错误消息
- * 合并了原 ValidationErrorCode、ValidationErrorMessage、ValidationRejectReason 的功能
+ * Single place for all validation error codes and messages
+ * Merges the former ValidationErrorCode, ValidationErrorMessage and ValidationRejectReason
  *
- * 使用方式：
- * - 获取错误码：ValidationError.NOT_FRIEND.getCode() → 91002
- * - 获取消息：ValidationError.NOT_FRIEND.getMessage() → "对方不是您的好友"
- * - 获取标识符：ValidationError.NOT_FRIEND.name() → "NOT_FRIEND"
- * - 根据错误码查找：ValidationError.fromCode(91002) → NOT_FRIEND
- * - 根据名称查找：ValidationError.fromName("NOT_FRIEND") → NOT_FRIEND
+ * Usage:
+ * - Error code: ValidationError.NOT_FRIEND.getCode() → 91002
+ * - Message: ValidationError.NOT_FRIEND.getMessage() → "The recipient is not your friend"
+ * - Identifier: ValidationError.NOT_FRIEND.name() → "NOT_FRIEND"
+ * - Look up by code: ValidationError.fromCode(91002) → NOT_FRIEND
+ * - Look up by name: ValidationError.fromName("NOT_FRIEND") → NOT_FRIEND
  */
 public enum ValidationError {
 
-    // ===================== 消息校验错误码（91000-91099）=====================
+    // ===================== Message validation error codes (91000-91099) =====================
 
     /**
-     * 消息校验失败（通用）
+     * Message validation failed (generic)
      */
     VALIDATION_FAILED(91001, "消息校验失败"),
 
     /**
-     * 对方不是您的好友
+     * The recipient is not your friend
      */
     NOT_FRIEND(91002, "对方不是您的好友"),
 
     /**
-     * 您已被对方拉黑
+     * You have been blocked by the recipient
      */
     BLOCKED_BY_RECEIVER(91003, "您已被对方拉黑"),
 
     /**
-     * 好友关系已删除
+     * The friendship has been deleted
      */
     FRIEND_DELETED(91004, "好友关系已删除"),
 
     /**
-     * 您不是该群成员
+     * You are not a member of this group
      */
     NOT_GROUP_MEMBER(91005, "您不是该群成员"),
 
     /**
-     * 发送者账号异常
+     * Sender account is disabled
      */
     SENDER_DISABLED(91006, "发送者账号异常"),
 
     /**
-     * 接收者账号异常
+     * Receiver account is disabled
      */
     RECEIVER_DISABLED(91007, "接收者账号异常"),
 
     /**
-     * 服务暂时不可用
+     * Service temporarily unavailable
      */
     SERVICE_UNAVAILABLE(91008, "服务暂时不可用，请稍后重试");
 
 
     /**
-     * 错误码
+     * Error code
      */
     private final int code;
 
     /**
-     * 用户友好的错误消息
+     * User-facing error message
      */
     private final String message;
 
     /**
-     * 错误码到枚举的映射缓存，避免每次 fromCode 都遍历
+     * Code-to-enum lookup cache, so fromCode doesn't scan every time
      */
     private static final Map<Integer, ValidationError> CODE_MAP;
 
     /**
-     * 名称到枚举的映射缓存
+     * Name-to-enum lookup cache
      */
     private static final Map<String, ValidationError> NAME_MAP;
 
@@ -104,20 +104,20 @@ public enum ValidationError {
     }
 
     /**
-     * 根据错误码查找枚举
+     * Look up the enum by error code
      *
-     * @param code 错误码
-     * @return 对应的枚举，找不到时返回 VALIDATION_FAILED
+     * @param code error code
+     * @return the matching enum, or VALIDATION_FAILED if not found
      */
     public static ValidationError fromCode(int code) {
         return CODE_MAP.getOrDefault(code, VALIDATION_FAILED);
     }
 
     /**
-     * 根据名称查找枚举（用于替代 ValidationRejectReason）
+     * Look up the enum by name (replaces ValidationRejectReason)
      *
-     * @param name 枚举名称（如 "NOT_FRIEND"）
-     * @return 对应的枚举，找不到时返回 VALIDATION_FAILED
+     * @param name enum name (e.g. "NOT_FRIEND")
+     * @return the matching enum, or VALIDATION_FAILED if not found
      */
     public static ValidationError fromName(String name) {
         if (name == null) {

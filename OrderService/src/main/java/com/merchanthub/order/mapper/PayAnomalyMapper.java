@@ -12,11 +12,11 @@ import java.util.List;
 @Mapper
 public interface PayAnomalyMapper extends BaseMapper<PayAnomaly> {
 
-    /** E3：待处理的支付异常（走索引 (handle_status, created_at)） */
+    /** E3: pending payment anomalies (using index (handle_status, created_at)) */
     @Select("SELECT * FROM pay_anomaly WHERE handle_status = 0 AND deleted = 0 ORDER BY created_at LIMIT #{limit}")
     List<PayAnomaly> selectPending(@Param("limit") int limit);
 
-    /** 0 → 2（已标记待退款并告警）。带旧状态条件：两个实例同时处理同一条，只有一个会成功 */
+    /** 0 -> 2 (marked pending refund and alerted). Conditioned on the old status: if two instances process the same row, only one succeeds */
     @Update("UPDATE pay_anomaly SET handle_status = 2 WHERE id = #{id} AND handle_status = 0")
     int markRefundPending(@Param("id") long id);
 }

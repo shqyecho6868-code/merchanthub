@@ -16,20 +16,20 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 商品主图上传（G-上）。两步：
+ * Product main image upload (G-上). Two steps:
  * <ol>
- *   <li>申请：服务按 {@code products/{tenantId}/{productId}/{uuid}.ext} 生成 key 并签 PUT URL，客户端直传 S3</li>
- *   <li>确认：客户端传回 key，服务校验"key 属于这个商家的这个商品 + 对象确实存在"后写进 product.main_image</li>
+ *   <li>Request: the service generates a key as {@code products/{tenantId}/{productId}/{uuid}.ext} and signs a PUT URL; the client uploads directly to S3</li>
+ *   <li>Confirm: the client passes the key back; the service checks "the key belongs to this merchant's product + the object really exists" and then writes it to product.main_image</li>
  * </ol>
- * key 由服务端生成、确认时再校验前缀：防止商家 A 把商家 B 的图片 key（或随便编的 key）挂到自己商品上。
- * 商品查询走租户插件，跨租户的 productId 直接"不存在"。
+ * The key is generated server-side and its prefix re-checked on confirm: prevents merchant A from attaching merchant B's image key (or a made-up key) to its own product.
+ * Product lookups go through the tenant plugin, so a cross-tenant productId is simply "not found".
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductImageService {
 
-    /** 只允许常见图片类型；扩展名由类型决定，不信任客户端给的文件名 */
+    /** Only common image types are allowed; the extension is derived from the type, never from the client-supplied filename */
     static final Map<String, String> ALLOWED_TYPES = Map.of(
             "image/jpeg", "jpg",
             "image/png", "png",
@@ -59,7 +59,7 @@ public class ProductImageService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片还没有上传成功");
         }
         String url = imageStorage.publicUrl(objectKey);
-        // 更新同样经过租户插件拼 tenant_id，双保险
+        // The update also goes through the tenant plugin which appends tenant_id — belt and braces
         int rows = productMapper.update(null, new LambdaUpdateWrapper<Product>()
                 .eq(Product::getId, productId).set(Product::getMainImage, url));
         if (rows != 1) {

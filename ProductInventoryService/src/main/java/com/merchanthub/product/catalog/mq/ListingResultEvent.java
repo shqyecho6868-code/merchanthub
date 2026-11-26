@@ -1,7 +1,7 @@
 package com.merchanthub.product.catalog.mq;
 
 /**
- * 上架审批结果事件（user-tenant 发，product 收）。各服务各持一份消息契约，同 OrderSettledEvent 的做法。
+ * Listing approval result event (sent by user-tenant, received by product). Each service keeps its own copy of the message contract, same as OrderSettledEvent.
  *
  * @param result APPROVED / REJECTED
  */

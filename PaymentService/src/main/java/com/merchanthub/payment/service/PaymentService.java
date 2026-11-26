@@ -34,7 +34,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PaymentService {
 
-    /** 回调处理结果。除 PAID 外，其余对渠道都回"成功"：告诉渠道"这条通知我收到了，别再重试" */
+    /** Callback processing result. Everything except PAID still replies "success" to the channel: telling it "got this notification, stop retrying" */
     public enum CallbackOutcome { PAID, DUPLICATE, IGNORED }
 
     private final PaymentMapper paymentMapper;
@@ -46,10 +46,10 @@ public class PaymentService {
     private final Clock clock;
     private final ReconAlarm reconAlarm;
 
-    /** 建支付单：每次"去支付"都建一条新的（订单与支付单一对多），金额以订单为准，不信任客户端 */
+    /** Create a payment: every "go pay" creates a new one (order-to-payment is one-to-many); the amount comes from the order, never trust the client */
     public PaymentVO create(long buyerId, long orderNo) {
         OrderBrief order = queryOrder(orderNo);
-        // 不是自己的订单也报"不存在"：不告诉对方这个订单号是有效的（防越权探测）
+        // Report "not found" even for someone else's order: don't reveal that the order number is valid (prevents enumeration of other users' orders)
         if (order == null || !Objects.equals(order.getBuyerId(), buyerId)) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "订单不存在");
         }
@@ -70,12 +70,12 @@ public class PaymentService {
     }
 
     /**
-     * 处理渠道的"支付成功"通知。同一笔支付可能通知多次（渠道没收到我们的响应就会重试），挡重复分两层：
+     * Handle the channel's "payment succeeded" notification. The same payment may be notified multiple times (the channel retries if it doesn't get our response); duplicates are stopped in two layers:
      * <ol>
-     *   <li>快速路径：读到支付单已成功 → 直接回成功，连 MQ 都不碰（先后到达的重复通知在这里挡住）</li>
-     *   <li>CAS：{@code WHERE status = 0} 的条件更新（同时到达的重复通知都读到"待支付"，在这里只有一个能赢）</li>
+     *   <li>Fast path: payment already succeeded → reply success right away without touching MQ (stops duplicates that arrive one after another)</li>
+     *   <li>CAS: a conditional update {@code WHERE status = 0} (duplicates arriving at the same time all read "pending"; only one can win here)</li>
      * </ol>
-     * 只有赢了 CAS 的那一次，事务消息才 COMMIT，产生唯一一条"支付成功"事件。
+     * Only the callback that wins the CAS gets its transactional message COMMITted, producing the single "payment succeeded" event.
      */
     public CallbackOutcome handleMockCallback(MockCallbackRequest req) {
         Payment p = paymentMapper.selectByPayNo(req.payNo());
@@ -91,7 +91,7 @@ public class PaymentService {
     }
 
     private CallbackOutcome doHandle(Payment p, MockCallbackRequest req) {
-        // 金额必须和支付单一致：防止"付 1 分钱回调成功、订单却按全额标成已支付"
+        // The amount must match the payment: prevents "pay 1 cent, callback succeeds, and the order gets marked paid for the full amount"
         if (!Objects.equals(p.getAmount(), req.amount())) {
             log.error("回调金额不符，拒绝 payNo={} orderNo={} 支付单金额={} 回调金额={}", p.getPayNo(), p.getOrderNo(), p.getAmount(), req.amount());
             throw new BusinessException(ErrorCode.PAY_AMOUNT_MISMATCH);
@@ -101,15 +101,15 @@ public class PaymentService {
                 log.info("【幂等·第一层 快速路径】重复回调：支付单已是成功，直接返回成功，不再发事件 payNo={} orderNo={} channelTradeNo={}",
                         p.getPayNo(), p.getOrderNo(), req.channelTradeNo());
             } else {
-                // 同一张支付单出现两个不同的渠道流水号：渠道侧异常或伪造通知，交给对账人工看
+                // Two different channel transaction numbers on the same payment: a channel-side anomaly or a forged notification — leave it to reconciliation / manual review
                 log.error("支付单已成功，但回调带了不同的渠道流水号，需对账 payNo={} 已记录={} 本次={}",
                         p.getPayNo(), p.getChannelTradeNo(), req.channelTradeNo());
             }
             return CallbackOutcome.DUPLICATE;
         }
         if (p.getStatus() != PaymentStatus.PENDING.getCode()) {
-            // 支付单已关闭 / 失败后钱又到了（例：对账刚关掉遗留支付单，买家还在旧页面付了款）：钱收了货不发，待退款（退款不做）。
-            // E3：记异常表 + 告警，转人工
+            // Money arrives after the payment is closed / failed (e.g. recon just closed a stale payment while the buyer paid on the old page): money collected but no goods shipped, pending refund (refunds out of scope).
+            // E3: record in the anomaly table + alert, escalate to manual handling
             reconAlarm.raise(p.getTenantId(), ReconAlarm.PAID_AFTER_CLOSED, "payNo:" + p.getPayNo(),
                     "支付单状态 " + p.getStatus() + " 时收到支付成功回调，待退款 orderNo=" + p.getOrderNo()
                             + " amount=" + p.getAmount() + " channelTradeNo=" + req.channelTradeNo());
@@ -119,12 +119,12 @@ public class PaymentService {
         LocalDateTime paidAt = LocalDateTime.now(clock);
         PaySuccessEvent event = new PaySuccessEvent(p.getPayNo(), p.getPayNo(), p.getOrderNo(), p.getTenantId(),
                 p.getBuyerId(), p.getAmount(), req.channelTradeNo(), paidAt);
-        // 每次回调一个尝试 ID：CAS 赢了就记到支付单上，事务回查据此只提交赢家的那条半消息
+        // One attempt ID per callback: if the CAS wins it's recorded on the payment, and the tx check-back uses it to commit only the winner's half message
         String attempt = UUID.randomUUID().toString();
         CasTx tx = new CasTx(() -> Boolean.TRUE.equals(txTemplate.execute(s ->
                 paymentMapper.markSuccess(p.getPayNo(), req.channelTradeNo(), paidAt, attempt) == 1)));
         try {
-            // 半消息发不出去（MQ 不可用）会在这里抛异常：支付单保持待支付，回调返回失败，渠道稍后重试 —— 不会"钱收了事件丢了"
+            // If the half message can't be sent (MQ unavailable) it throws here: the payment stays pending, the callback returns failure, and the channel retries later — never "money collected but event lost"
             producer.sendMessageInTransaction(codec.toMessage(event, attempt), tx);
         } catch (MQClientException e) {
             log.warn("支付成功事件发送失败，支付单保持待支付，等渠道重试 payNo={}", p.getPayNo(), e);
@@ -147,7 +147,7 @@ public class PaymentService {
         return CallbackOutcome.PAID;
     }
 
-    /** 超时 / 连不上 / 熔断中 → DOWNSTREAM_UNAVAILABLE（降级）；订单不存在等业务失败原样透传（E3 起经 Sentinel 熔断） */
+    /** Timeout / connection failure / circuit open → DOWNSTREAM_UNAVAILABLE (degraded); business failures such as order not found are passed through as-is (via the Sentinel circuit breaker since E3) */
     private OrderBrief queryOrder(long orderNo) {
         return OrderRemote.call(OrderClient.RES_GET_ORDER, () -> orderClient.getOrder(orderNo));
     }

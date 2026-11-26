@@ -18,15 +18,15 @@ public interface InventoryReservationMapper extends BaseMapper<InventoryReservat
     }
 
     /**
-     * 预占记录 CAS：只有当前还是 from（RESERVED）才能改成 to。重复的释放 / 确认、释放与确认并发，
-     * 都在这里只有一个能拿到"影响 1 行"，拿到的才去动库存 —— 这条记录本身就是库存侧的幂等闸门。
+     * Reservation record CAS: can change to `to` only if it's currently `from` (RESERVED). Duplicate releases / confirms, or a release racing a confirm,
+     * all get exactly one "1 row affected" here, and only that one touches stock — this record itself is the inventory side's idempotency gate.
      */
     @Update("UPDATE inventory_reservation SET status = #{to} WHERE id = #{id} AND status = #{from} AND deleted = 0")
     int casStatus(@Param("id") long id, @Param("from") int from, @Param("to") int to);
 
     /**
-     * 悬空预占候选：预占了 olderThanSeconds 秒以上仍是 RESERVED 的订单（走 idx_status_created）。
-     * 用数据库的 NOW(3) 算时间：created_at 由数据库默认值写入，用同一个时钟比较不受应用机器时钟偏差影响
+     * Dangling-reservation candidates: orders whose reservations are still RESERVED after olderThanSeconds (uses idx_status_created).
+     * Time is computed with the database's NOW(3): created_at is written by a database default, so comparing on the same clock is unaffected by app machine clock skew
      */
     @Select("SELECT DISTINCT order_no AS orderNo, tenant_id AS tenantId FROM inventory_reservation "
             + "WHERE status = 10 AND deleted = 0 AND created_at < NOW(3) - INTERVAL #{olderThanSeconds} SECOND "

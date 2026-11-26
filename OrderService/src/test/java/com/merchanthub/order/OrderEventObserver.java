@@ -16,8 +16,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 测试里的"旁观者"消费者：用一个随机的独立消费组订阅 ORDER_EVENT，把收到的消息按订单号记下来，
- * 用来断言"消费者到底能不能看到这条消息"。它不做幂等，所以重复投递也会如实记录。
+ * An "observer" consumer for tests: subscribes to ORDER_EVENT with a random separate consumer group and records received messages by order number,
+ * used to assert "can a consumer actually see this message". It isn't idempotent, so redeliveries are recorded faithfully.
  */
 final class OrderEventObserver implements AutoCloseable {
 
@@ -28,7 +28,7 @@ final class OrderEventObserver implements AutoCloseable {
         consumer = new DefaultMQPushConsumer("it-observer-" + UUID.randomUUID().toString().substring(0, 8));
         consumer.setNamesrvAddr(SharedContainers.rocketmq().getNamesrvAddr());
         consumer.setVipChannelEnabled(false);
-        // 新消费组从头读：避免"消费者还没完成负载均衡，消息已经发了"导致漏收
+        // A new consumer group reads from the beginning: avoids missing messages sent "before the consumer finished rebalancing"
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
         consumer.subscribe(OrderEventTopics.TOPIC, "*");
         consumer.registerMessageListener((MessageListenerConcurrently) (msgs, ctx) -> {

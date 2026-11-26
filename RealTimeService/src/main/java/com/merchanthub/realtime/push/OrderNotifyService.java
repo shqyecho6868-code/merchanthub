@@ -14,13 +14,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 订单事件 → 要推的消息（E1，"商家新订单通知"演示消费者从 order 迁来后的样子）。
+ * Order event -> messages to push (E1; shows what the "merchant new-order notice" demo consumer looks like after moving here from order).
  * <ul>
- *   <li>ORDER_CREATED → 写商家通知（merchant_order_notice）+ 推给商家：新订单提醒</li>
- *   <li>ORDER_PAID / ORDER_CLOSED → 推给买家：订单状态变化</li>
+ *   <li>ORDER_CREATED -> write a merchant notice (merchant_order_notice) + push to the merchant: new-order alert</li>
+ *   <li>ORDER_PAID / ORDER_CLOSED -> push to the buyer: order status change</li>
  * </ul>
- * 去重记录和通知在同一个本地事务里（同 B2 的消费端幂等）；事务提交后才分发推送（由调用方做），
- * 重复事件返回空列表 —— 不会重复写通知，也不会重复推。
+ * The dedup record and the notice are in the same local transaction (same consumer idempotency as B2); pushes are dispatched only after commit (by the caller),
+ * and duplicate events return an empty list -- no duplicate notices, no duplicate pushes.
  */
 @Slf4j
 @Service
@@ -29,7 +29,7 @@ public class OrderNotifyService {
 
     private final JdbcTemplate jdbc;
 
-    /** @return 需要推送的消息；重复事件或无需推送时为空 */
+    /** @return messages to push; empty for duplicate events or when nothing needs pushing */
     @Transactional(rollbackFor = Exception.class)
     public List<PushMessage> record(String tag, JsonNode e) {
         long eventId = e.path("eventId").asLong();
@@ -58,7 +58,7 @@ public class OrderNotifyService {
             case PushTopics.TAG_ORDER_PAID, PushTopics.TAG_ORDER_CLOSED -> {
                 JsonNode buyer = e.path("buyerId");
                 if (buyer.isMissingNode() || buyer.isNull()) {
-                    // E1 之前发出的老事件没有 buyerId：不知道推给谁，跳过（状态以订单查询为准）
+                    // Old events sent before E1 have no buyerId: we don't know whom to push to, so skip (order queries are the source of truth for status)
                     log.info("订单事件没有 buyerId，不推送 tag={} orderNo={}", tag, orderNo);
                     return List.of();
                 }

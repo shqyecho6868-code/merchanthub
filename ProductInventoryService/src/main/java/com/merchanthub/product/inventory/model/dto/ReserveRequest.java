@@ -12,8 +12,8 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 预占请求：一个订单要占的所有 SKU，一次调用、一个本地事务，全占或全不占。
- * orderNo 是幂等键：同一个 orderNo 重复请求（Feign 重试等）只生效一次。
+ * Reservation request: all SKUs an order needs, in one call and one local transaction — all reserved or none.
+ * orderNo is the idempotency key: repeated requests with the same orderNo (Feign retries, etc.) take effect only once.
  */
 @Data
 @NoArgsConstructor

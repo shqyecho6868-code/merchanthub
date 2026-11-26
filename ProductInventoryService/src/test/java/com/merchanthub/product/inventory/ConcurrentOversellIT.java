@@ -18,21 +18,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * B1 核心并发测试：100 个买家同时抢库存为 10 的 SKU，每人买 1 件，各自不同的订单号。
+ * B1 core concurrency test: 100 buyers race for a SKU with stock 10, each buying 1 unit with a distinct order number.
  * <p>
- * 期望：恰好 10 单成功、90 单“库存不足”；available = 0，reserved = 10，预占记录 10 条。
- * 防住超卖的是 InventoryMapper.tryReserve 里的条件更新 {@code WHERE ... AND available >= #{qty}}：
- * 同一行上的 UPDATE 由 InnoDB 行锁串行化，每个请求判断的都是前一个提交后的最新 available。
+ * Expected: exactly 10 orders succeed, 90 get "insufficient stock"; available = 0, reserved = 10, 10 reservation records.
+ * What prevents overselling is the conditional update in InventoryMapper.tryReserve {@code WHERE ... AND available >= #{qty}}:
+ * UPDATEs on the same row are serialized by InnoDB row locks, so each request evaluates the latest available committed by the previous one.
  * <p>
- * 破坏性实验（B1，2026-11-18）：去掉 {@code AND available >= #{qty}} 后再跑本测试 →
- * 成功 100 单、库存不足 0 单，available = -90，reserved = 100，预占记录 100 条，超卖 90 件。
- * 结论：
- * 1. 防超卖靠的是 WHERE 里的条件：它让“判断够不够”和“扣减”在同一条语句里原子完成；
- * 2. 即使去掉条件，available 也恰好是 -90 而不是更乱的数：行锁仍让 100 次扣减串行执行，一次都没丢（没有丢失更新）。
- *    行锁保证“扣得准”，条件保证“扣到 0 就停”，两者缺一不可；
- * 3. 反面对照：如果写成“先 SELECT available，在 Java 里判断，再 UPDATE SET available = 新值”，
- *    两个请求可能读到同一个旧值，既会超卖也会丢失更新——这就是为什么判断必须放进 UPDATE 的 WHERE 里。
- * 恢复后本测试即为回归测试：任何人删掉这个条件，CI 会变红。
+ * Destructive experiment (B1, 2026-11-18): remove {@code AND available >= #{qty}} and rerun this test →
+ * 100 orders succeed, 0 insufficient, available = -90, reserved = 100, 100 reservation records — oversold by 90 units.
+ * Conclusions:
+ * 1. Oversell prevention relies on the WHERE condition: it makes "check whether there's enough" and "deduct" happen atomically in one statement;
+ * 2. Even without the condition, available is exactly -90 rather than something messier: row locks still serialize the 100 deductions and none is lost (no lost updates).
+ *    Row locks make the deduction "accurate", the condition makes it "stop at 0" — both are required;
+ * 3. Counter-example: written as "SELECT available first, check in Java, then UPDATE SET available = new value",
+ *    two requests may read the same old value, causing both overselling and lost updates — which is why the check must live in the UPDATE's WHERE.
+ * Restored, this test serves as a regression test: if anyone removes the condition, CI goes red.
  */
 @SpringBootTest
 class ConcurrentOversellIT extends ProductItSupport {
@@ -78,7 +78,7 @@ class ConcurrentOversellIT extends ProductItSupport {
         Map<String, Object> row = jdbc.queryForMap("SELECT available, reserved FROM inventory WHERE sku_id = ?", SKU);
         long records = jdbc.queryForObject("SELECT COUNT(*) FROM inventory_reservation", Long.class);
 
-        // 打印给人看：🧑 亲手跑时观察这一行
+        // Printed for humans: watch this line during the 🧑 hands-on run
         System.out.printf("%n===== 并发下单结果：成功 %d 单，库存不足 %d 单，其他异常 %d 个；available=%s，reserved=%s，预占记录 %d 条 =====%n%n",
                 success.get(), insufficient.get(), otherErrors.size(), row.get("available"), row.get("reserved"), records);
 

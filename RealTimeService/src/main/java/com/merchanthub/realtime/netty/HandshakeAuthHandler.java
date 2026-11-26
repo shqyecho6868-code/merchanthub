@@ -24,13 +24,13 @@ import java.util.List;
 import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 /**
- * WebSocket 握手前鉴权：token 来自请求头 Authorization（可带 Bearer 前缀），或查询参数 ?token=（浏览器的 WebSocket API 不能自定义请求头）。
+ * Authentication before the WebSocket handshake: the token comes from the Authorization header (optional Bearer prefix) or the ?token= query param (the browser WebSocket API can't set custom headers).
  * <ol>
- *   <li>JWT 签名、过期校验（和网关同一个密钥）</li>
- *   <li>和 Redis 里 user-tenant 登录时存的 token 比对：重新登录 / 登出后旧 token 立刻失效（沿用原 IM 的做法）</li>
- *   <li>按身份决定接收方：商家员工 → merchant:{tenantId}（同店员工共享商家通知）；买家 → buyer:{userId}</li>
+ *   <li>JWT signature and expiry check (same secret as the gateway)</li>
+ *   <li>Compare with the token user-tenant stored in Redis at login: after re-login / logout the old token is invalid immediately (same approach as the original IM)</li>
+ *   <li>Receiver is derived from identity: merchant staff -> merchant:{tenantId} (staff of one shop share merchant notices); buyer -> buyer:{userId}</li>
  * </ol>
- * 通过后把接收方挂在连接上，交给 WebSocket 协议处理器完成握手；不通过回 401 并关闭。
+ * On success the receiver is attached to the channel and the WebSocket protocol handler completes the handshake; on failure respond 401 and close.
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -56,9 +56,9 @@ public class HandshakeAuthHandler extends ChannelInboundHandlerAdapter {
             return;
         }
         ctx.channel().attr(ChannelRegistry.RECEIVER).set(receiver);
-        // 协议处理器按路径精确匹配，去掉查询参数（里面有 token，也不该继续往后传）
+        // The protocol handler matches the path exactly, so strip the query params (they contain the token, which shouldn't travel further anyway)
         req.setUri(uri.path());
-        ctx.pipeline().remove(this);   // 鉴权只做一次
+        ctx.pipeline().remove(this);   // authenticate only once
         ctx.fireChannelRead(req);
     }
 
@@ -92,6 +92,6 @@ public class HandshakeAuthHandler extends ChannelInboundHandlerAdapter {
         if (role == Role.BUYER) {
             return PushMessage.buyer(Long.parseLong(userId));
         }
-        return null;   // 平台管理员等没有订单推送
+        return null;   // platform admins and the like get no order pushes
     }
 }

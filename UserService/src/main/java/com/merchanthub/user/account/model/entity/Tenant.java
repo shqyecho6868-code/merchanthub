@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 租户 / 商家（表 tenant） */
+/** Tenant / merchant (table tenant) */
 @Data
 @TableName("tenant")
 public class Tenant {

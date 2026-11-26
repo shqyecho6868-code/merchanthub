@@ -8,7 +8,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 支付单（表 payment）。订单与支付单分离：一个订单可以有多次支付尝试 */
+/** Payment (table payment). Orders and payments are separate: one order can have multiple payment attempts */
 @Data
 @TableName("payment")
 public class Payment {
@@ -19,16 +19,16 @@ public class Payment {
     private Long payNo;
     private Long orderNo;
     private Long buyerId;
-    /** 分 */
+    /** In cents */
     private Long amount;
     private String channel;
-    /** 见 PaymentStatus */
+    /** See PaymentStatus */
     private Integer status;
     private String channelTradeNo;
     private LocalDateTime paidAt;
-    /** 赢得成功 CAS 的那次回调的尝试 ID（事务回查用） */
+    /** Attempt ID of the callback that won the success CAS (used by the transaction check-back) */
     private String successAttempt;
-    /** E3：0 未核对 / 1 已一致 / 3 补发耗尽已告警 */
+    /** E3: 0 not reconciled / 1 consistent / 3 re-sends exhausted, alerted */
     private Integer reconStatus;
     private Integer reconRetry;
 

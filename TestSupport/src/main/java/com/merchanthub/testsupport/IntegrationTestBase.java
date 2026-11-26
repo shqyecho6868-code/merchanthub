@@ -4,12 +4,12 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Spring Boot 集成测试基类：把共享容器的地址注入成 Spring 配置。
+ * Base class for Spring Boot integration tests: injects the shared containers' addresses as Spring properties.
  * <p>
- * 用法：{@code @SpringBootTest class XxxIT extends IntegrationTestBase}
+ * Usage: {@code @SpringBootTest class XxxIT extends IntegrationTestBase}
  * <p>
- * 这里注册的都是 Supplier，Spring 真正读取某个属性时才会调用，进而触发对应容器启动。
- * 所以服务里没有 Redis 依赖时，spring.data.redis.* 不会被读取，Redis 容器也不会启动。
+ * Everything registered here is a Supplier, invoked only when Spring actually reads that property, which in turn starts the matching container.
+ * So when a service has no Redis dependency, spring.data.redis.* is never read and the Redis container never starts.
  */
 public abstract class IntegrationTestBase {
 
@@ -24,16 +24,16 @@ public abstract class IntegrationTestBase {
         registry.add("spring.data.redis.port", () -> SharedContainers.redis().getMappedPort(6379));
         registry.add("spring.data.redis.password", () -> "");
 
-        // 读到这个属性时才会启动 RocketMQ 容器；不用 MQ 的服务不受影响
+        // The RocketMQ container starts only when this property is read; services that don't use MQ are unaffected
         registry.add("merchanthub.rocketmq.namesrv-addr", () -> SharedContainers.rocketmq().getNamesrvAddr());
 
-        // 测试不连 Nacos：只测本服务，跨服务调用用 Mock 或 WireMock 替代
+        // Tests don't connect to Nacos: only this service is tested; cross-service calls are replaced with Mock or WireMock
         registry.add("spring.cloud.nacos.discovery.enabled", () -> "false");
         registry.add("spring.cloud.service-registry.auto-registration.enabled", () -> "false");
 
-        // E3：测试不注册 XXL-Job 执行器（不起调度中心，任务方法由测试直接调用）。
-        // 必须放在这里而不是 test 的 application.properties：测试也激活 dev profile，
-        // application-dev.yml 里的 enabled=true 优先级高于非 profile 的配置文件，会把它盖掉
+        // E3: tests don't register an XXL-Job executor (no admin server; job methods are called directly by tests).
+        // It must live here rather than in the test application.properties: tests also activate the dev profile,
+        // and enabled=true in application-dev.yml takes precedence over non-profile config files and would override it
         registry.add("merchanthub.job.xxl.enabled", () -> "false");
     }
 }

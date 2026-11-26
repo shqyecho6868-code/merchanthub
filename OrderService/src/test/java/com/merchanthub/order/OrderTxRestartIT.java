@@ -20,14 +20,14 @@ import java.time.LocalDateTime;
 import static org.awaitility.Awaitility.await;
 
 /**
- * 🧑 kill 实验的自动化版本："旧进程提交本地事务后挂掉，新进程重启后接住回查"。
+ * Automated version of the 🧑 kill experiment: "the old process dies after committing the local transaction, and the restarted process picks up the check-back".
  * <p>
- * 构造：用一个裸的 TransactionMQProducer 扮演"即将被 kill 的旧进程"——本地事务写订单后返回 UNKNOW，
- * 然后立刻 shutdown（相当于进程没了）。Spring 上下文里的生产者扮演"重启后的新进程"：同一个生产者组，
- * 而且<b>一条消息都没发过</b>。
+ * Setup: a bare TransactionMQProducer plays "the old process about to be killed" -- after the local transaction writes the order it returns UNKNOW,
+ * then shuts down immediately (as if the process were gone). The producer in the Spring context plays "the restarted process": same producer group,
+ * and it has <b>never sent a single message</b>.
  * <p>
- * 结论：新进程必须能接住回查并 COMMIT。B2 手动实验里这一步失败过 —— 生产者没发过消息就不会给 Broker 发心跳，
- * Broker 回查报 "channel is null"，半消息回查满 15 次后被丢弃（pitfalls P18）。修复：启动时预取 Topic 路由。
+ * Conclusion: the new process must pick up the check-back and COMMIT. This step failed in the B2 manual experiment -- a producer that has never sent doesn't heartbeat to the broker,
+ * so check-back fails with "channel is null" and the half message is discarded after 15 check-backs (pitfalls P18). Fix: prefetch Topic routes at startup.
  */
 @SpringBootTest(properties = {
         "merchanthub.order.event-mode=TX_MESSAGE",
@@ -62,10 +62,10 @@ class OrderTxRestartIT extends OrderItSupport {
         dying.setTransactionListener(new TransactionListener() {
             @Override
             public LocalTransactionState executeLocalTransaction(Message msg, Object arg) {
-                // 本地事务提交：写订单
+                // Local transaction commits: write the order
                 jdbc.update("INSERT INTO orders (tenant_id, order_no, buyer_id, status, total_amount, pay_amount, expire_at)"
                         + " VALUES (?, ?, ?, 10, 100, 100, NOW(3))", TENANT, orderNo, BUYER);
-                return LocalTransactionState.UNKNOW;   // COMMIT 没来得及发出去
+                return LocalTransactionState.UNKNOW;   // COMMIT never got sent
             }
 
             @Override
@@ -76,9 +76,9 @@ class OrderTxRestartIT extends OrderItSupport {
         dying.start();
         dying.sendMessageInTransaction(codec.toMessage(
                 new OrderCreatedEvent(9_000_000_002L, orderNo, TENANT, BUYER, 100, LocalDateTime.now())), null);
-        dying.shutdown();   // 进程没了
+        dying.shutdown();   // the process is gone
 
-        // 新进程（Spring 上下文里的生产者，没发过任何消息）接住回查 → 查到订单 → COMMIT → 消费者收到
+        // The new process (the Spring context's producer, which has never sent anything) picks up the check-back -> finds the order -> COMMIT -> consumer receives it
         await().atMost(Duration.ofSeconds(60)).until(() -> !observer.received(orderNo).isEmpty());
     }
 }

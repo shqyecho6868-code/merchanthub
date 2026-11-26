@@ -18,8 +18,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * C1 集成测试：商品的租户隔离 + RBAC。走完整的 Spring MVC 链路（拦截器 → Controller → 租户插件 → 真实 MySQL）。
- * 场景：商家 7 有商品 P7 / SKU S7，商家 8 有商品 P8 / SKU S8。
+ * C1 integration test: product tenant isolation + RBAC. Goes through the full Spring MVC chain (interceptor → Controller → tenant plugin → real MySQL).
+ * Scenario: merchant 7 has product P7 / SKU S7, merchant 8 has product P8 / SKU S8.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -78,7 +78,7 @@ class ProductTenantIsolationIT extends ProductItSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.name").value("商家7的T恤"))
                 .andExpect(jsonPath("$.data.skus[0].skuId").value(s7));
-        // 拿商家 8 的商品 ID 来查：SQL 被拼上 tenant_id = 7，查不到
+        // Query with merchant 8's product ID: the SQL gets tenant_id = 7 appended, so nothing is found
         mvc.perform(as(get("/products/" + p8), 7L, 2001, "MERCHANT_STAFF"))
                 .andExpect(jsonPath("$.code").value(40400));
     }
@@ -89,7 +89,7 @@ class ProductTenantIsolationIT extends ProductItSupport {
                 .andExpect(jsonPath("$.data.tenantId").value(8));
     }
 
-    /** 员工调管理员接口 → 403，价格不变 */
+    /** Staff calling an admin API → 403, price unchanged */
     @Test
     void staffCannotChangePrice_403() throws Exception {
         mvc.perform(as(put("/skus/" + s7 + "/price"), 7L, 2002, "MERCHANT_STAFF")
@@ -111,7 +111,7 @@ class ProductTenantIsolationIT extends ProductItSupport {
                 .andExpect(status().isOk());
         assertThat(price(s7)).isEqualTo(8800);
 
-        // 改商家 8 的 SKU：UPDATE ... WHERE id = s8 AND tenant_id = 7 影响 0 行
+        // Changing merchant 8's SKU: UPDATE ... WHERE id = s8 AND tenant_id = 7 affects 0 rows
         mvc.perform(as(put("/skus/" + s8 + "/price"), 7L, 2001, "MERCHANT_ADMIN")
                         .contentType(MediaType.APPLICATION_JSON).content("{\"price\": 1}"))
                 .andExpect(jsonPath("$.code").value(40400));

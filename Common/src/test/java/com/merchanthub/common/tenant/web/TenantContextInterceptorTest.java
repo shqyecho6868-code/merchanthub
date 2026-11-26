@@ -38,7 +38,7 @@ class TenantContextInterceptorTest {
         interceptor.preHandle(r, resp, null);
         assertThat(TenantContext.get()).isEqualTo(new TenantInfo(7L, 2001L, Role.MERCHANT_STAFF));
 
-        // 业务抛了异常，afterCompletion 照样会被 DispatcherServlet 调用
+        // Business code threw, but DispatcherServlet still calls afterCompletion
         interceptor.afterCompletion(r, resp, null, new RuntimeException("业务失败"));
         assertThat(TenantContext.get()).isNull();
     }
@@ -72,7 +72,7 @@ class TenantContextInterceptorTest {
         interceptor.preHandle(a, resp, null);
         interceptor.afterCompletion(a, resp, null, null);
 
-        MockHttpServletRequest b = req(null, null, null);   // 没带身份的请求
+        MockHttpServletRequest b = req(null, null, null);   // request without identity
         interceptor.preHandle(b, resp, null);
         assertThat(TenantContext.get()).isNull();
         interceptor.afterCompletion(b, resp, null, null);

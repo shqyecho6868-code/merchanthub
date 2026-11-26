@@ -23,17 +23,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 /**
- * 注册 / 登录 / 刷新（D1 重写，替换旧 IM 的验证码 + MD5 登录）。
+ * Register / login / refresh (rewritten in D1, replacing the old IM's SMS code + MD5 login).
  * <p>
- * token 签发后同时写进 Redis（key = access:token:{userId}）：网关除了验签，还核对"是不是 Redis 里当前那一个"，
- * 这样重新登录（挤掉旧 token）、封号后删 key 都能让旧 token 立即失效 —— 纯 JWT 做不到主动失效。
+ * Issued tokens are also written to Redis (key = access:token:{userId}): besides verifying the signature, the gateway checks "is this the current one in Redis",
+ * so re-login (kicking out the old token) and deleting the key on a ban both invalidate the old token immediately -- pure JWT can't revoke actively.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
-    /** 用户名不存在时也做一次 BCrypt 比较，让"用户不存在"和"密码错"耗时相同，不能靠响应时间枚举登录名 */
+    /** Do a BCrypt comparison even when the username doesn't exist, so "no such user" and "wrong password" take the same time and usernames can't be enumerated by response time */
     private static final String DUMMY_HASH = new BCryptPasswordEncoder().encode("dummy-password-for-timing");
 
     private final AccountMapper accountMapper;
@@ -43,7 +43,7 @@ public class AuthService {
     private final JwtProperties jwtProps;
     private final StringRedisTemplate redis;
 
-    /** 买家自助注册。商家账号只能通过入驻审批开通（OnboardingDelegate） */
+    /** Buyer self-registration. Merchant accounts can only be opened via onboarding approval (OnboardingDelegate) */
     public long registerBuyer(String username, String password) {
         Account a = new Account();
         a.setUsername(username);
@@ -53,7 +53,7 @@ public class AuthService {
         try {
             accountMapper.insert(a);
         } catch (DuplicateKeyException e) {
-            // 不先查再插：两个请求同时注册同名时"先查"都查不到，唯一索引才是最终裁决
+            // Don't check-then-insert: when two requests register the same name concurrently, both "checks" find nothing; the unique index is the final arbiter
             throw new BusinessException(ErrorCode.USER_ALREADY_EXISTS);
         }
         log.info("买家注册 userId={} username={}", a.getId(), username);
@@ -66,7 +66,7 @@ public class AuthService {
             passwordEncoder.matches(password, DUMMY_HASH);
             throw new BusinessException(ErrorCode.LOGIN_ERROR);
         }
-        // 用户不存在 / 密码错 / 被禁用返回同一个错误：不告诉外部"这个登录名存在"
+        // Unknown user / wrong password / disabled all return the same error: don't reveal that "this username exists"
         if (!passwordEncoder.matches(password, a.getPasswordHash()) || !isUsable(a)) {
             throw new BusinessException(ErrorCode.LOGIN_ERROR);
         }
@@ -74,7 +74,7 @@ public class AuthService {
         return issue(a);
     }
 
-    /** 用 Refresh-Token 换一对新 token。身份从库里重新读：角色 / 状态变了，新 token 立即反映 */
+    /** Exchange a Refresh-Token for a new token pair. Identity is re-read from the DB: if role / status changed, the new token reflects it immediately */
     public TokenVO refresh(String refreshToken) {
         Claims claims = jwt.parse(refreshToken);
         if (claims == null || claims.getSubject() == null) {
@@ -91,7 +91,7 @@ public class AuthService {
         return issue(a);
     }
 
-    /** 账号启用；商家账号还要求商家在营业（商家被停用，员工也不能再登录） */
+    /** Account must be enabled; merchant accounts also require the merchant to be active (if the merchant is suspended, its staff can't log in either) */
     private boolean isUsable(Account a) {
         if (a.getStatus() == null || a.getStatus() != Account.ENABLED) {
             return false;
@@ -112,7 +112,7 @@ public class AuthService {
         Long tenantId = role.isMerchant() ? a.getTenantId() : null;
         String access = jwt.issue(a.getId(), tenantId, role.name(), jwtProps.getAccessTtl());
         String refresh = jwt.issue(a.getId(), tenantId, role.name(), jwtProps.getRefreshTtl());
-        // 覆盖写：同一账号再次登录，旧 token 在网关那一关就过不去了（单点登录）
+        // Overwrite: when the same account logs in again, the old token no longer passes the gateway (single sign-on)
         redis.opsForValue().set(CommonConstant.ACCESS_TOKEN_PREFIX + a.getId(), access, jwtProps.getAccessTtl());
         redis.opsForValue().set(CommonConstant.REFRESH_TOKEN_PREFIX + a.getId(), refresh, jwtProps.getRefreshTtl());
         return new TokenVO(a.getId(), role.name(), tenantId, access, refresh);

@@ -1,9 +1,9 @@
 package com.merchanthub.user.approval.model.vo;
 
 /**
- * 上架审批单查询结果（product 补偿扫描用）。
+ * Listing approval record lookup result (used by product's compensation scan).
  *
- * @param state NOT_FOUND（没发起过）/ RUNNING / APPROVED / REJECTED
+ * @param state NOT_FOUND (never started) / RUNNING / APPROVED / REJECTED
  */
 public record ListingResultVO(String state, String processInstanceId, String rejectReason) {
 

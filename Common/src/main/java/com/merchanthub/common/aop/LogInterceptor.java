@@ -16,10 +16,10 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.util.UUID;
 
 /**
- * 请求响应日志 AOP
+ * Request/response logging AOP
  * <p>
- * 依赖 AOP 与 Servlet API，二者在 Common 中都是 optional，
- * 只有声明了 spring-boot-starter-aop 的 Servlet 服务才启用。
+ * Depends on AOP and the Servlet API, both optional in Common,
+ * so it is only active in Servlet services that declare spring-boot-starter-aop.
  **/
 @ConditionalOnClass(name = {"org.aspectj.lang.ProceedingJoinPoint", "jakarta.servlet.http.HttpServletRequest"})
 @Aspect
@@ -28,27 +28,27 @@ import java.util.UUID;
 public class LogInterceptor {
 
     /**
-     * 执行拦截
+     * Intercept the call
      */
     @Around("execution(* com.merchanthub..controller.*.*(..))")
     public Object doInterceptor(ProceedingJoinPoint point) throws Throwable {
-        // 计时
+        // Start timing
         StopWatch stopWatch = new StopWatch();
         stopWatch.start();
-        // 获取请求路径
+        // Get the request path
         RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
         HttpServletRequest httpServletRequest = ((ServletRequestAttributes) requestAttributes).getRequest();
-        // 生成请求唯一 id
+        // Generate a unique request id
         String requestId = UUID.randomUUID().toString();
         String url = httpServletRequest.getRequestURI();
-        // 获取请求参数
+        // Get the request parameters
         Object[] args = point.getArgs();
         String reqParam = "[" + StringUtils.join(args, ", ") + "]";
-        // 输出请求日志
+        // Log the request
         log.info("request start，id: {}, path: {}, ip: {}, params: {}", requestId, url, httpServletRequest.getRemoteHost(), reqParam);
-        // 执行原方法
+        // Invoke the original method
         Object result = point.proceed();
-        // 输出响应日志
+        // Log the response
         stopWatch.stop();
         long totalTimeMillis = stopWatch.getTotalTimeMillis();
         log.info("request end, id: {}, cost: {}ms", requestId, totalTimeMillis);

@@ -23,12 +23,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商家后台商品接口（C1）。角色分工：
+ * Merchant back-office product APIs (C1). Role split:
  * <ul>
- *   <li>查看：商家管理员、商家员工、平台管理员</li>
- *   <li>提交上架审核（D1）：商家管理员、商家员工都能提交；审批由商家管理员初审 + 平台管理员复审</li>
- *   <li>主图上传（G-上）：商家管理员、商家员工；先申请 S3 直传 URL，上传后再确认绑定</li>
- *   <li>改价：只有商家管理员 —— 员工调用返回 403（平台管理员也不能替商家改价：平台管的是规则，不是商家的经营决策）</li>
+ *   <li>View: merchant admin, merchant staff, platform admin</li>
+ *   <li>Submit for listing review (D1): both merchant admin and staff can submit; approval is a first review by the merchant admin + a second review by the platform admin</li>
+ *   <li>Main image upload (G-上): merchant admin, merchant staff; first request an S3 direct-upload URL, then confirm the binding after uploading</li>
+ *   <li>Price change: merchant admin only — staff get 403 (the platform admin can't change prices for a merchant either: the platform governs rules, not a merchant's business decisions)</li>
  * </ul>
  */
 @RestController

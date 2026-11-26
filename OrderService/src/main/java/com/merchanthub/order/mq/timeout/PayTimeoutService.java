@@ -18,15 +18,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 超时关单：定时消息到期 → CAS 待支付→已关闭 → 赢了才写"订单已关闭"事件（库存据此释放）。
+ * Timeout close: scheduled message fires -> CAS pending -> closed -> only the winner writes the "order closed" event (inventory is released from it).
  * <p>
- * 和支付成功竞争同一个订单时，靠 {@link OrderStatusTransitioner} 的 CAS 只让一方赢：
- * 输家什么也不写，所以也就不会产生任何库存事件 —— "输家不改库存"不是靠输家自觉，而是它根本没有事件可发。
+ * When racing payment success on the same order, the CAS in {@link OrderStatusTransitioner} lets only one side win:
+ * the loser writes nothing, so it produces no inventory event -- "the loser doesn't touch inventory" isn't left to the loser's discipline; it simply has no event to send.
  * <p>
- * E3：两个入口共用 {@link #closeIfPending}：
+ * E3: two entry points share {@link #closeIfPending}:
  * <ul>
- *   <li>{@link #handle}：ORDER_TIMEOUT 定时消息（主路径），先过消费去重</li>
- *   <li>{@link #closeExpired}：超时订单扫描（兜底：定时消息丢了 / 进了死信），不需要去重 —— CAS 本身就是幂等闸门</li>
+ *   <li>{@link #handle}: ORDER_TIMEOUT scheduled message (main path), deduplicated first</li>
+ *   <li>{@link #closeExpired}: timeout-order scan (safety net: scheduled message lost / sent to DLQ), no dedup needed -- the CAS itself is the idempotency gate</li>
  * </ul>
  */
 @Slf4j
@@ -43,7 +43,7 @@ public class PayTimeoutService {
     private final OrderEventCodec codec;
     private final SnowflakeIdGenerator idGenerator;
 
-    /** @return true 本次把订单关掉了；false 重复消息或订单已不是待支付（已支付 / 已取消），什么也没改 */
+    /** @return true if the order was closed this time; false for a duplicate message or an order no longer pending (paid / cancelled), nothing changed */
     @Transactional(rollbackFor = Exception.class)
     public boolean handle(PayTimeoutMessage msg) {
         ConsumedEvent mark = new ConsumedEvent();
@@ -59,24 +59,24 @@ public class PayTimeoutService {
         return closeIfPending(msg.orderNo(), msg.tenantId(), "支付超时");
     }
 
-    /** 超时订单扫描调用：订单早已过了支付截止时间、却还是待支付 */
+    /** Called by the timeout-order scan: the order is long past its payment deadline but still pending */
     @Transactional(rollbackFor = Exception.class)
     public boolean closeExpired(long orderNo, long tenantId) {
         return closeIfPending(orderNo, tenantId, "支付超时（扫描兜底）");
     }
 
-    /** 只在上面两个事务方法里调用（同类内部调用，事务注解不生效，所以不标注；transitioner 是 MANDATORY，没事务会直接报错） */
+    /** Called only from the two transactional methods above (self-invocation bypasses the transaction annotation, so it isn't annotated; transitioner is MANDATORY and fails fast without a transaction) */
     private boolean closeIfPending(long orderNo, long tenantId, String remark) {
         boolean won = transitioner.transit(orderNo, tenantId, OrderEvent.PAY_TIMEOUT, "SYSTEM", 0L, remark);
         if (!won) {
-            // 常见原因：已经支付（支付成功先赢了 CAS）。正常结束，不关单、不发事件、不动库存
+            // Usually: already paid (payment success won the CAS first). Return normally: no close, no event, no inventory change
             log.info("【超时关单·CAS 输】订单已不是待支付，不关单、不释放库存 orderNo={} tenantId={}", orderNo, tenantId);
             return false;
         }
-        // E1：带上买家，realtime 据此推"订单已关闭"。CAS 赢了订单一定存在
+        // E1: include the buyer so realtime can push "order closed". If the CAS won, the order definitely exists
         Orders order = ordersMapper.selectByOrderNoAcrossTenants(orderNo);
         Long buyerId = order == null ? null : order.getBuyerId();
-        // 和关单 CAS 在同一个事务里写"已关闭"事件：关单提交了，库存释放就一定会发生（进程挂了扫描补发）
+        // Write the "closed" event in the same transaction as the close CAS: once the close commits, inventory release is guaranteed (if the process dies, the scan re-sends)
         OrderSettledEvent closed = new OrderSettledEvent(idGenerator.nextId(), orderNo, tenantId,
                 OrderEvent.PAY_TIMEOUT.name(), buyerId);
         outboxWriter.append(tenantId, closed.eventId(), String.valueOf(orderNo), OrderEventTopics.TOPIC,
