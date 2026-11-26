@@ -1,6 +1,6 @@
 #!/bin/bash
 # Load test: a big merchant (tenant 7) places orders at high concurrency while a small merchant (tenant 8) places a few, at the same time; summarized by HTTP status code at the end.
-#   ./deploy/c2/press.sh [durationSeconds=20] [tenant7Concurrency=20] [tenant8OrdersPerSecond=2]
+#   ./deploy/rate-limit/press.sh [durationSeconds=20] [tenant7Concurrency=20] [tenant8OrdersPerSecond=2]
 # Needs only curl; hits order (8107) directly with buyer identity headers (downstream services trust identity headers, the security boundary is the gateway; bypassing the gateway keeps it out of the measurement).
 # Expected: lots of 429 (error code 42900) for tenant 7, all 200 for tenant 8.
 cd "$(dirname "$0")/../.." || exit 1

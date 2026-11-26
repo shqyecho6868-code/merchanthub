@@ -1,6 +1,6 @@
 #!/bin/sh
 # Look up messages in the broker by order number (mqadmin starts a JVM each time, expect 5-10 seconds)
-#   ./deploy/b2/show-msg.sh <orderNo>
+#   ./deploy/order-events/show-msg.sh <orderNo>
 # Searches both the half-message system topic and the business topic, printing topic and properties
 ORDER_NO=$1
 for T in RMQ_SYS_TRANS_HALF_TOPIC ORDER_EVENT; do

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Show the current state of two deliberately inconsistent orders (run before and after reconciliation to compare)
-#   ./deploy/e3/show-recon.sh <orderNoA> <orderNoB>
+#   ./deploy/reconciliation/show-recon.sh <orderNoA> <orderNoB>
 cd "$(dirname "$0")/../.." || exit 1
 set -a; . ./.env; set +a
 q() { docker exec mh-mysql mysql --default-character-set=utf8mb4 -uroot -p"$MYSQL_ROOT_PASSWORD" -t -e "$1" 2>/dev/null; }

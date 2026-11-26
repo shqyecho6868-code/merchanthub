@@ -1,5 +1,5 @@
 -- Approval experiment data. Start user-tenant once first (Flyway creates the mh_user tables, Flowable creates the ACT_* tables), then run:
---   docker exec -i mh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < deploy/d1/seed.sql
+--   docker exec -i mh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < deploy/approval/seed.sql
 -- Every account's password is password123 (BCrypt from htpasswd -bnBC 10; Spring's BCryptPasswordEncoder also accepts the $2y$ prefix)
 
 USE mh_user;

@@ -7,7 +7,7 @@
 #   ORDER_OPTS='--merchanthub.order.sentinel.rate-limit.tenant-overrides[901]=2000' ./perf/start-services.sh
 #   JVM args: JAVA_OPTS='-Xms1g -Xmx1g' ./perf/start-services.sh
 cd "$(dirname "$0")/.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 
 # service name : module : port : extra-args variable name
 SERVICES="gateway:GateWay:10010:GATEWAY_OPTS user:UserService:8104:USER_OPTS product:ProductInventoryService:8106:PRODUCT_OPTS order:OrderService:8107:ORDER_OPTS payment:PaymentService:8108:PAYMENT_OPTS"

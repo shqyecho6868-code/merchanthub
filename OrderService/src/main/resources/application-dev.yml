@@ -20,7 +20,7 @@ spring:
         # Sentinel dashboard (mh-sentinel in docker-compose)
         dashboard: 127.0.0.1:8858
         # The dashboard runs in a container and must connect back to port 8719 on this host, so it needs a host IP reachable from inside the container.
-        # The dashboard accepts only IPs, not hostnames (host.docker.internal gives Bad IP), so deploy/c2/start-order.sh looks it up and passes it in
+        # The dashboard accepts only IPs, not hostnames (host.docker.internal gives Bad IP), so deploy/rate-limit/start-order.sh looks it up and passes it in
         client-ip: ${SENTINEL_CLIENT_IP:}
 
   # Order search replica (mh-es in docker-compose, security disabled locally)

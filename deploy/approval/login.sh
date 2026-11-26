@@ -1,6 +1,6 @@
 #!/bin/sh
 # Log in for real through the gateway and print the Access-Token (last line)
-#   TOKEN=$(./deploy/d1/login.sh m7_staff | tail -1)
+#   TOKEN=$(./deploy/approval/login.sh m7_staff | tail -1)
 cd "$(dirname "$0")/../.." || exit 1
 USER=$1; PASS=${2:-password123}
 [ -n "$USER" ] || { echo "Usage: $0 <username> [password]"; exit 1; }

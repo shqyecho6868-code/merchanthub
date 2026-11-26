@@ -1,8 +1,8 @@
 #!/bin/sh
 # Show how product 1001's current approval looks in the runtime and history tables
-#   ./deploy/d1/show-tasks.sh            -> latest round of product 1001
+#   ./deploy/approval/show-tasks.sh            -> latest round of product 1001
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 q() { docker exec mh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 -t -e "$1" 2>/dev/null; }
 PID=$(docker exec mh-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -e \
   "SELECT process_instance_id FROM mh_user.listing_approval WHERE product_id = 1001 ORDER BY audit_round DESC LIMIT 1" 2>/dev/null)

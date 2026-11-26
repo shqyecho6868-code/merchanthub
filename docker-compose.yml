@@ -143,7 +143,7 @@ services:
 
   # XXL-Job admin (console http://127.0.0.1:8090/xxl-job-admin, default account admin / 123456).
   # The 3.x image defaults context-path to /; set explicitly to /xxl-job-admin to match each service's admin-addresses
-  # Tables live in MySQL's xxl_job database: an existing mysql volume won't rerun init scripts, so import once with deploy/e3/init-xxl-job.sh
+  # Tables live in MySQL's xxl_job database: an existing mysql volume won't rerun init scripts, so import once with deploy/xxl-job/init-xxl-job.sh
   xxl-job-admin:
     image: xuxueli/xxl-job-admin:3.4.2
     container_name: mh-xxl-job

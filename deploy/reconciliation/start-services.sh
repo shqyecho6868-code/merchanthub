@@ -1,8 +1,8 @@
 #!/bin/sh
 # Demo: start product-inventory / order / payment in the background (logs in /tmp/mh-*.log); they register with the XXL-Job admin.
-# Stop: ./deploy/e3/start-services.sh stop
+# Stop: ./deploy/reconciliation/start-services.sh stop
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 if [ "$1" = "stop" ]; then
   pkill -f 'ProductInventoryService-0.0.1-SNAPSHOT.jar|OrderService-0.0.1-SNAPSHOT.jar|PaymentService-0.0.1-SNAPSHOT.jar'
   exit 0

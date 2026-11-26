@@ -1,17 +1,17 @@
 #!/bin/sh
 # Issue an Access-Token carrying an identity and store it in Redis (the gateway checks that Redis holds this exact token).
-#   ./deploy/c1/token.sh <userId> <role> [tenantId]
-#   ./deploy/c1/token.sh 2001 MERCHANT_ADMIN 7     -> admin of merchant 7
-#   ./deploy/c1/token.sh 50001 BUYER               -> buyer (no tenant ID)
-# Output: the token itself (last line), e.g. TOKEN=$(./deploy/c1/token.sh ... | tail -1)
+#   ./deploy/tenant-isolation/token.sh <userId> <role> [tenantId]
+#   ./deploy/tenant-isolation/token.sh 2001 MERCHANT_ADMIN 7     -> admin of merchant 7
+#   ./deploy/tenant-isolation/token.sh 50001 BUYER               -> buyer (no tenant ID)
+# Output: the token itself (last line), e.g. TOKEN=$(./deploy/tenant-isolation/token.sh ... | tail -1)
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 USER_ID=$1; ROLE=$2; TENANT=$3
 [ -n "$USER_ID" ] && [ -n "$ROLE" ] || { echo "Usage: $0 <userId> <role> [tenantId]"; exit 1; }
 
 b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 # The key is JWT_SECRET from .env (padded standard Base64); base64-decoding it on the command line yields exactly the same bytes as Java.
-# For normal experiments use the real login API (deploy/d1/login.sh); this script is for "I need some identity that has no account in the DB"
+# For normal experiments use the real login API (deploy/approval/login.sh); this script is for "I need some identity that has no account in the DB"
 HEXKEY=$(printf %s "$JWT_SECRET" | openssl base64 -d -A | xxd -p | tr -d '\n')
 
 NOW=$(date +%s); EXP=$((NOW + 3600))

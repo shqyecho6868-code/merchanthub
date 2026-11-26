@@ -1,9 +1,9 @@
 #!/bin/sh
 # Experiment 1: the "payment succeeded" event arrives before the order is persisted.
-#   Usage: ./deploy/b3/early-pay.sh <orderNo> <amount>
+#   Usage: ./deploy/payment/early-pay.sh <orderNo> <amount>
 # Sends a PAY_SUCCESS straight to PAYMENT_EVENT (simulating payment having confirmed the money; in the real flow payment looks up the order before creating a payment, so this ordering can't be produced)
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 O=$1; A=$2
 [ -n "$O" ] && [ -n "$A" ] || { echo "Usage: $0 <orderNo> <amount>"; exit 1; }
 P=$(date +%s)000

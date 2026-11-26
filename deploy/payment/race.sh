@@ -1,13 +1,13 @@
 #!/bin/sh
-# Experiment 2: payment success and timeout close arrive at the same time. Start order with ./deploy/b3/start-order.sh 20s (20-second payment deadline)
-#   Usage: ./deploy/b3/race.sh [offsetSeconds]
+# Experiment 2: payment success and timeout close arrive at the same time. Start order with ./deploy/payment/start-order.sh 20s (20-second payment deadline)
+#   Usage: ./deploy/payment/race.sh [offsetSeconds]
 #   Offset 0: callback right at expiry (the winner is luck); -3: 3 seconds before expiry; 3: 3 seconds after expiry
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 OFFSET=${1:-0}
 TIMEOUT=20
 
-RESP=$(./deploy/b2/place-order.sh)
+RESP=$(./deploy/order-events/place-order.sh)
 O=$(echo "$RESP" | sed -n 's/.*"orderNo":"\([0-9]*\)".*/\1/p')
 [ -n "$O" ] || { echo "Order failed: $RESP"; exit 1; }
 echo "Order placed orderNo=${O}, payment deadline ${TIMEOUT}s"
@@ -27,4 +27,4 @@ curl -s -X POST http://127.0.0.1:8108/payments/callback/mock -H 'Content-Type: a
 echo
 echo "Waiting 10 seconds for both paths to finish..."
 sleep 10
-./deploy/b3/show-order.sh "$O"
+./deploy/payment/show-order.sh "$O"

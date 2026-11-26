@@ -26,7 +26,7 @@ import java.util.Set;
  * since sync is "look up + full overwrite", reprocessing a batch has no side effects. If it keeps failing (e.g. ES down) the position stays put,
  * and after recovery it resumes from the checkpoint without losing changes -- the cost is ES growing staler (lag) meanwhile.
  * <p>
- * Off by default (tests and environments without Canal don't connect); enable for local demos with deploy/e2/start-order-canal.sh.
+ * Off by default (tests and environments without Canal don't connect); enable for local demos with deploy/order-search/start-order-canal.sh.
  */
 @Slf4j
 @Component

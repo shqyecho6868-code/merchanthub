@@ -1,7 +1,7 @@
 #!/bin/sh
 # Print what an order looks like across tables: order, status history, outbox events, payments, payment anomalies, reservations, inventory
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 O=$1
 [ -n "$O" ] || { echo "Usage: $0 <orderNo>"; exit 1; }
 q() { docker exec -e MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mh-mysql mysql -uroot -t -e "$1"; }

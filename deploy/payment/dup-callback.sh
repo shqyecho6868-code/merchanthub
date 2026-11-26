@@ -1,9 +1,9 @@
 #!/bin/sh
 # Experiment: fire the callback of the same payment several times and see what blocks the duplicates.
-#   Usage: ./deploy/b3/dup-callback.sh <orderNo>
+#   Usage: ./deploy/payment/dup-callback.sh <orderNo>
 # Steps: create a payment -> 5 concurrent callbacks (same channelTradeNo) -> wait 1 second, then 2 more sequential ones -> print payment, order, history, dedup records
 cd "$(dirname "$0")/../.." || exit 1
-. deploy/b2/env.sh
+. deploy/env.sh
 ORDER_NO=$1
 [ -n "$ORDER_NO" ] || { echo "Usage: $0 <orderNo>"; exit 1; }
 

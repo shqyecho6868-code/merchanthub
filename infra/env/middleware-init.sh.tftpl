@@ -50,7 +50,7 @@ ENV
 cd /opt/mh
 docker compose -f compose.yml --env-file .env up -d
 
-# Create topics once the broker has registered with the NameServer (same as deploy/b3/create-topics.sh); broker cold start takes tens of seconds, each topic retries for up to ~5 minutes
+# Create topics once the broker has registered with the NameServer (same as deploy/rocketmq/create-topics.sh); broker cold start takes tens of seconds, each topic retries for up to ~5 minutes
 for T in ORDER_EVENT ORDER_TIMEOUT PAYMENT_EVENT PRODUCT_LISTING_RESULT; do
   for i in $(seq 1 30); do
     if docker compose -f compose.yml --env-file .env exec -T broker sh -c \
