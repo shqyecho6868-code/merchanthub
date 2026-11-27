@@ -92,6 +92,28 @@ merchanthub:
       base-backoff-seconds: 10
       max-backoff-seconds: 600
       max-retries: 10
+      # Post-commit "send once now" pool. Full queue -> task dropped (counted as outbox.fastpath.dropped + WARN), row stays for the scan
+      fast-path:
+        core-threads: 2
+        max-threads: 4
+        queue-capacity: 1000
+      # When a scan batch comes back full: bigger batches, sent in parallel, until drained or the time budget is used (catch-up).
+      # parallelism stays small because each thread holds one of order's 10 DB connections per send
+      catch-up:
+        batch-size: 1000
+        parallelism: 4
+        time-budget: 45s
+      # Backlog watcher, scheduled by Spring inside order (independent of XXL-Job): gauges + CloudWatch push + fallback scan
+      monitor:
+        enabled: true
+        interval-ms: 60000
+        initial-delay-ms: 30000
+        stale-after: 5m
+        # Run the scan from the monitor if the stale backlog hasn't shrunk for this many rounds (the scheduler looks down)
+        fallback-enabled: true
+        fallback-after-rounds: 2
+        cloudwatch:
+          enabled: false
 
     # XXL-Job task parameters (task entry point job/OrderJobs; frequency configured in the admin console)
     jobs:
@@ -100,6 +122,8 @@ merchanthub:
       # How long to keep sent outbox records before archiving
       archive-retention: 7d
       batch-size: 200
+      # One timeout-scan call keeps taking full batches for at most this long (below the job's 120s executor timeout)
+      time-budget: 90s
     # Canal -> ES order sync, off by default (environments without Canal don't connect); turn on for demos
     canal:
       enabled: false

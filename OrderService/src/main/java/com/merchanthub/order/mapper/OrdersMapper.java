@@ -51,4 +51,8 @@ public interface OrdersMapper extends BaseMapper<Orders> {
 
     @Select("SELECT status FROM orders WHERE order_no = #{orderNo} AND deleted = 0 FOR UPDATE")
     Integer selectStatusForUpdate(@Param("orderNo") long orderNo);
+
+    /** Monitoring: orders still pending payment although their deadline passed before {@code before} (timeout close didn't happen) */
+    @Select("SELECT COUNT(*) FROM orders WHERE status = 10 AND expire_at < #{before} AND deleted = 0")
+    long countExpiredPending(@Param("before") LocalDateTime before);
 }

@@ -31,9 +31,14 @@ merchanthub:
     namesrv-addr: ${ROCKETMQ_NAMESRV}
   job:
     xxl:
-      # The XXL-Job admin isn't deployed in the cloud this time (only the order flow runs there), so compensation / reconciliation jobs aren't scheduled; timeout order closing still works via RocketMQ scheduled messages
-      enabled: false
-      access-token: ""
+      # The XXL-Job admin runs on the middleware EC2 (schema xxl_job on RDS). Compensation / reconciliation jobs
+      # are the safety net of every async flow here; without them the cloud once silently piled up 129k unsent outbox rows
+      enabled: true
+      admin-addresses: ${XXL_JOB_ADMIN}
+      access-token: ${XXL_JOB_ACCESS_TOKEN}
+      # Register the VPC address, not the 169.254 link-local one (same reason as inetutils.preferred-networks above)
+      ip-prefix: "10.20."
+      log-path: /tmp/xxl-job
   jwt:
     secret: ${JWT_SECRET}
 

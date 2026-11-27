@@ -24,6 +24,12 @@ public class XxlJobProperties {
      * so set it to http://host.docker.internal:{port}/, otherwise the admin may not be able to reach back
      */
     private String address;
+    /**
+     * Pick the executor IP from the local interface whose address starts with this prefix (e.g. "10.20."), when address is empty.
+     * A Fargate task also has a 169.254.172.x link-local interface; XXL-Job's own IP detection may register that one, which the admin can't reach
+     * (same problem as Nacos, solved there by spring.cloud.inetutils.preferred-networks)
+     */
+    private String ipPrefix;
     /** Port of the executor's embedded HTTP server: must differ per service when several run on one machine */
     private int port;
     /** Job log directory: the default /data/applogs isn't writable on a Mac, so use the temp dir */

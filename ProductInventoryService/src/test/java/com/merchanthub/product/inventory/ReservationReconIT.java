@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -132,5 +133,42 @@ class ReservationReconIT extends ProductItSupport {
         reserve(3001, 0);
         assertThat(reconciler.reconcile().total()).isZero();
         verify(orderClient, never()).statuses(any());
+    }
+
+    /**
+     * Catch-up: stuck reservations behind a full page of orders that are legitimately still pending.
+     * Batch size 3; orders 4001-4003 are pending (left alone), 4004-4006 are closed (ORDER_CLOSED lost).
+     * Before keyset paging, every round re-read the same first page of 3 pending orders, so the closed ones were never released;
+     * now one call pages past them and releases all three.
+     */
+    @Test
+    void fullPageOfPendingOrders_doesNotHideStuckOnesBehindIt() {
+        Map<Long, Integer> orderStatus = new java.util.HashMap<>();
+        for (long n = 4001; n <= 4006; n++) {
+            reserve(n, 40);
+            orderStatus.put(n, n <= 4003 ? 10 : 50);
+        }
+        when(orderClient.statuses(any())).thenAnswer(inv -> {
+            Map<Long, Integer> m = new java.util.HashMap<>();
+            for (Long no : inv.<List<Long>>getArgument(0)) {
+                m.put(no, orderStatus.get(no));
+            }
+            return ResultUtils.success(m);
+        });
+        Object old = ReflectionTestUtils.getField(reconciler, "batchSize");
+        ReflectionTestUtils.setField(reconciler, "batchSize", 3);
+        try {
+            ReservationReconciler.Result r = reconciler.reconcile();
+            assertThat(r.released()).isEqualTo(3);
+        } finally {
+            ReflectionTestUtils.setField(reconciler, "batchSize", old);
+        }
+        for (long n = 4001; n <= 4003; n++) {
+            assertThat(status(n)).isEqualTo(10);
+        }
+        for (long n = 4004; n <= 4006; n++) {
+            assertThat(status(n)).isEqualTo(30);
+        }
+        assertThat(stock()).containsEntry("available", 97).containsEntry("reserved", 3);
     }
 }

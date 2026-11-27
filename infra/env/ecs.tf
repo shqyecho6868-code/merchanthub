@@ -24,6 +24,7 @@ locals {
     NACOS_ADDR             = "${local.mw_ip}:8848"
     ROCKETMQ_NAMESRV       = "${local.mw_ip}:9876"
     ES_URIS                = "http://${local.mw_ip}:9200"
+    XXL_JOB_ADMIN          = "http://${local.mw_ip}:8090/xxl-job-admin"
     S3_BUCKET              = aws_s3_bucket.assets.bucket
     # Raise the order rate limit for load-test merchant 901 (default 20 QPS per merchant), otherwise the load test measures the limiter instead of the order path.
     # Same as the local load test's tenant-overrides[901]=100000; only order reads this setting, other services ignore it
@@ -91,6 +92,7 @@ resource "aws_ecs_task_definition" "svc" {
     secrets = [
       { name = "MYSQL_PASSWORD", valueFrom = aws_ssm_parameter.mysql_password.arn },
       { name = "JWT_SECRET", valueFrom = aws_ssm_parameter.jwt_secret.arn },
+      { name = "XXL_JOB_ACCESS_TOKEN", valueFrom = aws_ssm_parameter.xxl_job_token.arn },
     ]
     logConfiguration = {
       logDriver = "awslogs"

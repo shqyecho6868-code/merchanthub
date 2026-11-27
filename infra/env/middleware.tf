@@ -28,6 +28,8 @@ resource "aws_instance" "middleware" {
     log_group       = aws_cloudwatch_log_group.middleware.name
     compose_file    = file("${path.module}/middleware-compose.yml")
     compose_version = "v5.6.1"
+    name            = var.name
+    bucket          = aws_s3_bucket.assets.bucket
   })
   # user_data runs only on first boot; changing it requires replacing the instance
   user_data_replace_on_change = true

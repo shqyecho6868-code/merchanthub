@@ -69,6 +69,17 @@ resource "aws_vpc_security_group_egress_rule" "ecs_all" {
   ip_protocol       = "-1"
 }
 
+# The XXL-Job admin (on the middleware EC2) calls each executor's embedded server to trigger jobs:
+# order 9201 / payment 9202 / product-inventory 9203 / user-tenant 9204
+resource "aws_vpc_security_group_ingress_rule" "ecs_from_xxl_admin" {
+  security_group_id            = aws_security_group.ecs.id
+  referenced_security_group_id = aws_security_group.middleware.id
+  from_port                    = 9201
+  to_port                      = 9204
+  ip_protocol                  = "tcp"
+  description                  = "XXL-Job admin -> executors"
+}
+
 # Middleware EC2: only ECS tasks may connect. Port 22 is closed -- log in via SSM Session Manager (over the AWS API, no public IP or key pair needed)
 resource "aws_security_group" "middleware" {
   name        = "${var.name}-middleware"
@@ -84,6 +95,7 @@ locals {
     broker     = 10911
     broker_vip = 10909
     es         = 9200
+    xxl_admin  = 8090 # executors register / send callbacks to the XXL-Job admin
   }
 }
 

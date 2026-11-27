@@ -105,6 +105,30 @@ result "Amount received = order amount payable" "$(q "SELECT COUNT(*) FROM ($SQL
 ANOMALY=$(q "SELECT COUNT(*) FROM mh_order.pay_anomaly WHERE tenant_id IN ($T)")
 echo "  INFO  pay_anomaly records: $ANOMALY (paid after close / duplicate payment, left for manual reconciliation)"
 
+# The three safety nets -- outbox scan, timeout close, reservation release. Each number is 0 when they work.
+# Times are compared with UTC_TIMESTAMP: the app writes UTC (connectionTimeZone=UTC), while the CLI session may be in local time.
+# GRACE_SEC matches merchanthub.order.jobs.timeout-grace: within it the timeout message is still expected to close the order
+GRACE_SEC=${GRACE_SEC:-300}
+echo "== Safety nets (outbox scan / timeout close / reservation release) =="
+printf 'Waiting for the outbox to drain (up to %ss)' "$WAIT"
+for i in $(seq 1 "$WAIT"); do
+  n=$(q "SELECT COUNT(*) FROM mh_order.order_outbox WHERE status = 0")
+  [ "$n" = "0" ] && break
+  printf '.'; sleep 1
+done
+echo " pending: $n"
+SQL="SELECT status, COUNT(*) n, MIN(created_at) oldest, MAX(retry_count) max_retries FROM mh_order.order_outbox WHERE status IN (0, 2) GROUP BY status"
+result "Outbox undelivered = 0 (status 0 pending / 2 failed)" \
+  "$(q "SELECT COUNT(*) FROM mh_order.order_outbox WHERE status IN (0, 2)")" "$SQL"
+
+SQL="SELECT order_no, tenant_id, expire_at, created_at FROM mh_order.orders
+  WHERE status = 10 AND deleted = 0 AND expire_at < UTC_TIMESTAMP(3) - INTERVAL $GRACE_SEC SECOND ORDER BY expire_at"
+result "Orders past deadline + ${GRACE_SEC}s still pending payment = 0 (timeout close happened)" "$(q "SELECT COUNT(*) FROM ($SQL) x")" "$SQL"
+
+SQL="SELECT o.order_no, o.tenant_id, o.updated_at closed_at, r.sku_id, r.quantity FROM mh_order.orders o
+  JOIN mh_product.inventory_reservation r ON r.order_no = o.order_no WHERE o.status = 50 AND r.status = 10"
+result "Closed orders whose reservation is still held = 0 (stock released)" "$(q "SELECT COUNT(*) FROM ($SQL) x")" "$SQL"
+
 if [ -n "$RUN_ID" ]; then
   echo "== k6 stats <-> orders in DB (${RUN_ID}) =="
   SUMMARY=perf/results/$RUN_ID/summary.json

@@ -52,6 +52,38 @@ resource "aws_cloudwatch_dashboard" "main" {
           period  = 60
           metrics = [for s in keys(local.services) : ["AWS/ECS", "MemoryUtilization", "ClusterName", var.name, "ServiceName", s]]
         }
+      },
+      # Safety-net numbers pushed by order, plus the alarm line
+      {
+        type = "metric", x = 0, y = 12, width = 12, height = 6
+        properties = {
+          title  = "Outbox backlog (pending / older than 5m) and expired pending orders"
+          region = var.region
+          stat   = "Maximum"
+          period = 60
+          metrics = [
+            [local.app_metric_namespace, "OutboxPending"],
+            [".", "OutboxStalePending"],
+            [".", "ExpiredPendingOrders"]
+          ]
+        }
+      },
+      {
+        type = "metric", x = 12, y = 12, width = 12, height = 6
+        properties = {
+          title   = "Outbox fast-path drops per minute (pool full, left to the scan)"
+          region  = var.region
+          stat    = "Sum"
+          period  = 60
+          metrics = [[local.app_metric_namespace, "OutboxFastPathDropped"]]
+        }
+      },
+      {
+        type = "alarm", x = 0, y = 18, width = 24, height = 3
+        properties = {
+          title  = "Safety-net alarms"
+          alarms = [aws_cloudwatch_metric_alarm.outbox_stale.arn, aws_cloudwatch_metric_alarm.expired_pending_orders.arn]
+        }
       }
     ]
   })

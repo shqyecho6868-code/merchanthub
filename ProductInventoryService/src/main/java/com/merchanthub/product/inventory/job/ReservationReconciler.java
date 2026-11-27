@@ -51,7 +51,11 @@ public class ReservationReconciler {
     @Value("${merchanthub.inventory.reservation-recon.batch-size:100}")
     private int batchSize;
 
-    public record Result(int released, int confirmed) {
+    public record Result(int released, int confirmed, int candidates) {
+        public Result(int released, int confirmed) {
+            this(released, confirmed, 0);
+        }
+
         public int total() {
             return released + confirmed;
         }
@@ -62,11 +66,35 @@ public class ReservationReconciler {
      * when actually settling an order it switches to <b>that order's merchant</b>, so SQL carries tenant_id, and automatically returns to SYSTEM afterwards.
      */
     public Result reconcile() {
-        return TenantContext.callAsSystem(this::reconcileOnce);
+        return TenantContext.callAsSystem(this::reconcileUntilDone);
     }
 
-    private Result reconcileOnce() {
-        List<InventoryReservation> stale = reservationMapper.selectStaleReserved(olderThan.toSeconds(), batchSize);
+    /** One call keeps going for at most this long (XXL-Job executor timeout of reservationReconJob is 120s) */
+    @Value("${merchanthub.inventory.reservation-recon.time-budget:90s}")
+    private Duration timeBudget = Duration.ofSeconds(90);
+
+    /**
+     * Catch-up: 100 reservations every 5 minutes would need hours for thousands of stuck ones, so keep paging (keyset on order_no)
+     * while a page is full. The cursor always moves forward, so the loop ends; a page where order couldn't be queried (candidates = -1) stops it
+     */
+    private Result reconcileUntilDone() {
+        long deadline = System.nanoTime() + timeBudget.toNanos();
+        int released = 0;
+        int confirmed = 0;
+        long cursor = 0;
+        while (true) {
+            List<InventoryReservation> page = reservationMapper.selectStaleReserved(olderThan.toSeconds(), cursor, batchSize);
+            Result r = reconcilePage(page);
+            released += r.released();
+            confirmed += r.confirmed();
+            if (r.candidates() < batchSize || System.nanoTime() >= deadline) {
+                return new Result(released, confirmed);
+            }
+            cursor = page.get(page.size() - 1).getOrderNo();
+        }
+    }
+
+    private Result reconcilePage(List<InventoryReservation> stale) {
         if (stale.isEmpty()) {
             return new Result(0, 0);
         }
@@ -76,13 +104,13 @@ public class ReservationReconciler {
             BaseResponse<Map<Long, Integer>> resp = orderClient.statuses(orderNos);
             if (resp == null || resp.getCode() != 200 || resp.getData() == null) {
                 log.warn("Reservation recon: order query returned an error, skipping this round resp={}", resp);
-                return new Result(0, 0);
+                return new Result(0, 0, -1);
             }
             statuses = resp.getData();
         } catch (RuntimeException e) {
             // "Can't look it up" ≠ "doesn't exist": if we treated an order timeout / outage as "doesn't exist" and released, stock of orders being paid would be returned → oversell
             log.warn("Reservation recon: order query failed, skipping this round candidates={}", orderNos.size(), e);
-            return new Result(0, 0);
+            return new Result(0, 0, -1);
         }
 
         int released = 0;
@@ -111,6 +139,6 @@ public class ReservationReconciler {
             }
         }
         log.info("Reservation recon done candidates={} released={} confirmed={}", stale.size(), released, confirmed);
-        return new Result(released, confirmed);
+        return new Result(released, confirmed, stale.size());
     }
 }

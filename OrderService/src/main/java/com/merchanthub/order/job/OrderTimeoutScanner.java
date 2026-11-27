@@ -36,8 +36,30 @@ public class OrderTimeoutScanner {
     @Value("${merchanthub.order.jobs.batch-size:200}")
     private int batchSize;
 
-    /** @return number of orders closed in this round */
+    /** One call keeps going for at most this long (XXL-Job executor timeout of orderTimeoutScanJob is 120s) */
+    @Value("${merchanthub.order.jobs.time-budget:90s}")
+    private Duration timeBudget = Duration.ofSeconds(90);
+
+    /**
+     * Catch-up: 200 orders per minute can't clear thousands of stuck orders, so keep taking batches while a batch comes back full
+     * and the round actually closed something. "Closed nothing" stops the loop: the same rows would be selected again (e.g. close keeps failing).
+     *
+     * @return number of orders closed in this call
+     */
     public int scan() {
+        long deadline = System.nanoTime() + timeBudget.toNanos();
+        int total = 0;
+        while (true) {
+            int[] r = scanOnce();
+            total += r[1];
+            if (r[0] < batchSize || r[1] == 0 || System.nanoTime() >= deadline) {
+                return total;
+            }
+        }
+    }
+
+    /** @return {candidates, closed} */
+    private int[] scanOnce() {
         List<Orders> expired = TenantContext.callAsSystem(() ->
                 ordersMapper.selectExpiredPending(LocalDateTime.now(clock).minus(grace), batchSize));
         int closed = 0;
@@ -56,6 +78,6 @@ public class OrderTimeoutScanner {
         if (!expired.isEmpty()) {
             log.info("Timeout-order scan done candidates={} closed={}", expired.size(), closed);
         }
-        return closed;
+        return new int[]{expired.size(), closed};
     }
 }

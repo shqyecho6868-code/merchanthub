@@ -61,3 +61,40 @@ for T in ORDER_EVENT ORDER_TIMEOUT PAYMENT_EVENT PRODUCT_LISTING_RESULT; do
   done
 done
 echo "MIDDLEWARE_READY"
+
+# ---- XXL-Job admin ----
+# Runs in the background so it doesn't hold up the rest of boot: RDS is created in parallel with this EC2 and usually becomes
+# reachable a few minutes later. Steps: wait for the RDS address in SSM -> wait until MySQL answers -> import the schema once
+# (skipped if xxl_job exists) -> start the admin. Log: /var/log/xxl-init.log
+cat > /opt/mh/xxl-init.sh <<'XXL'
+#!/bin/bash
+set -uo pipefail
+cd /opt/mh
+for i in $(seq 1 120); do
+  RDS_HOST=$(aws ssm get-parameter --region ${region} --name /${name}/rds-endpoint --query Parameter.Value --output text 2>/dev/null) && break
+  sleep 10
+done
+MYSQL_PW=$(aws ssm get-parameter --region ${region} --name /${name}/mysql-password --with-decryption --query Parameter.Value --output text)
+XXL_JOB_TOKEN=$(aws ssm get-parameter --region ${region} --name /${name}/xxl-job-token --with-decryption --query Parameter.Value --output text)
+MYSQL="docker run --rm -i -e MYSQL_PWD=$MYSQL_PW mysql:8.4 mysql -h $RDS_HOST -umhadmin"
+for i in $(seq 1 120); do
+  $MYSQL -N -e 'SELECT 1' >/dev/null 2>&1 && break
+  echo "waiting for RDS ($i)"; sleep 10
+done
+mkdir -p /opt/mh/xxl-job
+for f in tables_xxl_job.sql seed-jobs.sql cloud-jobs.sql; do
+  for i in $(seq 1 30); do aws s3 cp --region ${region} s3://${bucket}/ops/xxl-job/$f /opt/mh/xxl-job/$f && break; sleep 10; done
+done
+if $MYSQL -N -e "SHOW DATABASES LIKE 'xxl_job'" | grep -q xxl_job; then
+  echo "schema xxl_job already exists, skipping import"
+else
+  $MYSQL < /opt/mh/xxl-job/tables_xxl_job.sql && $MYSQL < /opt/mh/xxl-job/seed-jobs.sql && $MYSQL < /opt/mh/xxl-job/cloud-jobs.sql \
+    && echo "schema xxl_job imported"
+fi
+umask 077
+{ echo "RDS_HOST=$RDS_HOST"; echo "MYSQL_PW=$MYSQL_PW"; echo "XXL_JOB_TOKEN=$XXL_JOB_TOKEN"; } >> /opt/mh/.env
+docker compose -f compose.yml --env-file .env --profile xxl up -d xxl-job-admin
+echo "XXL_ADMIN_STARTED"
+XXL
+chmod +x /opt/mh/xxl-init.sh
+nohup /opt/mh/xxl-init.sh > /var/log/xxl-init.log 2>&1 &

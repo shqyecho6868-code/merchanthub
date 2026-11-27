@@ -31,11 +31,22 @@ spring:
 merchanthub:
   rocketmq:
     namesrv-addr: ${ROCKETMQ_NAMESRV}
+  order:
+    outbox:
+      monitor:
+        # Push the backlog counts to CloudWatch; the alarm (infra/env/alarms.tf) watches OutboxStalePending
+        cloudwatch:
+          enabled: true
   job:
     xxl:
-      # The XXL-Job admin isn't deployed in the cloud this time (only the order-placement path runs there), so compensation / reconciliation jobs aren't scheduled; timeout close still works via RocketMQ scheduled messages
-      enabled: false
-      access-token: ""
+      # The XXL-Job admin runs on the middleware EC2 (schema xxl_job on RDS). Compensation / reconciliation jobs
+      # are the safety net of every async flow here; without them the cloud once silently piled up 129k unsent outbox rows
+      enabled: true
+      admin-addresses: ${XXL_JOB_ADMIN}
+      access-token: ${XXL_JOB_ACCESS_TOKEN}
+      # Register the VPC address, not the 169.254 link-local one (same reason as inetutils.preferred-networks above)
+      ip-prefix: "10.20."
+      log-path: /tmp/xxl-job
 
 # ALB health checks use the readiness probe: it only reflects "can this process take traffic", not aggregated health of dependencies like MySQL / Redis.
 # Otherwise a Redis blip would mark every instance unhealthy at once in the ALB, amplifying a partial failure into a site-wide 503

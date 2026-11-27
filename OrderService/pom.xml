@@ -95,6 +95,26 @@
             <groupId>com.xuxueli</groupId>
             <artifactId>xxl-job-core</artifactId>
         </dependency>
+        <!-- Outbox backlog metrics pushed to CloudWatch (OutboxBacklogMonitor, aws profile only). Same AWS SDK BOM and the same
+             "exclude Netty / Apache, use the JDK url-connection client" choice as product-inventory's S3 client -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>cloudwatch</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>netty-nio-client</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>software.amazon.awssdk</groupId>
+                    <artifactId>apache-client</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+        </dependency>
         <!-- Order search. Java API Client version managed by Spring Boot (3.5.x -> 8.18), matching ES 8.18 in compose;
              Boot auto-configures ElasticsearchClient (spring.elasticsearch.uris) -->
         <dependency>

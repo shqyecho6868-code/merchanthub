@@ -29,7 +29,7 @@ resource "aws_iam_role_policy" "ecs_execution_ssm" {
     Statement = [{
       Effect   = "Allow"
       Action   = ["ssm:GetParameters"]
-      Resource = [aws_ssm_parameter.mysql_password.arn, aws_ssm_parameter.jwt_secret.arn]
+      Resource = [aws_ssm_parameter.mysql_password.arn, aws_ssm_parameter.jwt_secret.arn, aws_ssm_parameter.xxl_job_token.arn]
     }]
   })
 }
@@ -57,6 +57,14 @@ resource "aws_iam_role_policy" "ecs_task" {
         Action    = ["s3:ListBucket"]
         Resource  = aws_s3_bucket.assets.arn
         Condition = { StringLike = { "s3:prefix" = ["products/*"] } }
+      },
+      # order pushes the outbox backlog counts (OutboxBacklogMonitor -> CloudWatchBacklogSink). PutMetricData has no resource-level
+      # permissions, so it is scoped by namespace instead: the app can't write into AWS/* or anyone else's metrics
+      {
+        Effect    = "Allow"
+        Action    = ["cloudwatch:PutMetricData"]
+        Resource  = "*"
+        Condition = { StringEquals = { "cloudwatch:namespace" = local.app_metric_namespace } }
       },
       # ECS Exec (aws ecs execute-command into a container for debugging)
       {
@@ -96,7 +104,7 @@ resource "aws_iam_role_policy" "middleware" {
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/*" },
       # In-VPC load tests upload k6 results to S3 for download to the laptop (perf/cloud/run-in-vpc.sh)
       { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/results/*" },
-      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = aws_ssm_parameter.mysql_password.arn }
+      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = [aws_ssm_parameter.mysql_password.arn, aws_ssm_parameter.xxl_job_token.arn, aws_ssm_parameter.rds_endpoint.arn] }
     ]
   })
 }

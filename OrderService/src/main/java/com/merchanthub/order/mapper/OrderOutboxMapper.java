@@ -66,4 +66,15 @@ public interface OrderOutboxMapper extends BaseMapper<OrderOutbox> {
     /** Alerting: records whose delivery failures hit the limit (status = 2) */
     @Select("SELECT * FROM order_outbox WHERE status = 2 AND deleted = 0 ORDER BY id LIMIT #{limit}")
     List<OrderOutbox> selectFailed(@Param("limit") int limit);
+
+    /**
+     * Monitoring: pending rows created before {@code before}. "Older than 5 minutes and still pending" means neither the fast path
+     * nor the scan delivered it -- with a working scan (every 5s) this is 0, so any value > 0 is worth an alert
+     */
+    @Select("SELECT COUNT(*) FROM order_outbox WHERE status = 0 AND deleted = 0 AND created_at < #{before}")
+    long countPendingCreatedBefore(@Param("before") LocalDateTime before);
+
+    /** Monitoring: all pending rows (includes the ones the fast path is about to send) */
+    @Select("SELECT COUNT(*) FROM order_outbox WHERE status = 0 AND deleted = 0")
+    long countPending();
 }

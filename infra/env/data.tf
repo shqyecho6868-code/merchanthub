@@ -16,6 +16,26 @@ resource "aws_ssm_parameter" "mysql_password" {
   value = random_password.mysql.result
 }
 
+# XXL-Job admin <-> executor access token. The admin reads it on the middleware EC2, executors get it as an ECS secret
+resource "random_password" "xxl_job_token" {
+  length  = 32
+  special = false
+}
+
+resource "aws_ssm_parameter" "xxl_job_token" {
+  name  = "/${var.name}/xxl-job-token"
+  type  = "SecureString"
+  value = random_password.xxl_job_token.result
+}
+
+# The middleware EC2 needs the RDS address to start the XXL-Job admin, but passing it through user_data would make the EC2 wait
+# ~6 minutes for RDS to be created first. Instead it is published here, and the EC2 polls for it in the background
+resource "aws_ssm_parameter" "rds_endpoint" {
+  name  = "/${var.name}/rds-endpoint"
+  type  = "String"
+  value = aws_db_instance.mysql.address
+}
+
 resource "aws_ssm_parameter" "jwt_secret" {
   name  = "/${var.name}/jwt-secret"
   type  = "SecureString"
@@ -116,6 +136,15 @@ resource "aws_s3_bucket_cors_configuration" "assets" {
     allowed_headers = ["*"]
     max_age_seconds = 3000
   }
+}
+
+# XXL-Job admin schema + job definitions, imported into RDS by the middleware EC2 (same files as local deploy/xxl-job)
+resource "aws_s3_object" "xxl_job_sql" {
+  for_each = toset(["tables_xxl_job.sql", "seed-jobs.sql", "cloud-jobs.sql"])
+  bucket   = aws_s3_bucket.assets.id
+  key      = "ops/xxl-job/${each.value}"
+  source   = "${path.module}/../../deploy/xxl-job/${each.value}"
+  etag     = filemd5("${path.module}/../../deploy/xxl-job/${each.value}")
 }
 
 # Seed data: the middleware EC2 fetches it from here and loads it into RDS (RDS is in a private subnet, unreachable from a laptop)

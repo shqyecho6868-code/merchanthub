@@ -26,10 +26,13 @@ public interface InventoryReservationMapper extends BaseMapper<InventoryReservat
 
     /**
      * Dangling-reservation candidates: orders whose reservations are still RESERVED after olderThanSeconds (uses idx_status_created).
+     * Keyset paging by order_no (afterOrderNo = last order_no of the previous page, 0 for the first): a page full of orders that are
+     * legitimately still pending must not hide the stuck ones behind it.
      * Time is computed with the database's NOW(3): created_at is written by a database default, so comparing on the same clock is unaffected by app machine clock skew
      */
     @Select("SELECT DISTINCT order_no AS orderNo, tenant_id AS tenantId FROM inventory_reservation "
             + "WHERE status = 10 AND deleted = 0 AND created_at < NOW(3) - INTERVAL #{olderThanSeconds} SECOND "
-            + "ORDER BY order_no LIMIT #{limit}")
-    List<InventoryReservation> selectStaleReserved(@Param("olderThanSeconds") long olderThanSeconds, @Param("limit") int limit);
+            + "AND order_no > #{afterOrderNo} ORDER BY order_no LIMIT #{limit}")
+    List<InventoryReservation> selectStaleReserved(@Param("olderThanSeconds") long olderThanSeconds,
+                                                   @Param("afterOrderNo") long afterOrderNo, @Param("limit") int limit);
 }
