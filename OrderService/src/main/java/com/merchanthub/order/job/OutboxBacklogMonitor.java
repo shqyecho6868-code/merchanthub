@@ -51,6 +51,7 @@ public class OutboxBacklogMonitor {
     private double lastDropped;
     private long lastStale = -1;
     private int noProgressRounds;
+    private boolean fallbackRanLastRound;
 
     @Value("${merchanthub.order.outbox.monitor.stale-after:5m}")
     private Duration staleAfter = Duration.ofMinutes(5);
@@ -132,11 +133,22 @@ public class OutboxBacklogMonitor {
             noProgressRounds = 0;
         }
         lastStale = stale;
-        if (fallbackEnabled && noProgressRounds >= fallbackAfterRounds) {
+        // One fallback scan is time-boxed (catch-up budget), so a big backlog needs several. If the last round had to fall back and
+        // rows are still stale, the scheduler is still down: keep going every round instead of waiting another N flat rounds
+        // (in the cloud drill that wait left 4.6k rows stale for 3 more minutes)
+        boolean continuing = fallbackRanLastRound && stale > 0;
+        fallbackRanLastRound = false;
+        if (!fallbackEnabled || !(continuing || noProgressRounds >= fallbackAfterRounds)) {
+            return;
+        }
+        if (continuing) {
+            log.warn("Outbox backlog still stale after the previous fallback scan (stalePending={}): continuing the fallback", stale);
+        } else {
             log.error("Outbox backlog not shrinking for {} rounds (stalePending={}): the scheduled scan looks down (is XXL-Job running?). "
                     + "Running the scan from the monitor as a fallback", noProgressRounds, stale);
-            int n = relay.scan();
-            log.warn("Outbox monitor fallback scan sent {} rows", n);
         }
+        fallbackRanLastRound = true;
+        int n = relay.scan();
+        log.warn("Outbox monitor fallback scan sent {} rows", n);
     }
 }

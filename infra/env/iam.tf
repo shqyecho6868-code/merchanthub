@@ -90,6 +90,8 @@ resource "aws_iam_role_policy_attachment" "middleware_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role_policy" "middleware" {
   name = "middleware"
   role = aws_iam_role.middleware.id
@@ -104,7 +106,9 @@ resource "aws_iam_role_policy" "middleware" {
       { Effect = "Allow", Action = ["s3:GetObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/*" },
       # In-VPC load tests upload k6 results to S3 for download to the laptop (perf/cloud/run-in-vpc.sh)
       { Effect = "Allow", Action = ["s3:PutObject"], Resource = "${aws_s3_bucket.assets.arn}/ops/results/*" },
-      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = [aws_ssm_parameter.mysql_password.arn, aws_ssm_parameter.xxl_job_token.arn, aws_ssm_parameter.rds_endpoint.arn] }
+      # rds-endpoint ARN is built from its name, not taken from the resource: the parameter waits for RDS (~5 min),
+      # and the instance must not boot before this policy exists (its first step is shipping container logs)
+      { Effect = "Allow", Action = ["ssm:GetParameter"], Resource = [aws_ssm_parameter.mysql_password.arn, aws_ssm_parameter.xxl_job_token.arn, "arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${var.name}/rds-endpoint"] }
     ]
   })
 }

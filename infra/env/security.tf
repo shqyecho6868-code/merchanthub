@@ -77,7 +77,7 @@ resource "aws_vpc_security_group_ingress_rule" "ecs_from_xxl_admin" {
   from_port                    = 9201
   to_port                      = 9204
   ip_protocol                  = "tcp"
-  description                  = "XXL-Job admin -> executors"
+  description                  = "XXL-Job admin to executors"
 }
 
 # Middleware EC2: only ECS tasks may connect. Port 22 is closed -- log in via SSM Session Manager (over the AWS API, no public IP or key pair needed)

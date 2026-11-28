@@ -35,7 +35,7 @@ resource "aws_instance" "middleware" {
   user_data_replace_on_change = true
 
   # Images are pulled from the internet, so wait for NAT before starting, otherwise every docker pull in user_data fails
-  depends_on = [aws_nat_gateway.main, aws_route_table_association.private]
+  depends_on = [aws_nat_gateway.main, aws_route_table_association.private, aws_iam_role_policy.middleware]
 
   tags = { Name = "${var.name}-middleware" }
 }
