@@ -8,6 +8,8 @@
 
 ## 架构
 
+各核心链路的时序图（下单、outbox、支付、超时、租户透传、推送、对账）：[`docs/architecture.md`](docs/architecture.md)；精选踩坑记录：[`docs/pitfalls.md`](docs/pitfalls.md)（英文）。
+
 ```mermaid
 flowchart LR
     Client[客户端 / k6] --> GW[gateway<br/>JWT 鉴权 · 注入身份头]
@@ -117,7 +119,7 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 
 调优实验：把连接池从 10 调到 30，吞吐反而下降（COMMIT 6 → 16 ms，行锁等待 ×15），已回滚。瓶颈在数据库，连接池排队只是症状。
 
-单机本地压测（所有服务和中间件在一台笔记本上），数字只用于前后对比。
+单机本地压测（所有服务和中间件在一台笔记本上），数字只用于前后对比。完整报告（场景设计、瓶颈分析、云上结果，英文）：[`docs/perf-report.md`](docs/perf-report.md)。
 
 ### 云上（AWS us-east-1）
 

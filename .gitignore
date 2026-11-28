@@ -60,5 +60,5 @@ crash.log
 .claude/worktrees/
 
 # Local notes, not published
-docs/
+notes/
 CLAUDE.md

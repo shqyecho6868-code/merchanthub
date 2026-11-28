@@ -8,6 +8,8 @@ Backend of a multi-merchant (multi-tenant) e-commerce trading platform. Tenancy 
 
 ## Architecture
 
+Sequence diagrams of every core flow (checkout, outbox, payment, timeout, tenant propagation, push, reconciliation): [`docs/architecture.md`](docs/architecture.md). Selected problems and how they were found: [`docs/pitfalls.md`](docs/pitfalls.md).
+
 ```mermaid
 flowchart LR
     Client[Client / k6] --> GW[gateway<br/>JWT auth · identity headers]
@@ -117,7 +119,7 @@ k6 scripts and data checks live in [`perf/`](perf/); one command: `./perf/run.sh
 
 Tuning experiment: raising the connection pool from 10 to 30 made throughput worse (COMMIT 6 → 16 ms, row-lock wait ×15) and was reverted — the bottleneck is the database; pool queueing was only the symptom.
 
-Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only.
+Single-machine local test (all services and middleware on one laptop); numbers are for before/after comparison only. Full report with scenario design, bottleneck analysis and cloud results: [`docs/perf-report.md`](docs/perf-report.md).
 
 ### On AWS (us-east-1)
 
