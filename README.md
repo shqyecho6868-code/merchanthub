@@ -103,7 +103,7 @@ Requires Docker and JDK 17. The build pins JDK 17 through Maven Toolchains, so r
 | RealTimeService | 85.0% |
 | UserService | 85.7% |
 
-> From a local `./mvnw verify` on 2026-11-27; the CI Summary page has the latest numbers.
+> From a local `./mvnw verify` on commit eafaab3. PaymentService may come out one line lower on CI because of concurrency timing; the CI Summary page has the latest numbers.
 
 ## Load testing
 

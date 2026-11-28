@@ -103,7 +103,7 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 | RealTimeService | 85.0% |
 | UserService | 85.7% |
 
-> 本地 `./mvnw verify` 2026-11-27 的结果；最新数字以 CI Summary 页为准。
+> 数据来自本地 `./mvnw verify`（commit eafaab3），PaymentService 因并发时序在 CI 上可能低 1 行；最新数字以 CI Summary 页为准。
 
 ## 压测
 
