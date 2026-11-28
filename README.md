@@ -41,7 +41,7 @@ flowchart LR
 - **State-machine CAS**: every transition is `UPDATE ... WHERE status = <old>` plus a status-log row in the same transaction; when payment success and timeout-close race, exactly one wins
 - **Reliable events**: transactional outbox on the order side, RocketMQ transactional messages (half message + check-back) on the payment side; consumers dedupe by eventId inside the business transaction
 - **4-layer callback idempotency**: payment fast path → payment CAS → consumer dedupe → order CAS; money arriving after the order is closed goes to `pay_anomaly` instead of resurrecting the order
-- **Safety nets**: dangling-reservation scanner and payment ↔ order / reservation ↔ order reconciliation (XXL-Job); fixes go through the normal idempotent path
+- **Safety nets**: outbox re-send, timeout close and payment ↔ order / reservation ↔ order reconciliation (XXL-Job); fixes go through the normal idempotent path. An in-process monitor (not on XXL-Job) reports the stale backlog to a CloudWatch alarm and takes over the scan if the scheduler is down
 - Amounts in `long` cents, orders separate from payment attempts, trade snapshots, Snowflake order numbers (workerId leased from Redis)
 
 ### 2. Multi-tenancy
@@ -129,5 +129,6 @@ One Fargate task per service (0.5 vCPU / 1 GB), RDS db.t4g.micro; k6 runs inside
 | Hot SKU, stepped load | 81 orders/s, 0 errors (local: 240) | same as above — the hot row is no longer the bottleneck in the cloud | ✅ |
 | Scale order 1 → 3 | ~110–118 orders/s, **~1.4×** | product-inventory (88% CPU) and the gateway are still single instances; RDS connections hit 58 / 60; **~2 min** from command to new instances taking traffic (Spring needs 80+ s to start on 0.5 vCPU) | ✅ |
 | Sustained 200 orders/s overload (no rate limit) | **congestion collapse**: completions stay flat but almost every request hits the 10 s timeout | unbounded queueing; after scaling out, the old instance was still serving requests clients had already abandoned → load shedding at the entry is required | ✅ no lost orders (DB count ≥ k6 successes) |
-| Kill 1 of 3 order instances under load | 2.67% errors, recovered in **~40 s**; ECS replaced the task ~1 min later | the error window ≈ the gateway's load-balancer cache (35 s) still holding the dead instance | ✅ no lost orders, no corrupted state; ⚠️ found close events stuck in the outbox (the compensation scan has no scheduler in the cloud) |
+| Kill 1 of 3 order instances under load | 2.67% errors, recovered in **~40 s**; ECS replaced the task ~1 min later | the error window ≈ the gateway's load-balancer cache (35 s) still holding the dead instance | ✅ no lost orders, no corrupted state; ⚠️ found close events stuck in the outbox (the compensation scan had no scheduler in the cloud) → fixed, next row |
+| Outbox safety net: 150 orders/s overload, then XXL-Job stopped | backlog peak 21k drained **~80 s** after load ended (414 rows/s, so 129k ≈ 5 min); with the scheduler down, the in-process monitor took over and drained 9k in **< 2 min** | fast-path drops are counted and logged; the CloudWatch alarm on rows pending > 5 min fired and recovered in all 3 rounds; during overload the scan only reaches 18 rows/s (it competes with checkout for CPU and DB connections) | ✅ 0 undelivered, 0 expired-pending, 0 closed-but-reserved; dangling reservations released by recon |
 
