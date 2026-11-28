@@ -28,7 +28,6 @@ import java.util.Map;
  * Global exception handler
  * <p>
  * Only active in Servlet web apps: the Gateway is a WebFlux app and must not load it.
- * AI guardrail exceptions are not handled here (to keep Common free of LangChain4j); see AiExceptionHandler in the ai module.
  */
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RestControllerAdvice

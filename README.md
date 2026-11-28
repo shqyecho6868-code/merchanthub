@@ -95,15 +95,15 @@ Requires Docker and JDK 17. The build pins JDK 17 through Maven Toolchains, so r
 
 | Module | Line coverage |
 |---|---|
-| Common | 56.5% |
-| GateWay | 93.0% |
-| OrderService | 86.9% (70% gate) |
+| Common | 57.0% |
+| GateWay | 92.7% |
+| OrderService | 85.8% (70% gate) |
 | PaymentService | 91.7% (70% gate) |
-| ProductInventoryService | 91.6% (70% gate) |
-| RealTimeService | 86.6% |
+| ProductInventoryService | 90.6% (70% gate) |
+| RealTimeService | 85.0% |
 | UserService | 85.7% |
 
-> From a local `./mvnw verify` on 2026-11-24; the CI Summary page has the latest numbers.
+> From a local `./mvnw verify` on 2026-11-27; the CI Summary page has the latest numbers.
 
 ## Load testing
 

@@ -95,15 +95,15 @@ cp .env.example .env && docker compose up -d    # 全部中间件（填好 .env 
 
 | 模块 | 行覆盖率 |
 |---|---|
-| Common | 56.5% |
-| GateWay | 93.0% |
-| OrderService | 86.9%（70% 门禁） |
+| Common | 57.0% |
+| GateWay | 92.7% |
+| OrderService | 85.8%（70% 门禁） |
 | PaymentService | 91.7%（70% 门禁） |
-| ProductInventoryService | 91.6%（70% 门禁） |
-| RealTimeService | 86.6% |
+| ProductInventoryService | 90.6%（70% 门禁） |
+| RealTimeService | 85.0% |
 | UserService | 85.7% |
 
-> 本地 `./mvnw verify` 2026-11-24 的结果；最新数字以 CI Summary 页为准。
+> 本地 `./mvnw verify` 2026-11-27 的结果；最新数字以 CI Summary 页为准。
 
 ## 压测
 
